@@ -21,7 +21,7 @@ import { formatDate } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { generateKnowledgeBookPdf, createKnowledgeBookFromProject, KnowledgeBookConfig } from '@/lib/pdfGenerator';
 
-const statusOptions = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const statusOptions = ['ALL', 'GENERATING', 'COMPLETED', 'FAILED', 'ARCHIVED'];
 
 interface Project {
   id: string;
@@ -53,7 +53,7 @@ export function KnowledgeBooks() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', tags: [] as string[], status: 'DRAFT' });
+  const [formData, setFormData] = useState({ projectId: '', name: '', description: '', tags: [] as string[], status: 'COMPLETED' });
 
   // Project-scoped generation state
   const [isGenerateFromProjectOpen, setIsGenerateFromProjectOpen] = useState(false);
@@ -138,7 +138,7 @@ export function KnowledgeBooks() {
       await knowledgeBooksApi.create(formData);
       toast({ title: 'Success', description: 'Knowledge Book created successfully' });
       setIsCreateOpen(false);
-      setFormData({ name: '', description: '', tags: [], status: 'DRAFT' });
+      setFormData({ projectId: '', name: '', description: '', tags: [], status: 'COMPLETED' });
       refetch();
     } catch {
       toast({ title: 'Error', description: 'Failed to create Knowledge Book', variant: 'destructive' });
@@ -271,6 +271,7 @@ export function KnowledgeBooks() {
   const openEditDialog = (book: any) => {
     setSelectedBook(book);
     setFormData({
+      projectId: book.projectId || '',
       name: book.name,
       description: book.description || '',
       tags: book.tags || [],
@@ -291,7 +292,7 @@ export function KnowledgeBooks() {
             <BookOpen className="mr-2 h-4 w-4" />
             Generate from Project
           </Button>
-          <Button onClick={() => { setFormData({ name: '', description: '', tags: [], status: 'DRAFT' }); setIsCreateOpen(true); }}>
+          <Button onClick={() => { setFormData({ projectId: '', name: '', description: '', tags: [], status: 'COMPLETED' }); setIsCreateOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />
             Create Knowledge Book
           </Button>
@@ -339,7 +340,7 @@ export function KnowledgeBooks() {
               </div>
               <p className="mt-4 text-dbi-textSecondary">No knowledge books found</p>
               <div className="mt-4 flex gap-3 justify-center">
-                <Button onClick={() => { setFormData({ name: '', description: '', tags: [], status: 'DRAFT' }); setIsCreateOpen(true); }}>
+                <Button onClick={() => { setFormData({ projectId: '', name: '', description: '', tags: [], status: 'COMPLETED' }); setIsCreateOpen(true); }}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create First Knowledge Book
                 </Button>
@@ -413,7 +414,7 @@ export function KnowledgeBooks() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">{book.createdAt ? formatDate(book.createdAt) : 'N/A'}</TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">{book.updateAt ? formatDate(book.updateAt) : 'N/A'}</TableCell>
+                        <TableCell className="text-sm text-dbi-textSecondary">{book.updatedAt ? formatDate(book.updatedAt) : 'N/A'}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book)} title="Generate PDF" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
@@ -455,9 +456,22 @@ export function KnowledgeBooks() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create Knowledge Book</DialogTitle>
-            <DialogDescription>Compile documents into a knowledge book with PDF export</DialogDescription>
+            <DialogDescription>Compiles the project's documents into a PDF knowledge book</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label htmlFor="kb-project" className="text-sm font-medium text-dbi-textSecondary">Project *</label>
+              <select
+                id="kb-project"
+                required
+                value={formData.projectId}
+                onChange={e => setFormData({ ...formData, projectId: e.target.value })}
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">{projects.length ? 'Select a project' : 'No projects available'}</option>
+                {projects.map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+              </select>
+            </div>
             <div>
               <label className="text-sm font-medium text-dbi-textSecondary">Name</label>
               <Input
@@ -477,28 +491,6 @@ export function KnowledgeBooks() {
                 className="mt-1 w-full p-2 bg-dbi-elevated border-dbi-border rounded-lg text-dbi-textPrimary"
                 rows={3}
               />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-dbi-textSecondary">Tags (comma separated)</label>
-              <Input
-                value={formData.tags.join(', ')}
-                onChange={e => setFormData({ ...formData, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
-                placeholder="security, policy, compliance"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-dbi-textSecondary">Status</label>
-              <Select value={formData.status} onValueChange={v => setFormData({ ...formData, status: v })}>
-                <SelectTrigger className="w-full bg-dbi-elevated border-dbi-border mt-1">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="PUBLISHED">Published</SelectItem>
-                  <SelectItem value="ARCHIVED">Archived</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
@@ -535,22 +527,13 @@ export function KnowledgeBooks() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-dbi-textSecondary">Tags (comma separated)</label>
-              <Input
-                value={formData.tags.join(', ')}
-                onChange={e => setFormData({ ...formData, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
-                className="mt-1"
-              />
-            </div>
-            <div>
               <label className="text-sm font-medium text-dbi-textSecondary">Status</label>
               <Select value={formData.status} onValueChange={v => setFormData({ ...formData, status: v })}>
                 <SelectTrigger className="w-full bg-dbi-elevated border-dbi-border mt-1">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="PUBLISHED">Published</SelectItem>
+                  <SelectItem value="COMPLETED">Completed</SelectItem>
                   <SelectItem value="ARCHIVED">Archived</SelectItem>
                 </SelectContent>
               </Select>

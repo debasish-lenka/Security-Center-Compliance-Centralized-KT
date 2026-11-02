@@ -17,7 +17,9 @@ const SAFE_INLINE: Record<string, string> = {
 export async function fileRoutes(app: FastifyInstance) {
   const storage = getStorageService();
 
-  // Accept any content type as a raw buffer for uploads
+  // Uploads arrive as raw bytes whatever their type. Drop the built-in JSON/text parsers (they would
+  // turn a .txt or .json file into a string) so the catch-all below handles every content type here.
+  app.removeContentTypeParser(['application/json', 'text/plain']);
   app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit: MAX_UPLOAD }, (_req, body, done) => done(null, body));
 
   app.get('/:token', async (request, reply) => {

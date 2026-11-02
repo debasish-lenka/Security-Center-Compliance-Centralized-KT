@@ -20,6 +20,8 @@ import { AuditLogger } from './services/audit-logger.js';
 import { authPlugin } from './plugins/auth.js';
 
 const app = Fastify({
+  // signed file links (/api/v1/files/<token>) are ~200 characters; the default limit is 100
+  maxParamLength: 1000,
   trustProxy: true, // behind nginx: use X-Forwarded-For for client IPs (rate limit, audit log)
   logger: {
     level: env.LOG_LEVEL,

@@ -1248,13 +1248,30 @@ export const documentsApi = MOCK_MODE ? mockDocumentsApi : {
   getAdminMonitoring: (params: Record<string, string>) => api.get('/v1/documents/admin-monitoring', { params }),
 };
 
+// The knowledge book page shows `name`; the API stores `title`
+const mapBook = (b: any) => ({ ...b, name: b.title, tags: [] as string[] });
+
 export const knowledgeBooksApi = MOCK_MODE ? mockKnowledgeBooksApi : {
-  list: (params?: Record<string, string>) => api.get('/v1/knowledge-books', { params }),
+  list: async (params?: Record<string, string>): Promise<any> => {
+    const res = await api.get('/v1/knowledge-books', { params });
+    const items = (res.data?.items ?? []).map(mapBook);
+    return { ...res, data: { ...res.data, items } };
+  },
   get: (id: string) => api.get(`/v1/knowledge-books/${id}`),
-  create: (data: any) => api.post('/v1/knowledge-books', data),
-  update: (id: string, data: any) => api.patch(`/v1/knowledge-books/${id}`, data),
+  create: (data: any) => api.post('/v1/knowledge-books', {
+    projectId: data.projectId, title: data.name, description: data.description || null, includeDocumentIds: [],
+  }),
+  update: (id: string, data: any) => api.patch(`/v1/knowledge-books/${id}`, {
+    title: data.name, description: data.description || null, status: data.status,
+  }),
   delete: (id: string) => api.delete(`/v1/knowledge-books/${id}`),
-  generatePdf: (id: string) => api.get(`/v1/knowledge-books/${id}/pdf`, { responseType: 'blob' }),
+  // The server builds the PDF; fetch it through the short-lived link it returns
+  generatePdf: async (id: string): Promise<any> => {
+    const link = await api.get(`/v1/knowledge-books/${id}/download`);
+    const file = await fetch(link.data.data.downloadUrl);
+    if (!file.ok) throw new Error('PDF not available');
+    return { data: await file.blob() };
+  },
   getStats: () => api.get('/v1/knowledge-books/stats'),
   exportReport: (params: { format: string }) => api.get('/v1/knowledge-books/export', { params, responseType: 'blob' }),
 };

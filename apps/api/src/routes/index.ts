@@ -19,6 +19,7 @@ import { knowledgeBookRoutes } from './knowledge-books.js';
 import { stickyAlertRoutes } from './sticky-alerts.js';
 import { workflowRoutes } from './workflows.js';
 import { fileRoutes } from './files.js';
+import { knowledgeBookFlatRoutes } from './knowledge-books-flat.js';
 import { ktReportFlatRoutes } from './kt-reports-flat.js';
 import { overviewRoutes } from './overview.js';
 import { mailSettingsRoutes } from './mail-settings.js';
@@ -50,5 +51,6 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(ssoAuthRoutes, { prefix: '/api/v1/auth/microsoft' });
   await app.register(overviewRoutes, { prefix: '/api/v1' });
   await app.register(ktReportFlatRoutes, { prefix: '/api/v1/kt-reports' });
+  await app.register(knowledgeBookFlatRoutes, { prefix: '/api/v1/knowledge-books' });
   await app.register(fileRoutes, { prefix: '/api/v1/files' });
 }

@@ -1,3 +1,4 @@
+import PDFDocument from 'pdfkit';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
@@ -424,44 +425,68 @@ async function generateKnowledgeBookAsync(
   }
 }
 
+// Builds the knowledge book as a real PDF: cover page, table of contents, one section per document
 async function generatePDF(project: any, documents: any[], config: any): Promise<Buffer> {
-  // This is a placeholder for actual PDF generation
-  // In production, you would use a library like pdfmake, puppeteer, or @react-pdf/renderer
-  // For now, we'll create a simple PDF using a basic approach
+  const doc = new PDFDocument({ size: 'A4', margin: 56, bufferPages: true, info: { Title: config.title, Author: 'DBI Security Center' } });
+  const chunks: Buffer[] = [];
+  doc.on('data', (c: Buffer) => chunks.push(c));
+  const done = new Promise<Buffer>((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+  });
 
-  // For actual implementation, you would:
-  // 1. Use @react-pdf/renderer or pdfmake to generate professional PDFs
-  // 2. Include cover page, TOC, section dividers
-  // 3. Embed each document's content with metadata
-  // 4. Add watermarks and footers
+  const cyan = '#0e7490';
+  const grey = '#475569';
+  const date = (d: Date) => new Date(d).toLocaleDateString('en-GB');
 
-  // This is a simplified implementation returning a placeholder
-  const content = `
-Project Knowledge Book: ${config.title}
-Project: ${project.name}
-Description: ${project.description || 'N/A'}
-Generated: ${new Date().toLocaleDateString()}
-Document Count: ${documents.length}
+  // Cover
+  doc.rect(0, 0, doc.page.width, 12).fill(cyan);
+  doc.fillColor('#0f172a').fontSize(30).font('Helvetica-Bold').text(config.title, 56, 220, { width: doc.page.width - 112 });
+  doc.moveDown(0.6).fontSize(16).font('Helvetica').fillColor(cyan).text(project.name);
+  if (project.description) doc.moveDown(0.8).fontSize(11).fillColor(grey).text(project.description, { width: doc.page.width - 112 });
+  doc.moveDown(2).fontSize(10).fillColor(grey)
+    .text(`Generated ${date(new Date())}`)
+    .text(`${documents.length} document${documents.length === 1 ? '' : 's'} included`);
 
-Table of Contents:
-${documents.map((doc, i) => `${i + 1}. ${doc.name} (${doc.category}) - v${doc.version} by ${doc.uploader?.fullName || 'Unknown'}`).join('\n')}
+  // Table of contents
+  doc.addPage();
+  doc.fillColor('#0f172a').fontSize(20).font('Helvetica-Bold').text('Contents');
+  doc.moveDown(0.8).fontSize(11).font('Helvetica').fillColor('#0f172a');
+  if (documents.length === 0) {
+    doc.fillColor(grey).text('No approved or published documents were available when this book was generated.');
+  }
+  documents.forEach((d, i) => {
+    doc.text(`${i + 1}.  ${d.name}`, { continued: true }).fillColor(grey).text(`   ${d.category.replace(/_/g, ' ')}  ·  v${d.version}`).fillColor('#0f172a');
+  });
 
----
-Documents:
-${documents.map(doc => `
-=== ${doc.name} ===
-Category: ${doc.category}
-Version: ${doc.version}
-Author: ${doc.uploader?.fullName || 'Unknown'}
-Owner: ${doc.owner?.fullName || 'Unknown'}
-Created: ${doc.createdAt.toLocaleDateString()}
-Modified: ${doc.updatedAt.toLocaleDateString()}
-Tags: ${doc.tags.join(', ') || 'None'}
-Description: ${doc.metadata?.description || 'N/A'}
----`).join('\n')}
-  `;
+  // One section per document (metadata; the files themselves stay in the Document Vault)
+  documents.forEach((d, i) => {
+    doc.addPage();
+    doc.fillColor(cyan).fontSize(10).font('Helvetica-Bold').text(`SECTION ${i + 1}`);
+    doc.moveDown(0.3).fillColor('#0f172a').fontSize(18).text(d.name);
+    doc.moveDown(0.8).fontSize(11).font('Helvetica');
+    const rows: [string, string][] = [
+      ['Category', d.category.replace(/_/g, ' ')],
+      ['Version', `v${d.version}`],
+      ['Author', d.uploader?.fullName ?? 'Unknown'],
+      ['Owner', d.owner?.fullName ?? 'Unknown'],
+      ['Created', date(d.createdAt)],
+      ['Last modified', date(d.updatedAt)],
+      ['Tags', d.tags?.length ? d.tags.join(', ') : 'None'],
+    ];
+    for (const [k, v] of rows) {
+      doc.fillColor(grey).text(`${k}: `, { continued: true }).fillColor('#0f172a').text(v);
+    }
+    const description = d.metadata?.description;
+    if (description) doc.moveDown(0.8).fillColor('#0f172a').text(String(description), { width: doc.page.width - 112 });
+  });
 
-  // In a real implementation, convert this to actual PDF
-  // For now, return as buffer
-  return Buffer.from(content, 'utf-8');
+  // Page numbers
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(i);
+    doc.fontSize(9).fillColor(grey).text(`${i + 1} / ${range.count}`, 56, doc.page.height - 40, { width: doc.page.width - 112, align: 'center' });
+  }
+  doc.end();
+  return done;
 }
