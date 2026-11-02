@@ -83,9 +83,11 @@ export function Login() {
               {isLoading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
-          <p className="mt-6 text-center text-sm text-dbi-textSecondary">
-            Default: admin@dbi.example.com / Admin@123
-          </p>
+          {import.meta.env.DEV && (
+            <p className="mt-6 text-center text-sm text-dbi-textSecondary">
+              Dev default: admin@dbi.example.com / Admin@123
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

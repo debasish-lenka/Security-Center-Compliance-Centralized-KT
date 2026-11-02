@@ -43,4 +43,14 @@ if (!parsed.success) {
   process.exit(1);
 }
 
+// The repo is public, so the placeholder secrets in .env.example are known to everyone
+const PLACEHOLDER = /change-me|your-|here-12345/i;
+if (parsed.data.NODE_ENV === 'production') {
+  const weak = (['JWT_SECRET', 'SESSION_SECRET', 'ENCRYPTION_KEY'] as const).filter((k) => PLACEHOLDER.test(parsed.data[k]));
+  if (weak.length) {
+    console.error(`❌ Replace placeholder values before running in production: ${weak.join(', ')}`);
+    process.exit(1);
+  }
+}
+
 export const env = parsed.data;
