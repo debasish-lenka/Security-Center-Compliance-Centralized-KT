@@ -280,8 +280,11 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
     if (useWebSocket) {
       connectWebSocket();
-    } else {
+    } else if (import.meta.env.VITE_USE_SSE === 'true') {
       connectSSE();
+    } else {
+      // The API has no /notifications/stream endpoint; poll instead of failing an EventSource on every load
+      startPolling();
     }
 
     return () => {
@@ -295,7 +298,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         wsRef.current = null;
       }
     };
-  }, [enabled, connectSSE, connectWebSocket, stopPolling]);
+  }, [enabled, connectSSE, connectWebSocket, startPolling, stopPolling]);
 
   // Initial load
   useEffect(() => {

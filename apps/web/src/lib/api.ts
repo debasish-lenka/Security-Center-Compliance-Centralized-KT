@@ -1484,7 +1484,15 @@ api.interceptors.request.use(
 let redirectingToLogin = false;
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // The API wraps payloads as { success, data }, while list pages read response.data.items.
+    // For paginated lists expose both shapes (response.data.items and response.data.data.items).
+    const body = response.data;
+    if (body?.success === true && Array.isArray(body.data?.items)) {
+      response.data = { ...body.data, data: body.data, success: true };
+    }
+    return response;
+  },
   (error: AxiosError) => {
     // A 401 on a login attempt is just "wrong password": let the form show it.
     // For any other 401 the session is gone: clear it and go to /login once.

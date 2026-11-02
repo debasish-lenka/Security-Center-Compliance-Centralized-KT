@@ -66,7 +66,7 @@ export async function userRoutes(app: FastifyInstance) {
           id: true,
           email: true,
           fullName: true,
-          department: true,
+          department: { select: { name: true } },
           role: true,
           status: true,
           createdAt: true,
@@ -78,7 +78,7 @@ export async function userRoutes(app: FastifyInstance) {
       app.prisma.profile.count({ where }),
     ]);
 
-    return reply.send({ success: true, data: { items: users, total, page, limit, totalPages: Math.ceil(total / limit) } });
+    return reply.send({ success: true, data: { items: users.map((u) => ({ ...u, department: u.department?.name ?? null })), total, page, limit, totalPages: Math.ceil(total / limit) } });
   });
 
   // Get user profile

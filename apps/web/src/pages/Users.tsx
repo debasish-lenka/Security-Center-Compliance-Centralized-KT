@@ -111,6 +111,8 @@ export function Users() {
     },
   });
 
+  const [createOpen, setCreateOpen] = useState(false);
+
   const onSubmit = async (data: UserFormData) => {
     setIsCreating(true);
     try {
@@ -118,6 +120,7 @@ export function Users() {
       toast({ title: 'User created', description: 'The user has been created successfully' });
       setIsCreating(false);
       form.reset();
+      setCreateOpen(false);
       refetch();
     } catch (error: any) {
       const message = error?.response?.data?.error?.message || 'Failed to create user';
@@ -133,7 +136,7 @@ export function Users() {
           <h1 className="text-3xl font-bold text-dbi-textPrimary">User Management</h1>
           <p className="text-dbi-textSecondary">Manage user accounts and access control</p>
         </div>
-        <Dialog>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button>
               <UserPlus className="mr-2 h-4 w-4" />
@@ -282,7 +285,7 @@ export function Users() {
                 <User className="h-16 w-16" />
               </div>
               <p className="mt-4 text-dbi-textSecondary">No users found</p>
-              <Button onClick={() => form.reset()} className="mt-4">
+              <Button onClick={() => setCreateOpen(true)} className="mt-4">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add First User
               </Button>
@@ -357,7 +360,7 @@ export function Users() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">
-                          {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}
+                          {user.lastLogin || user.lastActivityAt ? formatDate(user.lastLogin || user.lastActivityAt) : 'Never'}
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
