@@ -72,8 +72,8 @@ export function Search() {
           limit: 20,
           offset: 0,
         });
-        setResults(response.data.results);
-        setTotalResults(response.data.total);
+        setResults(response.data.results ?? []);
+        setTotalResults(response.data.total ?? 0);
       } catch (error) {
         console.error('Search failed:', error);
         setResults([]);

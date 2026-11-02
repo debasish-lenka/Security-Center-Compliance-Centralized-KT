@@ -1459,13 +1459,16 @@ export const searchApi = MOCK_MODE ? {
     };
   },
 } : {
-  search: (params: { q: string; modules?: string[]; limit?: number; offset?: number }) =>
-    api.get('/v1/search', { params: {
+  // The API wraps results as { success, data: { results, total } } and takes a comma separated `modules`
+  search: async (params: { q: string; modules?: string[]; limit?: number; offset?: number }) => {
+    const res = await api.get('/v1/search', { params: {
       q: params.q,
-      module: params.modules,
+      modules: params.modules?.length ? params.modules.join(',') : undefined,
       limit: params.limit,
       offset: params.offset,
-    }}),
+    }});
+    return { ...res, data: res.data?.data ?? res.data };
+  },
 };
 
 // Request interceptor to add auth token
