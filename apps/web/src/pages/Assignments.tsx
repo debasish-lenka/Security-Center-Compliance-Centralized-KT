@@ -1,13 +1,23 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Filter, Calendar, AlertTriangle, Clock, FileText, CheckCircle, ChevronRight, Shield, Activity } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
-import { assignmentsApi } from '@/lib/api';
+import { assignmentsApi, projectsApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { TaskDialog } from '@/components/TaskDialog';
 
 export function Assignments() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [taskOpen, setTaskOpen] = useState(false);
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects-for-task'],
+    queryFn: () => projectsApi.list({ limit: '100' }),
+  });
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
     queryKey: ['assignments-tasks'],
     queryFn: () => assignmentsApi.getMyTasks(),
@@ -92,10 +102,17 @@ export function Assignments() {
           <h1 className="text-3xl font-bold tracking-tight dbi-gradient-text">My Assignments</h1>
           <p className="text-dbi-textSecondary">Your tasks, KT reports, and action items</p>
         </div>
-        <Button>
+        <Button onClick={() => setTaskOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Create Task
         </Button>
+        <TaskDialog
+          open={taskOpen}
+          onOpenChange={setTaskOpen}
+          projects={projectsData?.data?.items ?? []}
+          defaultAssigneeId={user?.id}
+          onCreated={() => queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('assignments') })}
+        />
       </div>
 
       {/* Quick Stats */}

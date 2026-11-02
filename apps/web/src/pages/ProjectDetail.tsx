@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProjectWork } from '@/components/ProjectWork';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
@@ -228,6 +229,7 @@ export function ProjectDetail() {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="work">Tasks &amp; Milestones</TabsTrigger>
           <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="reports">KT Reports ({reports.length})</TabsTrigger>
@@ -275,6 +277,10 @@ export function ProjectDetail() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="work" className="space-y-4">
+          <ProjectWork projectId={id!} />
         </TabsContent>
 
         <TabsContent value="team" className="space-y-4">

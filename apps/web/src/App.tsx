@@ -104,8 +104,8 @@ function AppRoutes() {
           <Route path="/assignments" element={<Assignments />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/new" element={<ProjectCreate />} />
-          <Route path="/projects/:projectId" element={<ProjectDetail />} />
-          <Route path="/projects/:projectId/edit" element={<ProjectEdit />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/edit" element={<ProjectEdit />} />
           <Route path="/kt-reports" element={<KTReports />} />
           <Route path="/kt-reports/new" element={<KTReportCreate />} />
           <Route path="/kt-reports/:id" element={<KTReportDetail />} />

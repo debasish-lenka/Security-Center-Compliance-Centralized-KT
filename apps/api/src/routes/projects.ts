@@ -307,9 +307,17 @@ export async function projectRoutes(app: FastifyInstance) {
       });
     }
 
+    // Prisma wants Date objects, not "YYYY-MM-DD" strings
+    const { startDate, expectedCompletionDate, actualCompletionDate, ...rest } = data;
+    const toDate = (v: string | null | undefined) => (v === undefined ? undefined : v === null ? null : new Date(v));
     const project = await app.prisma.project.update({
       where: { id: projectId },
-      data,
+      data: {
+        ...rest,
+        startDate: toDate(startDate),
+        expectedCompletionDate: toDate(expectedCompletionDate),
+        actualCompletionDate: toDate(actualCompletionDate),
+      },
     });
 
     await auditLogger.logResource('UPDATE', userId, 'project', projectId, data, request.ip, request.headers['user-agent']);

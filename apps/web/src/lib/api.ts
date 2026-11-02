@@ -1053,7 +1053,11 @@ export const dashboardApi = MOCK_MODE ? mockDashboardApi : {
 
 export const projectsApi = MOCK_MODE ? mockProjectsApi : {
   list: (params?: Record<string, string>) => api.get('/v1/projects', { params }),
-  get: (id: string) => api.get(`/v1/projects/${id}`),
+  // pages read the project straight from response.data; the API wraps it as { success, data }
+  get: async (id: string): Promise<any> => {
+    const res = await api.get(`/v1/projects/${id}`);
+    return { ...res, data: res.data?.data ?? res.data };
+  },
   create: (data: any) => api.post('/v1/projects', data),
   update: (id: string, data: any) => api.patch(`/v1/projects/${id}`, data),
   delete: (id: string) => api.delete(`/v1/projects/${id}`),
