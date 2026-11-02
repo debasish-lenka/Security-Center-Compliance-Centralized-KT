@@ -1207,15 +1207,29 @@ const realDocumentsList = async (params?: Record<string, string>) => {
   return { data: { items, total: items.length } };
 };
 
-const realDocumentsUpload = async ({ file, projectId, name }: { file: File; projectId?: string; name?: string }) => {
+const realDocumentsUpload = async ({ file, projectId, name, category }: { file: File; projectId?: string; name?: string; category?: string }) => {
   if (!projectId) throw new Error('Select a project before uploading');
   const mimeType = file.type || 'application/octet-stream';
-  const meta = { name: name || file.name, category: CATEGORY_BY_TYPE(mimeType) };
+  const meta = { name: name || file.name, category: category || CATEGORY_BY_TYPE(mimeType) };
   const { data } = await api.post(`/v1/projects/${projectId}/documents/upload-url`, meta);
   const { uploadUrl, storageKey } = data.data;
   // Signed link is same-origin; send the raw bytes
   await api.put(uploadUrl.replace(/^\/api/, ''), file, { headers: { 'Content-Type': mimeType }, withCredentials: false });
   return api.post(`/v1/projects/${projectId}/documents`, { ...meta, storageKey, size: file.size, mimeType });
+};
+
+const projectOfDoc = (id: string) => {
+  const projectId = docProject.get(id);
+  if (!projectId) throw new Error('Open the document from the list first');
+  return projectId;
+};
+
+const realDocumentsRollback = async (id: string, version: number) => {
+  const projectId = projectOfDoc(id);
+  const list = await api.get(`/v1/projects/${projectId}/documents/${id}/versions`);
+  const target = (list.data?.items ?? []).find((v: any) => v.version === version);
+  if (!target) throw new Error('Version not found');
+  return api.post(`/v1/projects/${projectId}/documents/${id}/versions/${target.id}/rollback`);
 };
 
 const realDocumentsDelete = (id: string) => {
@@ -1234,12 +1248,12 @@ export const documentsApi = MOCK_MODE ? mockDocumentsApi : {
   upload: realDocumentsUpload,
   downloadDocument: (id: string) => api.get(`/v1/documents/${id}/download`),
   previewDocument: (id: string) => api.get(`/v1/documents/${id}/preview`),
-  getVersions: (documentId: string) => api.get(`/v1/documents/${documentId}/versions`),
+  getVersions: (documentId: string) => api.get(`/v1/projects/${projectOfDoc(documentId)}/documents/${documentId}/versions`),
   getDiff: (documentId: string, version: number) => api.get(`/v1/documents/${documentId}/diff`, { params: { version } }),
-  rollback: (documentId: string, version: number) => api.post(`/v1/documents/${documentId}/rollback`, { version }),
-  submitReview: (documentId: string, reviewerId: string) => api.post(`/v1/documents/${documentId}/submit-review`, { reviewerId }),
-  reviewDocument: (documentId: string, status: 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED', comments?: string) => api.post(`/v1/documents/${documentId}/review`, { status, comments }),
-  getReviews: (documentId: string) => api.get(`/v1/documents/${documentId}/reviews`),
+  rollback: realDocumentsRollback,
+  submitReview: (documentId: string, reviewerId: string) => api.post(`/v1/projects/${projectOfDoc(documentId)}/documents/${documentId}/submit-review`, { reviewerId }),
+  reviewDocument: (documentId: string, status: 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED', comments?: string) => api.post(`/v1/projects/${projectOfDoc(documentId)}/documents/${documentId}/review`, { status, comments }),
+  getReviews: (documentId: string) => api.get(`/v1/projects/${projectOfDoc(documentId)}/documents/${documentId}/reviews`),
   // Document sharing
   getShares: (documentId: string) => api.get(`/v1/documents/${documentId}/shares`),
   share: (documentId: string, data: { userId: string; permission: 'VIEW' | 'EDIT' | 'DOWNLOAD' | 'COMMENT' | 'FULL' }) => api.post(`/v1/documents/${documentId}/shares`, data),

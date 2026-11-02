@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { documentsApi } from '@/lib/api';
+import { documentsApi, projectsApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { UserCheck, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -46,14 +47,16 @@ export function ReviewDialog({
   const [comments, setComments] = useState('');
   const [selectedReviewer, setSelectedReviewer] = useState<string>('');
 
-  // Mock project members for reviewer selection
-  const projectMembers = [
-    { id: '1', fullName: 'Admin User', email: 'admin@dbi.example.com', role: 'OWNER' },
-    { id: '2', fullName: 'John Doe', email: 'john@example.com', role: 'LEAD' },
-    { id: '3', fullName: 'Jane Smith', email: 'jane@example.com', role: 'REVIEWER' },
-    { id: '4', fullName: 'Bob Wilson', email: 'bob@example.com', role: 'CONTRIBUTOR' },
-    { id: '5', fullName: 'Alice Brown', email: 'alice@example.com', role: 'VIEWER' },
-  ];
+  // Project members who can be asked to review (everyone except the person submitting)
+  const { user: me } = useAuth();
+  const { data: members = [] } = useQuery({
+    queryKey: ['project-members', _projectId],
+    queryFn: async () => ((await projectsApi.get(_projectId)).data?.members ?? []) as any[],
+    enabled: open && !!_projectId,
+  });
+  const projectMembers = members
+    .filter((m: any) => m.userId !== me?.id)
+    .map((m: any) => ({ id: m.userId, fullName: m.user?.fullName ?? 'Unknown', email: m.user?.email ?? '', role: m.role }));
 
   const submitReviewMutation = useMutation({
     mutationFn: async (reviewerId: string) => {

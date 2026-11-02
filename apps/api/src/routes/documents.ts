@@ -252,6 +252,7 @@ export async function documentRoutes(app: FastifyInstance) {
         tags: true,
         status: true,
         reviewStatus: true,
+        reviewerId: true,
         visibility: true,
         visibleToTeamIds: true,
         visibleToDeptIds: true,
@@ -481,6 +482,21 @@ export async function documentRoutes(app: FastifyInstance) {
         visibleToTeamIds: visibleToTeamIds || [],
         visibleToDeptIds: visibleToDeptIds || [],
         visibleToUserIds: visibleToUserIds || [],
+      },
+    });
+
+    // The uploaded file is version 1
+    await app.prisma.documentVersion.create({
+      data: {
+        documentId: document.id,
+        version: 1,
+        storageKey,
+        size,
+        mimeType,
+        originalName: name,
+        uploadedById: userId,
+        changelog: 'Initial upload',
+        isCurrent: true,
       },
     });
 

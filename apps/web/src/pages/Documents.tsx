@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { documentsApi, projectsApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +29,7 @@ const statusOptions = ['ALL', 'DRAFT', 'PENDING_REVIEW', 'APPROVED', 'REJECTED',
 const typeOptions = ['ALL', 'PDF', 'DOC', 'DOCX', 'XLS', 'XLSX', 'PPT', 'PPTX', 'TXT', 'MD', 'CSV', 'JSON', 'XML', 'ZIP', 'IMAGE', 'VIDEO', 'OTHER'];
 
 export function Documents() {
+  const { user: me } = useAuth();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId');
   const urlSearch = searchParams.get('search') || '';
@@ -41,6 +43,8 @@ export function Documents() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProject, setUploadProject] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('OTHER');
   const [versionHistoryDoc, setVersionHistoryDoc] = useState<{ id: string; name: string } | null>(null);
   const [reviewDialogDoc, setReviewDialogDoc] = useState<{ id: string; name: string; projectId: string; reviewStatus: string | null; reviewerId?: string } | null>(null);
 
@@ -276,7 +280,7 @@ export function Documents() {
                               onClick={() => setReviewDialogDoc({
                                 id: doc.id,
                                 name: doc.name,
-                                projectId: doc.project?.id || '',
+                                projectId: doc.projectId || doc.project?.id || '',
                                 reviewStatus: doc.reviewStatus || null,
                                 reviewerId: doc.reviewerId
                               })}
@@ -403,20 +407,28 @@ export function Documents() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const file = formData.get('file') as File;
-              if (!file) {
+              const form = e.currentTarget; // read before the first await: React clears currentTarget afterwards
+              const file = (new FormData(form).get('file') as File) ?? null;
+              const projectId = uploadProject || (projectFilter !== 'ALL' ? projectFilter : '');
+              if (!file || !file.name) {
                 toast({ title: 'Error', description: 'Please select a file', variant: 'destructive' });
+                return;
+              }
+              if (!projectId) {
+                toast({ title: 'Choose a project', description: 'Documents are stored inside a project', variant: 'destructive' });
                 return;
               }
               setIsUploading(true);
               try {
-                await documentsApi.upload({ file, projectId: projectFilter !== 'ALL' ? projectFilter : undefined, name: file.name, description: '', type: file.type || 'OTHER' });
+                await documentsApi.upload({ file, projectId, name: file.name, description: '', type: file.type || 'OTHER', category: uploadCategory });
                 toast({ title: 'Success', description: 'Document uploaded successfully' });
                 setIsUploadOpen(false);
-                e.currentTarget.reset();
-              } catch {
-                toast({ title: 'Error', description: 'Failed to upload document', variant: 'destructive' });
+                form.reset();
+                setUploadProject('');
+                setUploadCategory('OTHER');
+                refetch();
+              } catch (err: any) {
+                toast({ title: 'Upload failed', description: err?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
               } finally {
                 setIsUploading(false);
               }
@@ -424,18 +436,45 @@ export function Documents() {
             className="space-y-4"
           >
             <div>
-              <label className="text-sm font-medium text-dbi-textSecondary">File</label>
+              <label htmlFor="upload-project" className="text-sm font-medium text-dbi-textSecondary">Project *</label>
+              <select
+                id="upload-project"
+                required
+                value={uploadProject || (projectFilter !== 'ALL' ? projectFilter : '')}
+                onChange={(e) => setUploadProject(e.target.value)}
+                disabled={isUploading}
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">{projects.length ? 'Select a project' : 'No projects available'}</option>
+                {projects.map((pr: any) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="upload-category" className="text-sm font-medium text-dbi-textSecondary">Category</label>
+              <select
+                id="upload-category"
+                value={uploadCategory}
+                onChange={(e) => setUploadCategory(e.target.value)}
+                disabled={isUploading}
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              >
+                {[['TECHNICAL', 'Technical'], ['COMPLIANCE', 'Compliance'], ['DESIGN', 'Design'], ['MEETING_NOTES', 'Meeting notes'], ['KT_REPORT', 'KT report'], ['OTHER', 'Other']].map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="upload-file" className="text-sm font-medium text-dbi-textSecondary">File *</label>
               <input
+                id="upload-file"
                 type="file"
                 name="file"
                 required
                 className="mt-1 block w-full text-sm text-dbi-textPrimary bg-dbi-elevated border-dbi-border rounded-lg p-2"
                 disabled={isUploading}
               />
+              <p className="mt-1 text-xs text-dbi-textSecondary">Up to 50 MB.</p>
             </div>
-            {projectFilter !== 'ALL' && (
-              <input type="hidden" name="projectId" value={projectFilter} />
-            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)} disabled={isUploading}>
                 Cancel
@@ -465,8 +504,8 @@ export function Documents() {
         projectId={reviewDialogDoc?.projectId || ''}
         reviewStatus={reviewDialogDoc?.reviewStatus || null}
         reviewerId={reviewDialogDoc?.reviewerId}
-        isReviewer={false} // TODO: Check if current user is the reviewer
-        canSubmitForReview={true} // TODO: Check if current user can submit for review
+        isReviewer={!!me?.id && reviewDialogDoc?.reviewerId === me.id}
+        canSubmitForReview={reviewDialogDoc?.reviewerId !== me?.id}
         open={!!reviewDialogDoc}
         onOpenChange={(open) => {
           if (!open) setReviewDialogDoc(null);
