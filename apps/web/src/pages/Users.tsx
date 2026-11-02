@@ -26,7 +26,7 @@ const userSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   role: z.string().min(1, 'Role is required'),
   department: z.string().optional(),
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -44,7 +44,9 @@ export function Users() {
     queryKey: ['roles'],
     queryFn: async () => {
       const response = await rolesApi.list();
-      return response.data?.data?.items || response.data?.items || response.data || [];
+      const body = response.data;
+      const list = body?.data?.items ?? body?.data ?? body?.items ?? body;
+      return Array.isArray(list) ? list : [];
     },
   });
 
@@ -117,8 +119,9 @@ export function Users() {
       setIsCreating(false);
       form.reset();
       refetch();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to create user', variant: 'destructive' });
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message || 'Failed to create user';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
       setIsCreating(false);
     }
   };

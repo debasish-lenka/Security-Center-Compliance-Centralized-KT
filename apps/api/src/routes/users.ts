@@ -3,6 +3,18 @@ import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { createAuthService } from '../services/auth.js';
 
+const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'SECURITY_ANALYST', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER', 'VIEWER'] as const;
+type AppUserRole = (typeof USER_ROLES)[number];
+
+const CreateUserSchema = z.object({
+  email: z.string().email().max(255),
+  fullName: z.string().trim().min(2).max(255),
+  password: z.string().min(8).max(128),
+  // Either a UserRole enum value or the id of a Role (what the Users page dropdown sends)
+  role: z.string().min(1),
+  department: z.string().trim().max(255).optional().nullable(),
+});
+
 const UpdateUserSchema = z.object({
   fullName: z.string().min(1).max(255).optional(),
   department: z.string().max(255).optional().nullable(),
@@ -70,6 +82,60 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // Get user profile
+  // Create user (admin only)
+  app.post('/', {
+    schema: { body: CreateUserSchema },
+    preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN', 'ADMIN'])],
+  }, async (request, reply) => {
+    const actorId = request.userId!;
+    const actorRole = request.user!.role;
+    const data = request.body as z.infer<typeof CreateUserSchema>;
+
+    // Resolve `role`: enum value, or a Role row whose name maps onto the enum
+    let roleRow: { id: string; name: string } | null = null;
+    let role: AppUserRole | undefined = USER_ROLES.find((r) => r === data.role);
+    if (!role) {
+      roleRow = await app.prisma.role.findUnique({ where: { id: data.role }, select: { id: true, name: true } }).catch(() => null);
+      if (!roleRow) {
+        return reply.code(400).send({ success: false, error: { code: 'INVALID_ROLE', message: 'Unknown role' } });
+      }
+      const normalized = roleRow.name.trim().toUpperCase().replace(/\s+/g, '_');
+      role = USER_ROLES.find((r) => r === normalized) ?? 'USER';
+    }
+
+    // Only a super admin can mint admins
+    if ((role === 'SUPER_ADMIN' || role === 'ADMIN') && actorRole !== 'SUPER_ADMIN') {
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only a super admin can create admin accounts' } });
+    }
+
+    const email = data.email.toLowerCase();
+    if (await app.prisma.profile.findUnique({ where: { email }, select: { id: true } })) {
+      return reply.code(409).send({ success: false, error: { code: 'CONFLICT', message: 'A user with this email already exists' } });
+    }
+
+    const passwordHash = await authService.hashPassword(data.password);
+    const departmentId = data.department
+      ? (await app.prisma.department.upsert({ where: { name: data.department }, update: {}, create: { name: data.department } })).id
+      : null;
+
+    const user = await app.prisma.profile.create({
+      data: {
+        email,
+        passwordHash,
+        fullName: data.fullName,
+        departmentId,
+        role,
+        status: 'ACTIVE',
+        ...(roleRow ? { userRoles: { create: { roleId: roleRow.id, assignedBy: actorId } } } : {}),
+      },
+      select: { id: true, email: true, fullName: true, role: true, status: true, createdAt: true, department: { select: { name: true } } },
+    });
+
+    await auditLogger.logResource('CREATE', actorId, 'user', user.id, { email, role }, request.ip, request.headers['user-agent']);
+
+    return reply.code(201).send({ success: true, data: { ...user, department: user.department?.name ?? null } });
+  });
+
   app.get('/:userId', async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;
