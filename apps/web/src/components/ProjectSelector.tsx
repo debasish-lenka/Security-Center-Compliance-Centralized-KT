@@ -9,7 +9,7 @@ export function ProjectSelector() {
     return (
       <Select disabled>
         <SelectTrigger className="w-48 bg-dbi-elevated border-dbi-border">
-          <SelectValue placeholder="Loading projects..." />
+          <SelectValue placeholder={isLoading ? 'Loading projects...' : 'No projects yet'} />
         </SelectTrigger>
       </Select>
     );

@@ -104,28 +104,24 @@ export function ExecutiveDashboard() {
           value={`${m?.organizationHealthScore || 0}%`}
           icon={metricIcons.organizationHealth}
           accentColor="cyan"
-          trend={m?.organizationHealthScore && m.organizationHealthScore > 80 ? { value: 5, label: 'vs last month' } : { value: -2, label: 'vs last month' }}
         />
         <MetricCard
           title="Compliance Score"
           value={`${m?.complianceScore || 0}%`}
           icon={metricIcons.complianceScore}
           accentColor="emerald"
-          trend={m?.complianceScore && m.complianceScore > 75 ? { value: 3, label: 'vs last month' } : { value: -1, label: 'vs last month' }}
         />
         <MetricCard
           title="Open Risks"
           value={m?.openRisks || 0}
           icon={metricIcons.openRisks}
           accentColor="rose"
-          trend={{ value: m?.openRisks ? -(m.openRisks) : 0, label: 'vs last month' }}
         />
         <MetricCard
           title="Team Utilization"
           value={`${m?.teamUtilization || 0}%`}
           icon={metricIcons.teamUtilization}
           accentColor="indigo"
-          trend={m?.teamUtilization && m.teamUtilization > 70 ? { value: 2, label: 'vs last month' } : { value: -3, label: 'vs last month' }}
         />
       </div>
 

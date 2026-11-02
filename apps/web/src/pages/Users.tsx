@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Search, Edit, Trash2, Eye, UserPlus, Loader2, Mail, User } from 'lucide-react';
+import { Search, Edit, Trash2, Eye, UserPlus, Loader2, Mail, User, KeyRound, Send, ShieldOff } from 'lucide-react';
 import { formatDate, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
@@ -469,18 +469,18 @@ export function Users() {
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             {(me?.role === 'SUPER_ADMIN' || !['SUPER_ADMIN', 'ADMIN'].includes(user.role)) && (
-                              <Button variant="outline" size="sm" onClick={() => { setPwUser(user); setNewPassword(''); }}>
-                                Set password
+                              <Button variant="ghost" size="icon" title="Set password" aria-label="Set password" onClick={() => { setPwUser(user); setNewPassword(''); }}>
+                                <KeyRound className="h-4 w-4" />
                               </Button>
                             )}
                             {user.status === 'PENDING' && (
-                              <Button variant="outline" size="sm" onClick={() => resendInvite(user)}>
-                                Resend invite
+                              <Button variant="ghost" size="icon" title="Resend invite" aria-label="Resend invite" onClick={() => resendInvite(user)}>
+                                <Send className="h-4 w-4" />
                               </Button>
                             )}
                             {me?.role === 'SUPER_ADMIN' && ['ADMIN', 'SUPER_ADMIN'].includes(user.role) && user.status === 'ACTIVE' && (
-                              <Button variant="outline" size="sm" onClick={() => resetMfa(user)}>
-                                Reset 2FA
+                              <Button variant="ghost" size="icon" title="Reset 2FA" aria-label="Reset 2FA" onClick={() => resetMfa(user)}>
+                                <ShieldOff className="h-4 w-4" />
                               </Button>
                             )}
                             <Button variant="ghost" size="icon" asChild>
