@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { createAuthService } from '../services/auth.js';
+import { randomBytes } from 'crypto';
+import { inviteAndEmail } from '../services/invites.js';
 
 const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'SECURITY_ANALYST', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER', 'VIEWER'] as const;
 type AppUserRole = (typeof USER_ROLES)[number];
@@ -9,7 +11,6 @@ type AppUserRole = (typeof USER_ROLES)[number];
 const CreateUserSchema = z.object({
   email: z.string().email().max(255),
   fullName: z.string().trim().min(2).max(255),
-  password: z.string().min(8).max(128),
   // Either a UserRole enum value or the id of a Role (what the Users page dropdown sends)
   role: z.string().min(1),
   department: z.string().trim().max(255).optional().nullable(),
@@ -21,6 +22,16 @@ const UpdateUserSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING', 'SUSPENDED']).optional(),
   role: z.enum(['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER']).optional(),
 });
+
+// Only a super admin may see the raw link, and only when the email could not be sent
+// (otherwise an admin could activate someone else's account themselves)
+function inviteResult(invite: Awaited<ReturnType<typeof inviteAndEmail>>, actorRole: string) {
+  return {
+    emailed: invite.sent,
+    expiresAt: invite.expiresAt,
+    ...(invite.sent ? {} : { error: invite.error, url: actorRole === 'SUPER_ADMIN' ? invite.url : undefined }),
+  };
+}
 
 export async function userRoutes(app: FastifyInstance) {
   const auditLogger = createAuditLogger(app);
@@ -113,7 +124,8 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(409).send({ success: false, error: { code: 'CONFLICT', message: 'A user with this email already exists' } });
     }
 
-    const passwordHash = await authService.hashPassword(data.password);
+    // No password yet: the user chooses one via the emailed activation link
+    const passwordHash = await authService.hashPassword(randomBytes(32).toString('hex'));
     const departmentId = data.department
       ? (await app.prisma.department.upsert({ where: { name: data.department }, update: {}, create: { name: data.department } })).id
       : null;
@@ -125,7 +137,7 @@ export async function userRoutes(app: FastifyInstance) {
         fullName: data.fullName,
         departmentId,
         role,
-        status: 'ACTIVE',
+        status: 'PENDING',
         ...(roleRow ? { userRoles: { create: { roleId: roleRow.id, assignedBy: actorId } } } : {}),
       },
       select: { id: true, email: true, fullName: true, role: true, status: true, createdAt: true, department: { select: { name: true } } },
@@ -133,7 +145,38 @@ export async function userRoutes(app: FastifyInstance) {
 
     await auditLogger.logResource('CREATE', actorId, 'user', user.id, { email, role }, request.ip, request.headers['user-agent']);
 
-    return reply.code(201).send({ success: true, data: { ...user, department: user.department?.name ?? null } });
+    const invite = await inviteAndEmail(app.prisma, user);
+    return reply.code(201).send({
+      success: true,
+      data: { ...user, department: user.department?.name ?? null, invite: inviteResult(invite, actorRole) },
+    });
+  });
+
+  // Resend the activation link (pending accounts only)
+  app.post('/:userId/resend-invite', {
+    preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN', 'ADMIN'])],
+  }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const user = await app.prisma.profile.findUnique({ where: { id: userId } });
+    if (!user) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    if (user.status !== 'PENDING') {
+      return reply.code(400).send({ success: false, error: { code: 'NOT_PENDING', message: 'This account is already activated' } });
+    }
+    const invite = await inviteAndEmail(app.prisma, user);
+    await auditLogger.logResource('UPDATE', request.userId!, 'user', userId, { action: 'resend_invite', emailed: invite.sent }, request.ip, request.headers['user-agent']);
+    return reply.send({ success: true, data: inviteResult(invite, request.user!.role) });
+  });
+
+  // Lost phone: clear the authenticator so the admin enrolls again on next login
+  app.post('/:userId/reset-mfa', {
+    preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN'])],
+  }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const user = await app.prisma.profile.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    await app.prisma.profile.update({ where: { id: userId }, data: { totpEnabled: false, totpSecretEnc: null, recoveryCodeHashes: [] } });
+    await auditLogger.logResource('UPDATE', request.userId!, 'user', userId, { action: 'reset_mfa' }, request.ip, request.headers['user-agent']);
+    return reply.send({ success: true, data: null });
   });
 
   app.get('/:userId', async (request, reply) => {

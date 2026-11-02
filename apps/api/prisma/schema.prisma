@@ -58,6 +58,12 @@ model Profile {
   createdWorkflows            Workflow[]         @relation("WorkflowCreator")
   stickyCriticalAlerts        StickyCriticalAlert[]
 
+  // Two-factor auth (TOTP). Required for SUPER_ADMIN / ADMIN.
+  totpSecretEnc               String?   // AES-GCM encrypted base32 secret
+  totpEnabled                 Boolean   @default(false)
+  recoveryCodeHashes          String[]  @default([])
+  inviteTokens                InviteToken[]
+
   @@map("profiles")
 }
 
@@ -918,4 +924,53 @@ enum AlertType {
   SYSTEM_CONFIG_CHANGE
   DATA_EXPORT
   BULK_OPERATION
+}
+
+// ============================================
+// Invitations and mail configuration
+// ============================================
+
+// One-time account activation link. Only a hash of the token is stored.
+model InviteToken {
+  id                   String    @id @default(uuid())
+  userId               String
+  tokenHash            String    @unique
+  expiresAt            DateTime
+  usedAt               DateTime?
+  // Held between "set password" and "confirm authenticator" for admins
+  pendingPasswordHash  String?
+  pendingTotpSecretEnc String?
+  createdAt            DateTime  @default(now())
+
+  user                 Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("invite_tokens")
+}
+
+enum MailProvider {
+  SMTP
+  GRAPH // Microsoft Graph via an Entra ID (Azure AD) enterprise app
+}
+
+// Single-row table (id = "default") configured by a super admin in the UI
+model MailSettings {
+  id                 String       @id @default("default")
+  provider           MailProvider @default(SMTP)
+  fromName           String       @default("DBI Security Center")
+  fromEmail          String       @default("")
+  // SMTP
+  smtpHost           String?
+  smtpPort           Int?         @default(587)
+  smtpSecure         Boolean      @default(false) // true = implicit TLS (465); false = STARTTLS
+  smtpUser           String?
+  smtpPassEnc        String?
+  // Microsoft Graph (client-credentials flow)
+  tenantId           String?
+  clientId           String?
+  clientSecretEnc    String?
+  updatedBy          String?
+  updatedAt          DateTime     @updatedAt
+
+  @@map("mail_settings")
 }

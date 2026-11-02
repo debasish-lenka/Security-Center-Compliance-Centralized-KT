@@ -10,6 +10,7 @@ import {
   Users,
   Bell,
   Settings,
+  Mail,
   BookOpen,
   Shield,
 } from 'lucide-react';
@@ -64,6 +65,7 @@ export const navigationSections: NavSection[] = [
       { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Admin Control Center', href: '/admin-control-center', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN', 'SUPER_ADMIN'] },
+      { name: 'Mail Settings', href: '/mail-settings', icon: Mail, roles: ['SUPER_ADMIN'] },
     ],
   },
 ];

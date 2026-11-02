@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { usersApi, rolesApi } from '@/lib/api';
+import { usersApi, rolesApi, accessApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,7 +27,6 @@ const userSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   role: z.string().min(1, 'Role is required'),
   department: z.string().optional(),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -107,17 +107,45 @@ export function Users() {
       fullName: '',
       role: '',
       department: '',
-      password: '',
     },
   });
 
   const [createOpen, setCreateOpen] = useState(false);
+  const { user: me } = useAuth();
+  const [inviteInfo, setInviteInfo] = useState<{ email: string; url?: string; error?: string } | null>(null);
+
+  const resendInvite = async (u: { id: string; email: string }) => {
+    try {
+      const res = await accessApi.resendInvite(u.id);
+      const invite = res.data?.data ?? res.data;
+      if (invite.emailed) toast({ title: 'Invitation sent', description: `A new link was emailed to ${u.email}` });
+      else setInviteInfo({ email: u.email, url: invite.url, error: invite.error });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.response?.data?.error?.message || 'Could not resend invitation', variant: 'destructive' });
+    }
+  };
+
+  const resetMfa = async (u: { id: string; email: string }) => {
+    if (!confirm(`Reset the authenticator for ${u.email}? They will set up a new one at next login.`)) return;
+    try {
+      await accessApi.resetMfa(u.id);
+      toast({ title: 'Authenticator reset', description: `${u.email} will enroll again at next login` });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.response?.data?.error?.message || 'Could not reset', variant: 'destructive' });
+    }
+  };
 
   const onSubmit = async (data: UserFormData) => {
     setIsCreating(true);
     try {
-      await usersApi.create(data);
-      toast({ title: 'User created', description: 'The user has been created successfully' });
+      const res = await usersApi.create(data);
+      const invite = res.data?.data?.invite ?? res.data?.invite;
+      if (invite && !invite.emailed) {
+        // Email isn't set up or failed: a super admin gets the link to pass on manually
+        setInviteInfo({ email: data.email, url: invite.url, error: invite.error });
+      } else {
+        toast({ title: 'Invitation sent', description: `An activation link (valid 24 hours) was emailed to ${data.email}` });
+      }
       setIsCreating(false);
       form.reset();
       setCreateOpen(false);
@@ -211,19 +239,10 @@ export function Users() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <p className="text-sm text-dbi-textSecondary">
+                  No password is needed: the user receives an email with a link (valid 24 hours) to set their own password.
+                  Admins also set up an authenticator app.
+                </p>
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => form.reset()}>Cancel</Button>
                   <Button type="submit" disabled={isCreating}>
@@ -365,6 +384,16 @@ export function Users() {
                         <TableCell className="text-sm text-dbi-textSecondary">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
+                            {user.status === 'PENDING' && (
+                              <Button variant="outline" size="sm" onClick={() => resendInvite(user)}>
+                                Resend invite
+                              </Button>
+                            )}
+                            {me?.role === 'SUPER_ADMIN' && ['ADMIN', 'SUPER_ADMIN'].includes(user.role) && user.status === 'ACTIVE' && (
+                              <Button variant="outline" size="sm" onClick={() => resetMfa(user)}>
+                                Reset 2FA
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" asChild>
                               <Link to={`/users/${user.id}`}>
                                 <Eye className="h-4 w-4" />
@@ -402,6 +431,28 @@ export function Users() {
           )}
         </CardContent>
       </Card>
+    
+      <Dialog open={!!inviteInfo} onOpenChange={(o) => !o && setInviteInfo(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Account created, email not sent</DialogTitle>
+            <DialogDescription>
+              {inviteInfo?.error ? `${inviteInfo.error} ` : ''}
+              {inviteInfo?.url
+                ? `Send this one-time link (valid 24 hours) to ${inviteInfo.email} yourself:`
+                : 'Ask a super admin to configure email, then use "Resend invite".'}
+            </DialogDescription>
+          </DialogHeader>
+          {inviteInfo?.url && (
+            <div className="space-y-3">
+              <Input readOnly value={inviteInfo.url} onFocus={(e) => e.currentTarget.select()} />
+              <Button onClick={() => { navigator.clipboard?.writeText(inviteInfo.url!); toast({ title: 'Link copied' }); }}>
+                Copy link
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

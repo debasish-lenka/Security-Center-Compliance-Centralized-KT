@@ -11,7 +11,13 @@ chmod +x update.sh
 docker compose up -d --build
 docker compose exec -e NODE_ENV=development api node dist/db/seed.js   # creates admin@dbi.example.com
 ```
-Open `http://<UBUNTU_IP>:<WEB_PORT>`, log in with `admin@dbi.example.com` and the `SEED_ADMIN_PASSWORD` you set, then change the password.
+Open `https://<UBUNTU_IP>:<WEB_PORT>` (default 8443). The certificate is self-signed, so the browser shows a warning once: choose Advanced, then Continue.
+Log in with `admin@dbi.example.com` and `SEED_ADMIN_PASSWORD`. Admin accounts must set up an authenticator app (Microsoft/Google Authenticator) at first login, and save the recovery codes.
+
+## Inviting users
+1. Super admin: **Mail Settings** (sidebar, Administration) → choose SMTP (Office 365) or Enterprise app (Microsoft Graph) → Save → send a test email.
+2. **Team & Users → Add User** (name, email, role; no password). The user gets an email with a one-time link valid 24 hours; they set their password (admins also enroll the authenticator).
+3. If email fails, a super admin sees the link on screen to pass on. **Resend invite** is available for pending users; **Reset 2FA** (super admin) for a lost phone.
 
 ## Getting new changes
 On your laptop: `git push`. On Ubuntu: `./update.sh` (pulls, rebuilds, restarts only if changed).

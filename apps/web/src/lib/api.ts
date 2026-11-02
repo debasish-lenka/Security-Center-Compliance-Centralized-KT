@@ -1509,3 +1509,22 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+
+// Two-factor login, account activation and mail settings (no mock mode: these need the real API)
+export const accessApi = {
+  verifyMfa: (data: { mfaToken: string; code?: string; recoveryCode?: string }) => api.post('/v1/auth/login/mfa', data),
+  mfaSetup: (mfaToken: string) => api.post('/v1/auth/mfa/setup', { mfaToken }),
+  mfaConfirm: (mfaToken: string, code: string) => api.post('/v1/auth/mfa/confirm', { mfaToken, code }),
+  getInvite: (token: string) => api.get(`/v1/auth/invite/${token}`),
+  setInvitePassword: (token: string, password: string) => api.post(`/v1/auth/invite/${token}/password`, { password }),
+  confirmInvite: (token: string, code: string) => api.post(`/v1/auth/invite/${token}/confirm`, { code }),
+  resendInvite: (userId: string) => api.post(`/v1/users/${userId}/resend-invite`),
+  resetMfa: (userId: string) => api.post(`/v1/users/${userId}/reset-mfa`),
+};
+
+export const mailSettingsApi = {
+  get: () => api.get('/v1/admin/mail-settings'),
+  save: (data: Record<string, unknown>) => api.put('/v1/admin/mail-settings', data),
+  sendTest: (to: string) => api.post('/v1/admin/mail-settings/test', { to }),
+};

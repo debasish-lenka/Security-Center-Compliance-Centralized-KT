@@ -12,10 +12,16 @@ interface User {
   status: string;
 }
 
+export type LoginOutcome =
+  | { status: 'ok' }
+  | { status: 'mfa'; mfaToken: string; setupRequired: boolean }
+  | { status: 'error' };
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<LoginOutcome>;
+  completeLogin: (user: User, token: string) => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -46,19 +52,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  // Final step of any login (password only, or password + authenticator)
+  const completeLogin = (userData: User, token: string) => {
+    setAuthToken(token);
+    setUser(userData);
+    setStoredUser(userData);
+    toast({ title: 'Welcome back!', description: `Logged in as ${userData.fullName}` });
+  };
+
+  const login = async (email: string, password: string): Promise<LoginOutcome> => {
     try {
       const response = await authApi.login(email, password);
-      const { user: userData, token } = response.data.data;
-      setAuthToken(token);
-      setUser(userData);
-      setStoredUser(userData);
-      toast({ title: 'Welcome back!', description: `Logged in as ${userData.fullName}` });
-      return true;
+      const data = response.data.data;
+      if (data.mfaToken) {
+        return { status: 'mfa', mfaToken: data.mfaToken, setupRequired: !!data.mfaSetupRequired };
+      }
+      completeLogin(data.user, data.token);
+      return { status: 'ok' };
     } catch (error: any) {
       const message = error.response?.data?.error?.message || 'Login failed';
       toast({ title: 'Login Failed', description: message, variant: 'destructive' });
-      return false;
+      return { status: 'error' };
     }
   };
 
@@ -86,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, completeLogin, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

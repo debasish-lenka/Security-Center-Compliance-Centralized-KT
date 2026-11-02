@@ -3,6 +3,12 @@ import argon2 from 'argon2';
 import { randomBytes } from 'crypto';
 import { env } from '../utils/env.js';
 import { createAuditLogger } from './audit-logger.js';
+import { requiresMfa, verifyTotp, consumeRecoveryCode } from './mfa.js';
+import { decryptSecret } from './crypto.js';
+
+export type LoginResult =
+  | { kind: 'session'; user: any; token: string }
+  | { kind: 'mfa'; setupRequired: boolean; mfaToken: string };
 
 export class AuthService {
   private app: FastifyInstance;
@@ -41,7 +47,7 @@ export class AuthService {
     password: string,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<{ user: any; token: string } | null> {
+  ): Promise<LoginResult | null> {
     const user = await this.prisma.profile.findUnique({
       where: { email: email.toLowerCase() },
       include: { department: { select: { name: true } } },
@@ -64,15 +70,23 @@ export class AuthService {
       return null;
     }
 
-    // Generate JWT
-    const token = this.app.jwt.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
+    // Admins and super admins must pass a second factor before getting a session
+    if (requiresMfa(user.role)) {
+      const mfaToken = this.app.jwt.sign({ sub: user.id, purpose: 'mfa' }, { expiresIn: '5m' });
+      return { kind: 'mfa', setupRequired: !user.totpEnabled, mfaToken };
+    }
+
+    return { kind: 'session', ...(await this.issueSession(user.id, ipAddress, userAgent)) };
+  }
+
+  // Final step of every login: sign the session token and audit it
+  async issueSession(userId: string, ipAddress?: string, userAgent?: string): Promise<{ user: any; token: string }> {
+    const user = await this.prisma.profile.findUniqueOrThrow({
+      where: { id: userId },
+      include: { department: { select: { name: true } } },
     });
-
+    const token = this.app.jwt.sign({ sub: user.id, email: user.email, role: user.role });
     await this.auditLogger.logAuth('LOGIN', user.id, ipAddress, userAgent, true);
-
     return {
       user: {
         id: user.id,
@@ -84,6 +98,32 @@ export class AuthService {
       },
       token,
     };
+  }
+
+  // Validates a short-lived MFA token issued after the password step
+  verifyMfaToken(mfaToken: string): string | null {
+    try {
+      const payload = this.app.jwt.verify<{ sub: string; purpose?: string }>(mfaToken);
+      return payload.purpose === 'mfa' ? payload.sub : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Checks an authenticator code or a one-time recovery code
+  async verifySecondFactor(userId: string, input: { code?: string; recoveryCode?: string }): Promise<boolean> {
+    const user = await this.prisma.profile.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'ACTIVE' || !user.totpEnabled || !user.totpSecretEnc) return false;
+
+    if (input.code) return verifyTotp(decryptSecret(user.totpSecretEnc), input.code);
+
+    if (input.recoveryCode) {
+      const remaining = consumeRecoveryCode(user.recoveryCodeHashes, input.recoveryCode);
+      if (!remaining) return false;
+      await this.prisma.profile.update({ where: { id: userId }, data: { recoveryCodeHashes: remaining } });
+      return true;
+    }
+    return false;
   }
 
   async logout(userId: string, ipAddress?: string, userAgent?: string): Promise<void> {

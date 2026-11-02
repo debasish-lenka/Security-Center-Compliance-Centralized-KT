@@ -19,6 +19,7 @@ import { knowledgeBookRoutes } from './knowledge-books.js';
 import { stickyAlertRoutes } from './sticky-alerts.js';
 import { workflowRoutes } from './workflows.js';
 import { fileRoutes } from './files.js';
+import { mailSettingsRoutes } from './mail-settings.js';
 
 export async function registerRoutes(app: FastifyInstance) {
   // Register all route modules
@@ -41,5 +42,6 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(knowledgeBookRoutes, { prefix: '/api/v1/projects' });
   await app.register(stickyAlertRoutes, { prefix: '/api/v1/alerts' });
   await app.register(workflowRoutes, { prefix: '/api/v1/admin' });
+  await app.register(mailSettingsRoutes, { prefix: '/api/v1/admin' });
   await app.register(fileRoutes, { prefix: '/api/v1/files' });
 }

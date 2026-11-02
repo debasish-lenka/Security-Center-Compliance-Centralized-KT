@@ -6,6 +6,8 @@ const PUBLIC_PATHS = [
   '/api/v1/files/', // signed-link transfers; the token is the credential
   '/docs',
   '/api/v1/auth/login',
+  '/api/v1/auth/mfa',
+  '/api/v1/auth/invite',
   '/api/v1/auth/register',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
@@ -42,7 +44,8 @@ export async function authMiddleware(
     }
 
     // Verify JWT
-    const payload = request.server.jwt.verify<{ sub: string; email: string; role: string }>(token);
+    const payload = request.server.jwt.verify<{ sub: string; email: string; role: string; purpose?: string }>(token);
+    if (payload.purpose) throw new Error('Not a session token');
 
     // Get user from database
     const prisma = request.server.prisma;

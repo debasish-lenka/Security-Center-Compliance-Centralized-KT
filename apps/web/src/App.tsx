@@ -25,6 +25,8 @@ const AuditLogs = lazy(() => import('@/pages/AuditLogs').then((m) => ({ default:
 const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })));
 const Reports = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.Reports })));
 const Assignments = lazy(() => import('@/pages/Assignments').then((m) => ({ default: m.Assignments })));
+const Activate = lazy(() => import('@/pages/Activate').then((m) => ({ default: m.Activate })));
+const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ default: m.MailSettings })));
 const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })));
 const AdminControlCenter = lazy(() => import('@/pages/AdminControlCenter').then((m) => ({ default: m.AdminControlCenter })));
 import { useAuth } from '@/context/AuthContext';
@@ -84,6 +86,11 @@ function AppRoutes() {
         </Route>
       </Route>
 
+      {/* Public: link from the invitation email */}
+      <Route element={<PublicLayout />}>
+        <Route path="/activate/:token" element={<Activate />} />
+      </Route>
+
       <Route element={<Layout />}>
         <Route element={<ProtectedRoute />}>
           {/* Redirect root to Executive Dashboard */}
@@ -118,6 +125,7 @@ function AppRoutes() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/admin-control-center" element={<AdminControlCenter />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/mail-settings" element={<MailSettings />} />
           <Route path="/roles" element={<Roles />} />
 
           {/* SEARCH */}
