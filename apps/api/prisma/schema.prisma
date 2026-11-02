@@ -1,0 +1,921 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Identity and Permissions
+// ============================================
+
+model Profile {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  fullName        String
+  departmentId    String?
+  role            UserRole  @default(USER)
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastActivityAt  DateTime?
+
+  userRoles                   UserRoleAssignment[] @relation("UserRoleAssignments")
+  assignedRoles               UserRoleAssignment[] @relation("AssignedRoles")
+  projectMembers              ProjectMember[]
+  createdProjects             Project[]            @relation("CreatedProjects")
+  ownedProjects               Project[]            @relation("OwnedProjects")
+  tasks                       Task[]                @relation("TaskAssignee")
+  reportedTasks               Task[]                @relation("TaskReporter")
+  ktReports                   DailyKTReport[]
+  documents                   ProjectDocument[]     @relation("DocumentUploader")
+  complianceControls          ComplianceControl[] @relation("ComplianceOwner")
+  remediationTasks            RemediationTask[]   @relation("RemediationAssignee")
+  notifications               Notification[]
+  auditLogs                   AuditLog[]
+  assignedMembers             ProjectMember[]       @relation("AssignedBy")
+  approvedReports             DailyKTReport[]       @relation("ApprovedBy")
+  sessions                    Session[]
+  comments                    ProjectComment[]
+  uploadedDocumentVersions    DocumentVersion[] @relation("UploadedDocumentVersions")
+  documentAccessEvents        DocumentAccessEvent[] @relation("DocumentAccessEvents")
+  ownedDocuments              ProjectDocument[] @relation("DocumentOwner")
+  reviewedDocuments           ProjectDocument[] @relation("DocumentReviewer")
+  documentReviews             DocumentReview[]   @relation("DocumentReviewReviewer")
+  department                  Department?      @relation(fields: [departmentId], references: [id])
+  teamMemberships             TeamMember[]
+  createdTeams                Team[]              @relation("TeamCreator")
+  activityFeed                ActivityFeed[]
+  permissionOverrides         PermissionOverride[] @relation("PermissionOverrideUser")
+  permissionOverrideGrants    PermissionOverride[] @relation("PermissionOverrideGrantor")
+  knowledgeBooks              KnowledgeBook[]    @relation("KnowledgeBookGenerator")
+  createdWorkflows            Workflow[]         @relation("WorkflowCreator")
+  stickyCriticalAlerts        StickyCriticalAlert[]
+
+  @@map("profiles")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  SECURITY_ADMIN
+  SECURITY_ANALYST
+  COMPLIANCE_OFFICER
+  MANAGER
+  USER
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions Permission[]
+  userRoles   UserRoleAssignment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  resource    String   // e.g., 'project', 'document', 'kt_report', 'compliance', 'user', 'role', 'team'
+  action      String   // e.g., 'create', 'read', 'update', 'delete', 'approve', 'reject', 'assign', 'manage'
+  scope       PermissionScope @default(PROJECT) // GLOBAL, PROJECT, TEAM, DEPARTMENT, OWN
+  roles       Role[]
+  overrides   PermissionOverride[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([resource, action, scope])
+  @@map("permissions")
+}
+
+enum PermissionScope {
+  GLOBAL
+  PROJECT
+  TEAM
+  DEPARTMENT
+  OWN
+}
+
+// Permission Override - allows exceptions to role-based permissions
+model PermissionOverride {
+  id          String   @id @default(uuid())
+  userId      String
+  permissionId String
+  effect      OverrideEffect @default(ALLOW) // ALLOW, DENY
+  resourceType String? // Optional: specific resource type (project, document, etc.)
+  resourceId   String? // Optional: specific resource ID
+  reason      String?
+  grantedBy   String
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        Profile  @relation("PermissionOverrideUser", fields: [userId], references: [id], onDelete: Cascade)
+  permission  Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantor     Profile  @relation("PermissionOverrideGrantor", fields: [grantedBy], references: [id])
+
+  @@index([userId])
+  @@index([permissionId])
+  @@index([resourceType, resourceId])
+  @@map("permission_overrides")
+}
+
+enum OverrideEffect {
+  ALLOW
+  DENY
+}
+
+model UserRoleAssignment {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  assignedBy String
+  assignedAt DateTime @default(now())
+
+  user      Profile  @relation("UserRoleAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assigner  Profile  @relation("AssignedRoles", fields: [assignedBy], references: [id])
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+// ============================================
+// Projects and Tasks
+// ============================================
+
+model Project {
+  id                     String        @id @default(uuid())
+  name                   String
+  description            String?
+  category               String?
+  createdById            String
+  ownerId                String
+  startDate              DateTime?
+  expectedCompletionDate DateTime?
+  actualCompletionDate   DateTime?
+  priority               ProjectPriority @default(MEDIUM)
+  status                 ProjectStatus  @default(NOT_STARTED)
+  progress               Int           @default(0)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  creator                Profile       @relation("CreatedProjects", fields: [createdById], references: [id])
+  owner                  Profile       @relation("OwnedProjects", fields: [ownerId], references: [id])
+  members                ProjectMember[]
+  tasks                  Task[]
+  milestones             Milestone[]
+  ktReports              DailyKTReport[]
+  documents              ProjectDocument[]
+  complianceControls     ComplianceControl[]
+  comments               ProjectComment[]
+  activityFeed           ActivityFeed[]
+  knowledgeBooks         KnowledgeBook[]
+
+  @@index([createdById])
+  @@index([ownerId])
+  @@index([status])
+  @@map("projects")
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProjectStatus {
+  NOT_STARTED
+  ONGOING
+  ON_HOLD
+  COMPLETED
+  OVERDUE
+  AT_RISK
+}
+
+model ProjectMember {
+  id        String               @id @default(uuid())
+  projectId String
+  userId    String
+  role      ProjectMemberRole    @default(VIEWER)
+  assignedAt DateTime            @default(now())
+  assignedBy String
+
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      Profile              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assigner  Profile              @relation("AssignedBy", fields: [assignedBy], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+enum ProjectMemberRole {
+  OWNER
+  LEAD
+  CONTRIBUTOR
+  REVIEWER
+  VIEWER
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  projectId   String
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  assigneeId  String?
+  reporterId  String
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    Profile?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reporter    Profile      @relation("TaskReporter", fields: [reporterId], references: [id])
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Milestone {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  dueDate     DateTime
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("milestones")
+}
+
+model ProjectComment {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_comments")
+}
+
+// ============================================
+// Teams (for document visibility and collaboration)
+// ============================================
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  departmentId String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     Profile  @relation("TeamCreator", fields: [createdById], references: [id])
+  members     TeamMember[]
+  department  Department? @relation(fields: [departmentId], references: [id])
+
+  @@unique([name])
+  @@index([departmentId])
+  @@index([createdById])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  role      TeamMemberRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+enum TeamMemberRole {
+  LEAD
+  MEMBER
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  parentId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent      Department? @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children    Department[] @relation("DepartmentHierarchy")
+  teams       Team[]
+  members     Profile[]
+
+  @@index([parentId])
+  @@map("departments")
+}
+
+// Add department to Profile
+// (will update Profile model below)
+
+// ============================================
+// Activity Feed (for real-time monitoring)
+// ============================================
+
+model ActivityFeed {
+  id          String   @id @default(uuid())
+  actorId     String
+  action      String   // CREATE, UPDATE, DELETE, APPROVE, REJECT, UPLOAD, DOWNLOAD, SHARE, VIEW, ASSIGN, UNASSIGN, COMMENT, LOGIN, LOGOUT
+  resourceType String  // project, document, task, kt_report, compliance_control, user, team, etc.
+  resourceId  String?
+  projectId   String?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  actor       Profile  @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([projectId])
+  @@index([resourceType, resourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("activity_feed")
+}
+
+// ============================================
+// Knowledge Books (Priority 3)
+// ============================================
+
+model KnowledgeBook {
+  id          String   @id @default(uuid())
+  projectId   String
+  title       String
+  description String?
+  status      KnowledgeBookStatus @default(GENERATING)
+  version     Int      @default(1)
+  pdfUrl      String?
+  pdfStorageKey String?
+  generatedById String
+  generatedAt DateTime?
+  includesDocuments String[] @default([]) // Document IDs included
+  coverConfig Json?    // Cover page configuration
+  tocConfig   Json?    // Table of contents configuration
+  pageNumbering String  @default("continuous")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generator   Profile  @relation("KnowledgeBookGenerator", fields: [generatedById], references: [id])
+
+  @@index([projectId])
+  @@index([generatedById])
+  @@index([status])
+  @@map("knowledge_books")
+}
+
+enum KnowledgeBookStatus {
+  GENERATING
+  COMPLETED
+  FAILED
+  ARCHIVED
+}
+
+// ============================================
+// Workflows (Priority 7)
+// ============================================
+
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  type        WorkflowType
+  trigger     WorkflowTrigger
+  config      Json     // Workflow configuration (conditions, actions, etc.)
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     Profile  @relation("WorkflowCreator", fields: [createdById], references: [id])
+  executions  WorkflowExecution[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([createdById])
+  @@map("workflows")
+}
+
+model WorkflowExecution {
+  id          String   @id @default(uuid())
+  workflowId  String
+  status      ExecutionStatus @default(PENDING)
+  input       Json?
+  output      Json?
+  error       String?
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  triggeredBy String?
+
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("workflow_executions")
+}
+
+enum WorkflowType {
+  DOCUMENT_APPROVAL
+  KT_REPORT_REVIEW
+  COMPLIANCE_REMEDIATION
+  PROJECT_CREATION
+  USER_ONBOARDING
+  ACCESS_REQUEST
+  CUSTOM
+}
+
+enum WorkflowTrigger {
+  MANUAL
+  ON_CREATE
+  ON_UPDATE
+  ON_STATUS_CHANGE
+  SCHEDULED
+  WEBHOOK
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// Daily KT Reporting
+// ============================================
+
+model DailyKTReport {
+  id              String        @id @default(uuid())
+  projectId       String
+  userId          String
+  reportDate      DateTime      @db.Date
+  workCompleted   String?
+  detailedWork    String?
+  completedTasks  String?
+  pendingTasks    String?
+  challenges      String?
+  nextDayPlan     String?
+  status          KTReportStatus @default(DRAFT)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  approvedById    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approver        Profile?      @relation("ApprovedBy", fields: [approvedById], references: [id])
+  documents       ProjectDocument[]
+
+  @@unique([projectId, userId, reportDate])
+  @@index([projectId])
+  @@index([userId])
+  @@index([reportDate])
+  @@index([status])
+  @@map("daily_kt_reports")
+}
+
+enum KTReportStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+// ============================================
+// Documents
+// ============================================
+
+model ProjectDocument {
+  id           String              @id @default(uuid())
+  projectId    String
+  name         String
+  originalName String
+  mimeType     String
+  size         Int
+  category     DocumentCategory    @default(OTHER)
+  uploadedById String
+  ownerId      String              // Document owner (transferable)
+  coAuthorIds  String[]            @default([]) // Multi-author support
+  tags         String[]            @default([]) // Tag array
+  status       DocumentStatus      @default(DRAFT)
+  reviewStatus ReviewStatus?       // PENDING, APPROVED, REJECTED, CHANGES_REQUESTED
+  reviewerId   String?             // Assigned reviewer
+  reviewedAt   DateTime?
+  reviewComments String?
+  watermarkConfig Json?           // Watermark settings per document
+  metadata     Json?              // Custom metadata key-value
+  ktReportId   String?
+  storageKey   String
+  version      Int                 @default(1)
+  visibility   DocumentVisibility  @default(PROJECT_MEMBERS)
+  visibleToUserIds String[]        @default([]) // Custom user access list
+  visibleToTeamIds String[]        @default([]) // Team IDs for TEAM visibility
+  visibleToDeptIds String[]        @default([]) // Department IDs for DEPARTMENT visibility
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader     Profile             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  owner        Profile             @relation("DocumentOwner", fields: [ownerId], references: [id])
+  reviewer     Profile?            @relation("DocumentReviewer", fields: [reviewerId], references: [id])
+  ktReport     DailyKTReport?      @relation(fields: [ktReportId], references: [id])
+  versions     DocumentVersion[]
+  accessEvents DocumentAccessEvent[]
+  reviews      DocumentReview[]
+
+  @@index([projectId])
+  @@index([uploadedById])
+  @@index([ownerId])
+  @@index([reviewerId])
+  @@index([ktReportId])
+  @@index([category])
+  @@index([status])
+  @@index([visibility])
+  @@map("project_documents")
+}
+
+enum DocumentStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model DocumentReview {
+  id          String   @id @default(uuid())
+  documentId  String
+  reviewerId  String
+  status      ReviewStatus
+  comments    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  document    ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviewer    Profile         @relation("DocumentReviewReviewer", fields: [reviewerId], references: [id])
+
+  @@index([documentId])
+  @@index([reviewerId])
+  @@map("document_reviews")
+}
+
+enum DocumentCategory {
+  KT_REPORT
+  TECHNICAL
+  COMPLIANCE
+  MEETING_NOTES
+  DESIGN
+  OTHER
+}
+
+enum DocumentVisibility {
+  PRIVATE
+  PROJECT_MEMBERS
+  TEAM
+  DEPARTMENT
+  ORGANIZATION
+  CUSTOM_USERS
+}
+
+model DocumentVersion {
+  id           String   @id @default(uuid())
+  documentId   String
+  version      Int
+  storageKey   String
+  size         Int
+  mimeType     String
+  originalName String
+  uploadedById String
+  changelog    String?  // What changed in this version
+  isCurrent    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  document     ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploader     Profile         @relation("UploadedDocumentVersions", fields: [uploadedById], references: [id])
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+model DocumentAccessEvent {
+  id        String   @id @default(uuid())
+  documentId String
+  userId    String
+  action    String   // VIEW, DOWNLOAD, PREVIEW
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  document  ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user      Profile         @relation("DocumentAccessEvents", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("document_access_events")
+}
+
+// ============================================
+// Compliance
+// ============================================
+
+model ComplianceControl {
+  id              String              @id @default(uuid())
+  category        String
+  controlId       String
+  title           String
+  description     String?
+  projectId       String?
+  ownerId         String
+  dueDate         DateTime?
+  status          ComplianceStatus    @default(NOT_STARTED)
+  evidence        String?
+  lastReviewedAt  DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  project         Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  owner           Profile             @relation("ComplianceOwner", fields: [ownerId], references: [id])
+  remediationTasks RemediationTask[]
+
+  @@unique([controlId, projectId])
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([status])
+  @@map("compliance_controls")
+}
+
+enum ComplianceStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  AT_RISK
+}
+
+model RemediationTask {
+  id          String                @id @default(uuid())
+  controlId   String
+  title       String
+  description String?
+  assigneeId  String
+  dueDate     DateTime
+  status      RemediationStatus     @default(PENDING)
+  completedAt DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  control     ComplianceControl     @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  assignee    Profile               @relation("RemediationAssignee", fields: [assigneeId], references: [id])
+
+  @@index([controlId])
+  @@index([assigneeId])
+  @@index([status])
+  @@map("remediation_tasks")
+}
+
+enum RemediationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+// ============================================
+// Platform Services
+// ============================================
+
+model Notification {
+  id           String              @id @default(uuid())
+  userId       String
+  type         NotificationType
+  title        String
+  message      String
+  resourceType String?
+  resourceId   String?
+  isRead       Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+
+  user         Profile             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  PROJECT_ASSIGNED
+  DEADLINE_APPROACHING
+  OVERDUE_TASK
+  MISSING_KT_REPORT
+  NEW_DOCUMENT
+  PROJECT_COMPLETED
+  COMMENT_ADDED
+  ROLE_CHANGED
+  PERMISSION_CHANGED
+  DOCUMENT_REVIEW_REQUESTED
+  DOCUMENT_REVIEW_COMPLETED
+  DOCUMENT_APPROVED
+  DOCUMENT_REJECTED
+  DOCUMENT_CHANGES_REQUESTED
+  KT_REPORT_SUBMITTED
+  KT_REPORT_APPROVED
+  KT_REPORT_REJECTED
+  COMPLIANCE_CONTROL_DUE
+  COMPLIANCE_CONTROL_OVERDUE
+  REMEDIATION_TASK_ASSIGNED
+  REMEDIATION_TASK_DUE
+  REMEDIATION_TASK_OVERDUE
+  MENTION
+  CRITICAL_ALERT
+  SYSTEM_MAINTENANCE
+}
+
+model AuditLog {
+  id          String       @id @default(uuid())
+  actorId     String?
+  action      AuditAction
+  resourceType String
+  resourceId  String?
+  details     Json?
+  ipAddress   String?
+  userAgent   String?
+  outcome     AuditOutcome @default(SUCCESS)
+  errorMessage String?
+  createdAt   DateTime     @default(now())
+
+  actor       Profile?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ASSIGN
+  UNASSIGN
+  UPLOAD
+  DOWNLOAD
+  APPROVE
+  REJECT
+  ROLE_CHANGE
+  PERMISSION_CHANGE
+  CONFIG_CHANGE
+  VIEW
+  SHARE
+  TRANSFER_OWNERSHIP
+  SUBMIT_REVIEW
+  ROLLBACK_VERSION
+  GENERATE_KB
+  BULK_ASSIGN
+  EXPORT
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
+// ============================================
+// Sticky Critical Alerts (Priority 6)
+// ============================================
+
+model StickyCriticalAlert {
+  id          String   @id @default(uuid())
+  userId      String   // User who must acknowledge
+  type        AlertType
+  title       String
+  message     String
+  resourceType String?
+  resourceId   String?
+  metadata    Json?
+  isRead      Boolean  @default(false)
+  isDismissed Boolean  @default(false)
+  acknowledgedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([isDismissed])
+  @@index([type])
+  @@map("sticky_critical_alerts")
+}
+
+enum AlertType {
+  PERMISSION_CHANGE
+  DOCUMENT_DELETE
+  DOCUMENT_APPROVE
+  DOCUMENT_REJECT
+  USER_ROLE_CHANGE
+  PROJECT_DELETE
+  COMPLIANCE_OVERDUE
+  SECURITY_INCIDENT
+  SYSTEM_CONFIG_CHANGE
+  DATA_EXPORT
+  BULK_OPERATION
+}

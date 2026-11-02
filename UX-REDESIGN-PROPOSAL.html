@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Center — UX Redesign Proposal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --bg-elevated: #151b23;
+      --bg-card: #1c242d;
+      --border: #2a3542;
+      --text-primary: #e8edf2;
+      --text-secondary: #8b99a8;
+      --text-muted: #5d6d7e;
+      --cyan: #00d4ff;
+      --cyan-dim: #00d4ff33;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --indigo: #6366f1;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text-primary); }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; }
+    .badge { display: inline-flex; align-items: center; padding: 0.25rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .badge-p1 { background: #fef2f2; color: #dc2626; }
+    .badge-p2 { background: #fffbeb; color: #d97706; }
+    .badge-p3 { background: #eff6ff; color: #2563eb; }
+    .wireframe-box { background: var(--bg-elevated); border: 2px dashed var(--border); border-radius: 8px; }
+    h1, h2, h3 { color: var(--text-primary); }
+    a { color: var(--cyan); }
+    code { background: var(--bg-elevated); padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875rem; }
+    pre { background: #0a0f14; border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    pre code { background: transparent; padding: 0; }
+    .nav-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 8px; }
+    .nav-item.active { background: var(--cyan-dim); color: var(--cyan); }
+    .nav-section { font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-top: 1rem; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="max-w-6xl mx-auto p-6 space-y-10">
+    <!-- Header -->
+    <header class="border-b border-[var(--border)] pb-6">
+      <h1 class="text-3xl font-bold tracking-tight">Security Center — UX Redesign Proposal</h1>
+      <p class="text-[var(--text-secondary)] mt-2">Addressing Dashboard/Assignments overlap, Global Search gaps, and Navigation hierarchy issues</p>
+      <div class="flex flex-wrap gap-2 mt-4">
+        <span class="badge badge-p1">P1 — Critical</span>
+        <span class="badge badge-p2">P2 — High</span>
+        <span class="badge badge-p3">P3 — Medium</span>
+      </div>
+    </header>
+
+    <!-- Executive Summary -->
+    <section class="card p-6 space-y-4">
+      <h2 class="text-xl font-semibold">Executive Summary</h2>
+      <div class="grid md:grid-cols-3 gap-4 text-sm">
+        <div class="p-4 wireframe-box rounded-lg">
+          <h3 class="font-medium mb-2">Problem 1: Dashboard ≠ Assignments</h3>
+          <p class="text-[var(--text-secondary)]">Both pages show project cards, metrics, and activity feeds. Users can't distinguish "strategic overview" from "my daily work".</p>
+        </div>
+        <div class="p-4 wireframe-box rounded-lg">
+          <h3 class="font-medium mb-2">Problem 2: Global Search is Local</h3>
+          <p class="text-[var(--text-secondary)]">Header search only filters Documents. No cross-module results (projects, KT reports, compliance, users).</p>
+        </div>
+        <div class="p-4 wireframe-box rounded-lg">
+          <h3 class="font-medium mb-2">Problem 3: Flat Navigation</h3>
+          <p class="text-[var(--text-secondary)]">13 top-level items with no grouping. Admin items mixed with daily tools. No workspace concept.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1. Dashboard Separation Design -->
+    <section id="dashboard-separation" class="space-y-6">
+      <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-[var(--cyan-dim)] flex items-center justify-center text-[var(--cyan)] font-bold">1</span> Dashboard Separation Design</h2>
+
+      <div class="card p-6 space-y-6">
+        <h3 class="font-medium">Design Principle: <span class="text-[var(--cyan)]">"Strategy vs. Execution"</span></h3>
+        <p class="text-[var(--text-secondary)]">Dashboard = Leadership view (health, trends, risks). My Assignments = Operator view (tasks, due dates, blockers).</p>
+
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Security Center Dashboard -->
+          <div class="wireframe-box p-6 rounded-lg space-y-4">
+            <h4 class="font-medium text-[var(--cyan)]">Security Center Dashboard (P1)</h4>
+            <p class="text-sm text-[var(--text-secondary)]">Audience: Managers, CISO, Stakeholders | Cadence: Daily/Weekly review</p>
+            <div class="space-y-3 text-sm">
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--cyan)]"></span><strong>Portfolio Health Score</strong> — Aggregate compliance, risk, delivery metrics</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--cyan)]"></span><strong>Risk Heatmap</strong> — Projects by risk level + trend arrows</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--cyan)]"></span><strong>Compliance Posture</strong> — Framework scores (ISO 27001, NIST, SOC 2) with drift indicators</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--cyan)]"></span><strong>Resource Allocation</strong> — Team capacity vs. committed work</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--emerald)]"></span><strong>Executive Alerts</strong> — Only critical/escalated items requiring decision</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--emerald)]"></span><strong>Trend Sparklines</strong> — 30/60/90-day views for key KPIs</div>
+            </div>
+            <div class="pt-2 border-t border-[var(--border)]">
+              <code class="text-xs">Removed: Project cards, My tasks, Document lists, KT report lists</code>
+            </div>
+          </div>
+
+          <!-- My Assignments Workspace -->
+          <div class="wireframe-box p-6 rounded-lg space-y-4">
+            <h4 class="font-medium text-[var(--amber)]">My Assignments Workspace (P1)</h4>
+            <p class="text-sm text-[var(--text-secondary)]">Audience: Analysts, Auditors, Contributors | Cadence: Hourly/Daily</p>
+            <div class="space-y-3 text-sm">
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--amber)]"></span><strong>My Task Board</strong> — Kanban: To Do / In Progress / Blocked / Done (filterable by project)</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--amber)]"></span><strong>Due This Week</strong> — Sorted by urgency, with SLA countdown</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--amber)]"></span><strong>Blockers & Dependencies</strong> — Items waiting on others, with @mention actions</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--amber)]"></span><strong>KT Reports Due</strong> — My projects' reporting cadence with quick-submit</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--emerald)]"></span><strong>Recent Activity (Mine)</strong> — My comments, approvals, uploads</div>
+              <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[var(--emerald)]"></span><strong>Quick Actions</strong> — Create task, Log time, Request review</div>
+            </div>
+            <div class="pt-2 border-t border-[var(--border)]">
+              <code class="text-xs">Removed: Portfolio metrics, Compliance scores, Team workload charts</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shared vs Unique Matrix -->
+        <h4 class="font-medium">Content Ownership Matrix</h4>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[var(--text-secondary)] border-b border-[var(--border)]">
+                <th class="pb-2 pr-4 w-48">Content Block</th>
+                <th class="pb-2 pr-4">Dashboard</th>
+                <th class="pb-2 pr-4">Assignments</th>
+                <th class="pb-2">Notes</th>
+              </tr>
+            </thead>
+            <tbody class="border-t border-[var(--border)]">
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4 font-medium">Project portfolio cards</td><td class="pr-4">✅ Summary</td><td class="pr-4">✅ Detail</td><td>Dashboard: health only; Assignments: full detail</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4 font-medium">Compliance scores</td><td class="pr-4">✅</td><td class="pr-4">—</td><td>Strategic only</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4 font-medium">My tasks / KT reports</td><td class="pr-4">—</td><td class="pr-4">✅</td><td>Execution only</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4 font-medium">Risk heatmap</td><td class="pr-4">✅</td><td class="pr-4">⚠️ Filtered</td><td>Assignments shows only my projects</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4 font-medium">Team workload</td><td class="pr-4">✅</td><td class="pr-4">—</td><td>Management view</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4 font-medium">Document vault</td><td class="pr-4">—</td><td class="pr-4">✅ Contextual</td><td>Assignments shows project-scoped docs</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Global Search Results Page -->
+    <section id="global-search" class="space-y-6">
+      <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-[var(--cyan-dim)] flex items-center justify-center text-[var(--cyan)] font-bold">2</span> Global Search Results Page (P1)</h2>
+
+      <div class="card p-6 space-y-6">
+        <h3 class="font-medium">Design Principle: <span class="text-[var(--cyan)]">"Unified Findability"</span></h3>
+        <p class="text-[var(--text-secondary)]">Single entry point → categorized results → faceted refinement → deep links to modules.</p>
+
+        <h4 class="font-medium">Search Results Page Layout</h4>
+        <div class="wireframe-box p-6 rounded-lg space-y-4">
+          <div class="flex items-center gap-4 p-4 bg-[var(--bg-card)] rounded-lg border border-[var(--border)]">
+            <input type="text" placeholder="Search projects, documents, reports, people, compliance..." class="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none" style="font-size: 1.125rem;">
+            <span class="text-[var(--text-muted)]">Esc to close</span>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-4">
+            <div class="space-y-3">
+              <div class="flex items-center gap-2 text-sm"><span class="badge badge-p1">Projects</span><span class="text-[var(--text-muted)]">3 results</span></div>
+              <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-[var(--border)] space-y-2">
+                <a href="#" class="font-medium block hover:text-[var(--cyan)]">Security Audit Q1</a>
+                <div class="text-xs text-[var(--text-secondary)] flex gap-3"><span>📊 Ongoing · 65%</span><span>👤 John Doe</span></div>
+                <a href="#" class="font-medium block hover:text-[var(--cyan)]">Endpoint Security Assessment</a>
+                <div class="text-xs text-[var(--text-secondary)] flex gap-3"><span>📊 Not Started</span><span>👤 Jane Smith</span></div>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="flex items-center gap-2 text-sm"><span class="badge" style="background:#e0e7ff;color:#3730a3;">Documents</span><span class="text-[var(--text-muted)]">5 results</span></div>
+              <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-[var(--border)] space-y-2">
+                <a href="#" class="font-medium block hover:text-[var(--cyan)]">Security Policy v2.1</a>
+                <div class="text-xs text-[var(--text-secondary)] flex gap-3"><span>📄 PDF · 1.2 MB</span><span>✅ Approved</span></div>
+                <a href="#" class="font-medium block hover:text-[var(--cyan)]">Physical Security Standards</a>
+                <div class="text-xs text-[var(--text-secondary)] flex gap-3"><span>📄 PDF · 800 KB</span><span>📝 In Review</span></div>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="flex items-center gap-2 text-sm"><span class="badge" style="background:#fef3c7;color:#92400e;">KT Reports</span><span class="text-[var(--text-muted)]">2 results</span></div>
+              <div class="p-3 bg-[var(--bg-card)] rounded-lg border border-[var(--border)] space-y-2">
+                <a href="#" class="font-medium block hover:text-[var(--cyan)]">Weekly Security KT - Jan 15</a>
+                <div class="text-xs text-[var(--text-secondary)] flex gap-3"><span>📋 Submitted</span><span>👤 Sarah Johnson</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-[var(--border)] flex items-center gap-4 text-sm text-[var(--text-secondary)]">
+            <span>Compliance: 1</span>
+            <span>People: 2</span>
+            <span>Audit Logs: 4</span>
+            <a href="#" class="text-[var(--cyan)] hover:underline">View all 17 results →</a>
+          </div>
+        </div>
+
+        <h4 class="font-medium">Faceted Refinement (Right Sidebar)</h4>
+        <div class="wireframe-box p-4 rounded-lg space-y-3 max-w-xs">
+          <div><label class="text-xs text-[var(--text-muted)] block mb-1">Modules</label><div class="space-y-1 text-sm"><label class="flex items-center gap-2"><input type="checkbox" class="accent-[var(--cyan)]"> Projects</label><label class="flex items-center gap-2"><input type="checkbox" class="accent-[var(--cyan)]" checked> Documents</label><label class="flex items-center gap-2"><input type="checkbox" class="accent-[var(--cyan)]"> KT Reports</label></div></div>
+          <div><label class="text-xs text-[var(--text-muted)] block mb-1">Status</label><div class="space-y-1 text-sm"><label class="flex items-center gap-2"><input type="checkbox" class="accent-[var(--cyan)]"> Active</label><label class="flex items-center gap-2"><input type="checkbox" class="accent-[var(--cyan)]"> Completed</label></div></div>
+          <div><label class="text-xs text-[var(--text-muted)] block mb-1">Date Range</label><select class="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded px-3 py-2 text-sm"><option>All time</option><option>Last 7 days</option><option>Last 30 days</option></select></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Updated Navigation Hierarchy -->
+    <section id="navigation" class="space-y-6">
+      <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-[var(--cyan-dim)] flex items-center justify-center text-[var(--cyan)] font-bold">3</span> Updated Navigation Hierarchy (P1)</h2>
+
+      <div class="card p-6 space-y-6">
+        <h3 class="font-medium">Design Principle: <span class="text-[var(--cyan)]">"Workspaces + Modules"</span></h3>
+        <p class="text-[var(--text-secondary)]">Group by user intent (Workspaces) and domain (Modules). Collapsible sections. Admin separated.</p>
+
+        <div class="wireframe-box p-6 rounded-lg">
+          <nav class="space-y-1 max-w-xs" style="font-size: 0.875rem;">
+            <!-- Workspaces -->
+            <div class="nav-section">WORKSPACES</div>
+            <a href="#" class="nav-item active"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg> <span>Dashboard</span></a>
+            <a href="#" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg> <span>My Assignments</span></a>
+
+            <!-- Modules -->
+            <div class="nav-section">MODULES</div>
+            <a href="#" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg> <span>Projects</span></a>
+            <a href="#" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> <span>Documents</span></a>
+            <a href="#" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> <span>KT Reports</span></a>
+            <a href="#" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg> <span>Compliance</span></a>
+            <a href="#" class="nav-item"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg> <span>People</span></a>
+
+            <!-- Admin (collapsible, role-gated) -->
+            <details class="group">
+              <summary class="nav-item text-[var(--text-muted)] cursor-pointer select-none"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg> <span>Administration</span> <svg class="w-4 h-4 ml-auto group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></summary>
+              <div class="pl-8 space-y-1 mt-1 border-l border-[var(--border)]">
+                <a href="#" class="nav-item text-sm py-2"><span>Roles & Permissions</span></a>
+                <a href="#" class="nav-item text-sm py-2"><span>Audit Logs</span></a>
+                <a href="#" class="nav-item text-sm py-2"><span>System Settings</span></a>
+                <a href="#" class="nav-item text-sm py-2"><span>Integrations</span></a>
+              </div>
+            </details>
+          </nav>
+        </div>
+
+        <h4 class="font-medium">Key Changes</h4>
+        <ul class="space-y-2 text-sm text-[var(--text-secondary)]">
+          <li>• <strong>Workspaces</strong> (Dashboard, My Assignments) — intent-based, top-level</li>
+          <li>• <strong>Modules</strong> (Projects, Documents, KT Reports, Compliance, People) — domain-based</li>
+          <li>• <strong>Administration</strong> — collapsible, only visible to Admin/Super Admin roles</li>
+          <li>• Removed: "All Projects" (merged into Projects module), "My Assignments" duplicate entry</li>
+          <li>• Search moved to header (global), not a nav item</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 4. Wireframe Descriptions -->
+    <section id="wireframes" class="space-y-6">
+      <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-[var(--cyan-dim)] flex items-center justify-center text-[var(--cyan)] font-bold">4</span> Wireframe Descriptions</h2>
+
+      <div class="card p-6 space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="wireframe-box p-6 rounded-lg space-y-4">
+            <h4 class="font-medium text-[var(--cyan)]">Dashboard — Desktop (≥1024px)</h4>
+            <div class="space-y-2 text-sm font-mono text-[var(--text-secondary)]">
+              <div>┌─ Header (Search | Notifications | User) ────────────────────────┐</div>
+              <div>│ Sidebar | ┌─ Health Score Card ────────────────────────────┐    │</div>
+              <div>│         │ │ Risk Heatmap │ Compliance Posture │ Resource Alloc │    │</div>
+              <div>│         │ ├─ Executive Alerts (2) ─────────────────────────┤    │</div>
+              <div>│         │ ├─ Trend Sparklines (4) ────────────────────────┤    │</div>
+              <div>│         │ └─ Recent Escalations ─────────────────────────┘    │</div>
+              <div>└────────────────────────────────────────────────────────────┘</div>
+            </div>
+          </div>
+
+          <div class="wireframe-box p-6 rounded-lg space-y-4">
+            <h4 class="font-medium text-[var(--amber)]">My Assignments — Desktop (≥1024px)</h4>
+            <div class="space-y-2 text-sm font-mono text-[var(--text-secondary)]">
+              <div>┌─ Header (Search | Filters | Create Task) ────────────────────┐</div>
+              <div>│ Sidebar | ┌─ Task Board (Kanban) ─────────────────────────────┐ │</div>
+              <div>│         │ │ To Do │ In Progress │ Blocked │ Done │            │ │</div>
+              <div>│         │ ├─ Due This Week (list) ─────────────────────────┤    │</div>
+              <div>│         │ ├─ Blockers │ KT Reports Due ───────────────────┤    │</div>
+              <div>│         │ └─ Quick Actions ───────────────────────────────┘    │</div>
+              <div>└────────────────────────────────────────────────────────────┘</div>
+            </div>
+          </div>
+
+          <div class="wireframe-box p-6 rounded-lg space-y-4">
+            <h4 class="font-medium text-[var(--cyan)]">Global Search — Desktop</h4>
+            <div class="space-y-2 text-sm font-mono text-[var(--text-secondary)]">
+              <div>┌─ Modal Overlay (backdrop blur) ────────────────────────────┐</div>
+              <div>│ 🔍 [Search Input........................................] ⌘K │</div>
+              <div>│ ├─ Projects (3) ────────────────────────────────────────┤</div>
+              <div>│ ├─ Documents (5) ─────────────────────────────────────┤</div>
+              <div>│ ├─ KT Reports (2) ── Facets (Module, Status, Date) ─────┤</div>
+              <div>│ ├─ Compliance (1) ────────────────────────────────────┤</div>
+              <div>│ └─ [View all 17 results →] ────────────────────────────┘</div>
+              <div>└────────────────────────────────────────────────────────────┘</div>
+            </div>
+          </div>
+
+          <div class="wireframe-box p-6 rounded-lg space-y-4">
+            <h4 class="font-medium text-[var(--emerald)]">Mobile (≤640px) — Bottom Nav</h4>
+            <div class="space-y-2 text-sm font-mono text-[var(--text-secondary)]">
+              <div>┌─ Header (Hamburger | Title | Search) ───────────────────┐</div>
+              <div>│ Content Area (swipeable tabs: Dashboard | Assignments) ───│</div>
+              <div>│ ────────────────────────────────────────────────────────────│</div>
+              <div>│ Bottom Bar: [🏠] [📋] [📁] [📊] [☰ More] ──────────────────┘</div>
+              <div>└────────────────────────────────────────────────────────────┘</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Feature Prioritization -->
+    <section id="prioritization" class="space-y-6">
+      <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-[var(--cyan-dim)] flex items-center justify-center text-[var(--cyan)] font-bold">5</span> Feature Prioritization</h2>
+
+      <div class="card p-6 space-y-6">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-[var(--text-secondary)] border-b border-[var(--border)]">
+                <th class="pb-2 pr-4 w-10">Tier</th>
+                <th class="pb-2 pr-4 w-48">Feature</th>
+                <th class="pb-2 pr-4">Description</th>
+                <th class="pb-2 pr-4 w-24">Effort</th>
+                <th class="pb-2">Dependencies</th>
+              </tr>
+            </thead>
+            <tbody class="border-t border-[var(--border)]">
+              <!-- P1 -->
+              <tr class="border-b border-[var(--border)] bg-[var(--bg-elevated)]"><td class="py-2 pr-4"><span class="badge badge-p1">P1</span></td><td class="pr-4 font-medium">Dashboard/Assignments Split</td><td>Separate components, data hooks, routing</td><td class="pr-4">M</td><td>None</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4"><span class="badge badge-p1">P1</span></td><td class="pr-4 font-medium">Global Search Results Page</td><td>New route, cross-module API, faceted UI</td><td class="pr-4">M</td><td>Search API consolidation</td></tr>
+              <tr class="border-b border-[var(--border)] bg-[var(--bg-elevated)]"><td class="py-2 pr-4"><span class="badge badge-p1">P1</span></td><td class="pr-4 font-medium">Navigation Restructure</td><td>Sidebar rebuild, role-gating, collapsible admin</td><td class="pr-4">S</td><td>Auth context roles</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4"><span class="badge badge-p1">P1</span></td><td class="pr-4 font-medium">Header Global Search</td><td>Wire header input → /search route with query param</td><td class="pr-4">XS</td><td>Search page exists</td></tr>
+              <!-- P2 -->
+              <tr class="border-b border-[var(--border)] bg-[var(--bg-elevated)]"><td class="py-2 pr-4"><span class="badge badge-p2">P2</span></td><td class="pr-4 font-medium">Task Board (Kanban) in Assignments</td><td>Drag-drop, column config, persist view</td><td class="pr-4">L</td><td>Task API, DnD lib</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4"><span class="badge badge-p2">P2</span></td><td class="pr-4 font-medium">Search Facets & Filters</td><td>Module, status, date, owner, project facets</td><td class="pr-4">M</td><td>Search page P1</td></tr>
+              <tr class="border-b border-[var(--border)] bg-[var(--bg-elevated)]"><td class="py-2 pr-4"><span class="badge badge-p2">P2</span></td><td class="pr-4 font-medium">Saved Searches / Alerts</td><td>User saves query, gets notifications on new matches</td><td class="pr-4">M</td><td>Search page, Notifications</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4"><span class="badge badge-p2">P2</span></td><td class="pr-4 font-medium">Mobile Bottom Navigation</td><td>5-tab bar, swipeable workspace tabs</td><td class="pr-4">S</td><td>Responsive sidebar</td></tr>
+              <!-- P3 -->
+              <tr class="border-b border-[var(--border)] bg-[var(--bg-elevated)]"><td class="py-2 pr-4"><span class="badge badge-p3">P3</span></td><td class="pr-4 font-medium">Dashboard Customization</td><td>Widget drag-drop, per-user layout persist</td><td class="pr-4">L</td><td>Dashboard P1</td></tr>
+              <tr class="border-b border-[var(--border)]"><td class="py-2 pr-4"><span class="badge badge-p3">P3</span></td><td class="pr-4 font-medium">Assignment Time Tracking</td><td>Log hours, burndown, capacity planning</td><td class="pr-4">L</td><td>Task Board P2</td></tr>
+              <tr class="border-b border-[var(--border)] bg-[var(--bg-elevated)]"><td class="py-2 pr-4"><span class="badge badge-p3">P3</span></td><td class="pr-4 font-medium">Search Analytics</td><td>Popular queries, zero-result tracking, click-through</td><td class="pr-4">M</td><td>Search P1</td></tr>
+              <tr><td class="py-2 pr-4"><span class="badge badge-p3">P3</span></td><td class="pr-4 font-medium">Keyboard Shortcuts</td><td>⌘K search, G→D dashboard, G→A assignments</td><td class="pr-4">S</td><td>Global search</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 class="font-medium">Sequencing Recommendation</h4>
+        <ol class="space-y-2 text-sm text-[var(--text-secondary)] list-decimal list-inside">
+          <li><strong>Sprint 1:</strong> Navigation restructure (P1) + Header search wiring (P1) — enables discoverability</li>
+          <li><strong>Sprint 2:</strong> Dashboard/Assignments content split (P1) — core UX fix</li>
+          <li><strong>Sprint 3:</strong> Global Search results page (P1) — unified findability</li>
+          <li><strong>Sprint 4:</strong> Task Board in Assignments (P2) — daily workflow</li>
+          <li><strong>Sprint 5+:</strong> P2/P3 enhancements per feedback</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 6. Technical Considerations -->
+    <section id="technical" class="space-y-6">
+      <h2 class="text-xl font-semibold flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-[var(--cyan-dim)] flex items-center justify-center text-[var(--cyan)] font-bold">6</span> Technical Considerations</h2>
+
+      <div class="card p-6 space-y-4">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="space-y-3">
+            <h4 class="font-medium">API Changes Required</h4>
+            <ul class="space-y-2 text-sm text-[var(--text-secondary)] list-disc list-inside">
+              <li>New <code>GET /v1/search</code> endpoint — unified search across modules</li>
+              <li>Add <code>assignee=me</code> filter to Projects, Tasks, KT Reports APIs</li>
+              <li>Dashboard metrics endpoint — aggregate portfolio health</li>
+              <li>Assignments endpoint — user-scoped tasks + due dates + blockers</li>
+            </ul>
+          </div>
+          <div class="space-y-3">
+            <h4 class="font-medium">Frontend Architecture</h4>
+            <ul class="space-y-2 text-sm text-[var(--text-secondary)] list-disc list-inside">
+              <li>New routes: <code>/dashboard</code>, <code>/assignments</code>, <code>/search</code></li>
+              <li>React Query keys: <code>['dashboard']</code>, <code>['assignments']</code>, <code>['search', query]</code></li>
+              <li>Sidebar: dynamic config from <code>navigation.config.ts</code> (role-aware)</li>
+              <li>Search: debounced input → navigate to <code>/search?q=...</code></li>
+            </ul>
+          </div>
+          <div class="space-y-3">
+            <h4 class="font-medium">Migration Strategy</h4>
+            <ul class="space-y-2 text-sm text-[var(--text-secondary)] list-disc list-inside">
+              <li>Keep <code>/</code> → redirect to <code>/dashboard</code></li>
+              <li>Move current <code>/assignments</code> content to new <code>/assignments</code></li>
+              <li>Deprecate old <code>/dashboard</code> component after validation</li>
+              <li>Feature flag <code>NEW_NAV</code> for gradual rollout</li>
+            </ul>
+          </div>
+          <div class="space-y-3">
+            <h4 class="font-medium">Accessibility</h4>
+            <ul class="space-y-2 text-sm text-[var(--text-secondary)] list-disc list-inside">
+              <li>Search modal: trap focus, ESC to close, ARIA labels</li>
+              <li>Kanban: keyboard drag-drop (Space to pick, arrows to move, Enter to drop)</li>
+              <li>Sidebar: collapsible with ARIA-expanded, keyboard navigation</li>
+              <li>Color contrast: all badges meet WCAG AA</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-[var(--border)] pt-6 text-center text-sm text-[var(--text-muted)]">
+      <p>Security Center UX Redesign — Design Proposal v1.0</p>
+      <p class="mt-1">Next step: Stakeholder review → Prototype in Figma → Engineering estimation</p>
+    </footer>
+  </div>
+</body>
+</html>

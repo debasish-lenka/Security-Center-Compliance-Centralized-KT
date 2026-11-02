@@ -1,0 +1,45 @@
+import type { FastifyInstance } from 'fastify';
+import { authRoutes } from './auth.js';
+import { dashboardRoutes } from './dashboard.js';
+import { projectRoutes } from './projects.js';
+import { taskRoutes } from './tasks.js';
+import { milestoneRoutes } from './milestones.js';
+import { ktReportRoutes } from './kt-reports.js';
+import { documentRoutes } from './documents.js';
+import { userRoutes } from './users.js';
+import { roleRoutes } from './roles.js';
+import { complianceRoutes } from './compliance.js';
+import { notificationRoutes } from './notifications.js';
+import { auditLogRoutes } from './audit-logs.js';
+import { searchRoutes } from './search.js';
+import { teamRoutes } from './teams.js';
+import { activityFeedRoutes } from './activity-feed.js';
+import { permissionOverrideRoutes } from './permission-overrides.js';
+import { knowledgeBookRoutes } from './knowledge-books.js';
+import { stickyAlertRoutes } from './sticky-alerts.js';
+import { workflowRoutes } from './workflows.js';
+import { fileRoutes } from './files.js';
+
+export async function registerRoutes(app: FastifyInstance) {
+  // Register all route modules
+  await app.register(authRoutes, { prefix: '/api/v1/auth' });
+  await app.register(dashboardRoutes, { prefix: '/api/v1/dashboard' });
+  await app.register(projectRoutes, { prefix: '/api/v1/projects' });
+  await app.register(taskRoutes, { prefix: '/api/v1/projects' });
+  await app.register(milestoneRoutes, { prefix: '/api/v1/projects' });
+  await app.register(ktReportRoutes, { prefix: '/api/v1/projects' });
+  await app.register(documentRoutes, { prefix: '/api/v1/projects' });
+  await app.register(userRoutes, { prefix: '/api/v1/users' });
+  await app.register(roleRoutes, { prefix: '/api/v1/roles' });
+  await app.register(complianceRoutes, { prefix: '/api/v1/compliance' });
+  await app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
+  await app.register(auditLogRoutes, { prefix: '/api/v1/audit-logs' });
+  await app.register(searchRoutes, { prefix: '/api/v1/search' });
+  await app.register(teamRoutes, { prefix: '/api/v1/admin' });
+  await app.register(activityFeedRoutes, { prefix: '/api/v1/activity-feed' });
+  await app.register(permissionOverrideRoutes, { prefix: '/api/v1/admin' });
+  await app.register(knowledgeBookRoutes, { prefix: '/api/v1/projects' });
+  await app.register(stickyAlertRoutes, { prefix: '/api/v1/alerts' });
+  await app.register(workflowRoutes, { prefix: '/api/v1/admin' });
+  await app.register(fileRoutes, { prefix: '/api/v1/files' });
+}

@@ -1,0 +1,19 @@
+FROM node:20-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+# Install deps first so this layer is cached until a package.json changes
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages ./packages
+RUN npm ci --workspace=apps/api --include-workspace-root
+
+COPY apps/api ./apps/api
+WORKDIR /app/apps/api
+RUN npx prisma generate && npm run build
+
+ENV NODE_ENV=production
+EXPOSE 3001
+# No migration history exists yet, so sync the schema on start (refuses destructive changes)
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]

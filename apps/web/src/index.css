@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* DBI palette as RGB channels so Tailwind opacity modifiers (bg-dbi-cyan/20) work.
+     Light is the default; .dark overrides it. Accent colours are darkened in light mode for contrast. */
+  :root {
+    --dbi-background: 244 246 251;
+    --dbi-sidebar: 255 255 255;
+    --dbi-surface: 255 255 255;
+    --dbi-elevated: 238 242 248;
+    --dbi-border: 213 220 232;
+    --dbi-muted: 226 232 240;
+    --dbi-cyan: 8 145 178;
+    --dbi-indigo: 79 70 229;
+    --dbi-purple: 124 58 237;
+    --dbi-pink: 219 39 119;
+    --dbi-success: 5 150 105;
+    --dbi-emerald: 4 120 87;
+    --dbi-warning: 180 83 9;
+    --dbi-amber: 217 119 6;
+    --dbi-critical: 220 38 38;
+    --dbi-textPrimary: 15 23 42;
+    --dbi-textSecondary: 71 85 105;
+    --dbi-textMuted: 100 116 139;
+  }
+
+  .dark {
+    --dbi-background: 8 13 24;
+    --dbi-sidebar: 11 18 32;
+    --dbi-surface: 17 27 45;
+    --dbi-elevated: 22 34 56;
+    --dbi-border: 38 53 74;
+    --dbi-muted: 30 42 63;
+    --dbi-cyan: 83 216 251;
+    --dbi-indigo: 129 140 248;
+    --dbi-purple: 167 139 250;
+    --dbi-pink: 244 114 182;
+    --dbi-success: 52 211 153;
+    --dbi-emerald: 52 211 153;
+    --dbi-warning: 251 191 36;
+    --dbi-amber: 251 191 36;
+    --dbi-critical: 251 113 133;
+    --dbi-textPrimary: 241 245 249;
+    --dbi-textSecondary: 148 163 184;
+    --dbi-textMuted: 124 138 160;
+  }
+
+  :root {
+    --background: 222 36% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 192 91% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 30% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 30% 94%;
+    --muted-foreground: 215 19% 35%;
+    --accent: 243 75% 59%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 27% 86%;
+    --input: 218 27% 86%;
+    --ring: 192 91% 36%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 220 20% 6%;
+    --foreground: 210 40% 98%;
+    --card: 218 20% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 218 20% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 188 94% 66%;
+    --primary-foreground: 220 20% 6%;
+    --secondary: 218 20% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 218 20% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 238 90% 74%;
+    --accent-foreground: 220 20% 6%;
+    --destructive: 359 88% 68%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 18% 22%;
+    --input: 220 18% 22%;
+    --ring: 188 94% 66%;
+  }
+
+  .light {
+    --background: 222 36% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 192 91% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 30% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 30% 94%;
+    --muted-foreground: 215 19% 35%;
+    --accent: 243 75% 59%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 27% 86%;
+    --input: 218 27% 86%;
+    --ring: 192 91% 36%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    /* soft colour glows behind the app; follow the active theme */
+    background-image:
+      radial-gradient(60rem 30rem at 0% -10%, rgb(var(--dbi-cyan) / 0.10), transparent 60%),
+      radial-gradient(50rem 28rem at 100% 0%, rgb(var(--dbi-indigo) / 0.10), transparent 60%);
+    background-attachment: fixed;
+  }
+  html { transition: background-color .2s ease; }
+}
+
+@layer utilities {
+  .dbi-gradient-text {
+    background-image: linear-gradient(90deg, rgb(var(--dbi-cyan)), rgb(var(--dbi-indigo)) 60%, rgb(var(--dbi-purple)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dbi-glow {
+    box-shadow: 0 0 0 1px rgb(var(--dbi-cyan) / 0.25), 0 8px 30px -12px rgb(var(--dbi-cyan) / 0.45);
+  }
+  .dbi-accent-top {
+    position: relative;
+    overflow: hidden;
+  }
+  .dbi-accent-top::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background-image: linear-gradient(90deg, rgb(var(--dbi-cyan)), rgb(var(--dbi-indigo)), rgb(var(--dbi-purple)));
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground));
+  }
+}
+
+/* Custom animations */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--accent)) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+/* Light mode: pale -300/-400 text colours (made for dark backgrounds) are darkened for contrast */
+:root:not(.dark) .text-slate-300, :root:not(.dark) .text-slate-400 { color: rgb(51 65 85); }
+:root:not(.dark) .text-cyan-300, :root:not(.dark) .text-cyan-400 { color: rgb(14 116 144); }
+:root:not(.dark) .text-amber-300, :root:not(.dark) .text-amber-400 { color: rgb(180 83 9); }
+:root:not(.dark) .text-emerald-300, :root:not(.dark) .text-emerald-400 { color: rgb(4 120 87); }
+:root:not(.dark) .text-green-300, :root:not(.dark) .text-green-400 { color: rgb(21 128 61); }
+:root:not(.dark) .text-rose-300, :root:not(.dark) .text-rose-400 { color: rgb(190 18 60); }
+:root:not(.dark) .text-red-300, :root:not(.dark) .text-red-400 { color: rgb(185 28 28); }
+:root:not(.dark) .text-indigo-300, :root:not(.dark) .text-indigo-400 { color: rgb(67 56 202); }
+:root:not(.dark) .text-violet-300, :root:not(.dark) .text-violet-400 { color: rgb(109 40 217); }
+:root:not(.dark) .text-purple-300, :root:not(.dark) .text-purple-400 { color: rgb(126 34 206); }
+:root:not(.dark) .text-orange-300, :root:not(.dark) .text-orange-400 { color: rgb(194 65 12); }
+:root:not(.dark) .text-blue-300, :root:not(.dark) .text-blue-400 { color: rgb(29 78 216); }
+:root:not(.dark) .text-yellow-300, :root:not(.dark) .text-yellow-400 { color: rgb(161 98 7); }
+:root:not(.dark) .text-pink-300, :root:not(.dark) .text-pink-400 { color: rgb(190 24 93); }
+:root:not(.dark) .text-sky-300, :root:not(.dark) .text-sky-400 { color: rgb(3 105 161); }
+:root:not(.dark) .text-teal-300, :root:not(.dark) .text-teal-400 { color: rgb(15 118 110); }
