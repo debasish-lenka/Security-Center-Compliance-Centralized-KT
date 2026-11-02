@@ -4,20 +4,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Font,
   pdf,
 } from '@react-pdf/renderer';
 
-// Register fonts (using built-in fonts for now)
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://cdn.jsdelivr.net/npm/@react-pdf/renderer@3.1.14/fonts/Helvetica.afm', fontWeight: 'normal' },
-    { src: 'https://cdn.jsdelivr.net/npm/@react-pdf/renderer@3.1.14/fonts/Helvetica-Bold.afm', fontWeight: 'bold' },
-    { src: 'https://cdn.jsdelivr.net/npm/@react-pdf/renderer@3.1.14/fonts/Helvetica-Oblique.afm', fontStyle: 'italic' },
-    { src: 'https://cdn.jsdelivr.net/npm/@react-pdf/renderer@3.1.14/fonts/Helvetica-BoldOblique.afm', fontWeight: 'bold', fontStyle: 'italic' },
-  ],
-});
+// Uses react-pdf's built-in Helvetica, so PDFs work without internet access
 
 export interface KnowledgeBookConfig {
   title: string;

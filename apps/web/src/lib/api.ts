@@ -1522,6 +1522,8 @@ export const accessApi = {
   resendInvite: (userId: string) => api.post(`/v1/users/${userId}/resend-invite`),
   resetMfa: (userId: string) => api.post(`/v1/users/${userId}/reset-mfa`),
   ssoStatus: () => api.get('/v1/auth/microsoft/status'),
+  signInOptions: () => api.get('/v1/users/sign-in-options'),
+  setPassword: (userId: string, password: string) => api.post(`/v1/users/${userId}/set-password`, { password }),
   ssoExchange: (code: string) => api.post('/v1/auth/microsoft/exchange', { code }),
 };
 

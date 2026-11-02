@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Search, Edit, Trash2, Eye, UserPlus, Loader2, Mail, User } from 'lucide-react';
 import { formatDate, getStatusColor } from '@/lib/utils';
@@ -50,6 +50,31 @@ type UserFormData = z.infer<typeof userSchema>;
 
 export function Users() {
   const { user: me } = useAuth();
+  // Email invitations and Microsoft sign-in only appear once an admin has configured them
+  const { data: signIn } = useQuery({
+    queryKey: ['sign-in-options'],
+    queryFn: async () => (await accessApi.signInOptions()).data?.data as { invite: boolean; microsoft: boolean },
+  });
+  const [pwUser, setPwUser] = useState<{ id: string; email: string } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const pwOk = newPassword.length >= 10 && /[A-Za-z]/.test(newPassword) && /\d/.test(newPassword);
+
+  const savePassword = async () => {
+    if (!pwUser) return;
+    setPwSaving(true);
+    try {
+      await accessApi.setPassword(pwUser.id, newPassword);
+      toast({ title: 'Password updated', description: `Give the new password to ${pwUser.email}` });
+      setPwUser(null);
+      setNewPassword('');
+      refetch();
+    } catch (e: any) {
+      toast({ title: 'Could not set password', description: e?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
+    } finally {
+      setPwSaving(false);
+    }
+  };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -116,7 +141,7 @@ export function Users() {
       fullName: '',
       role: '',
       department: '',
-      authType: 'INVITE',
+      authType: 'PASSWORD',
       password: '',
     },
   });
@@ -259,10 +284,10 @@ export function Users() {
                   <FormLabel>How will this person sign in?</FormLabel>
                   <div className="grid gap-2">
                     {([
-                      ['INVITE', 'Email invitation', 'They get a link (valid 24 hours) and choose their own password'],
                       ['PASSWORD', 'Password set by me', 'I set a password now and hand it over'],
+                      ['INVITE', 'Email invitation', 'They get a link (valid 24 hours) and choose their own password'],
                       ['MICROSOFT', 'Microsoft 365 account', 'They sign in with their company Microsoft account'],
-                    ] as const).map(([value, title, hint]) => (
+                    ] as const).filter(([value]) => value === 'PASSWORD' || (value === 'INVITE' && signIn?.invite) || (value === 'MICROSOFT' && signIn?.microsoft)).map(([value, title, hint]) => (
                       <label
                         key={value}
                         className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
@@ -443,6 +468,11 @@ export function Users() {
                         <TableCell className="text-sm text-dbi-textSecondary">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
+                            {(me?.role === 'SUPER_ADMIN' || !['SUPER_ADMIN', 'ADMIN'].includes(user.role)) && (
+                              <Button variant="outline" size="sm" onClick={() => { setPwUser(user); setNewPassword(''); }}>
+                                Set password
+                              </Button>
+                            )}
                             {user.status === 'PENDING' && (
                               <Button variant="outline" size="sm" onClick={() => resendInvite(user)}>
                                 Resend invite
@@ -491,6 +521,26 @@ export function Users() {
         </CardContent>
       </Card>
     
+      <Dialog open={!!pwUser} onOpenChange={(o) => { if (!o) { setPwUser(null); setNewPassword(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set a new password</DialogTitle>
+            <DialogDescription>For {pwUser?.email}. Tell them the password yourself; it cannot be viewed again.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input autoComplete="off" placeholder="At least 10 characters, a letter and a number" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            {newPassword && !pwOk && <p className="text-xs text-dbi-critical">At least 10 characters, with a letter and a number.</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPwUser(null)}>Cancel</Button>
+            <Button onClick={savePassword} disabled={!pwOk || pwSaving}>
+              {pwSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!inviteInfo} onOpenChange={(o) => !o && setInviteInfo(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>

@@ -5,6 +5,7 @@ import { createAuthService } from '../services/auth.js';
 import { randomBytes } from 'crypto';
 import { inviteAndEmail } from '../services/invites.js';
 import { getSsoSettings, isSsoReady } from '../services/sso.js';
+import { getMailSettings, isMailConfigured } from '../services/mail.js';
 
 const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'SECURITY_ANALYST', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER', 'VIEWER'] as const;
 type AppUserRole = (typeof USER_ROLES)[number];
@@ -165,6 +166,40 @@ export async function userRoutes(app: FastifyInstance) {
       success: true,
       data: { ...user, department: user.department?.name ?? null, invite },
     });
+  });
+
+  // Which sign-in methods the "Add User" form can offer right now
+  app.get('/sign-in-options', {
+    preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN', 'ADMIN'])],
+  }, async (_request, reply) => {
+    const [mail, sso] = await Promise.all([getMailSettings(app.prisma), getSsoSettings(app.prisma)]);
+    return reply.send({ success: true, data: { password: true, invite: isMailConfigured(mail), microsoft: isSsoReady(sso) } });
+  });
+
+  // Admin sets a new password for a local account (no email needed). Admins cannot touch admin accounts.
+  app.post('/:userId/set-password', {
+    schema: { body: z.object({ password: z.string().min(10).max(128).regex(/[A-Za-z]/, 'Needs a letter').regex(/\d/, 'Needs a digit') }) },
+    preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN', 'ADMIN'])],
+  }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const { password } = request.body as { password: string };
+    const target = await app.prisma.profile.findUnique({ where: { id: userId } });
+    if (!target) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    if (target.authProvider !== 'LOCAL') {
+      return reply.code(400).send({ success: false, error: { code: 'NOT_LOCAL', message: 'This account signs in with Microsoft and has no password here' } });
+    }
+    if (['SUPER_ADMIN', 'ADMIN'].includes(target.role) && request.user!.role !== 'SUPER_ADMIN') {
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only a super admin can change an admin password' } });
+    }
+    await app.prisma.$transaction([
+      app.prisma.profile.update({
+        where: { id: userId },
+        data: { passwordHash: await authService.hashPassword(password), ...(target.status === 'PENDING' ? { status: 'ACTIVE' } : {}) },
+      }),
+      app.prisma.inviteToken.deleteMany({ where: { userId } }),
+    ]);
+    await auditLogger.logResource('UPDATE', request.userId!, 'user', userId, { action: 'set_password' }, request.ip, request.headers['user-agent']);
+    return reply.send({ success: true, data: null });
   });
 
   // Resend the activation link (pending accounts only)

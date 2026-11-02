@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { toast } from '@/hooks/use-toast';
@@ -135,7 +135,6 @@ export function Settings() {
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={user?.department ? `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName || 'User')}&background=53D8FB&color=080D18&size=96` : undefined} alt={user?.fullName} />
                   <AvatarFallback className="bg-dbi-cyan/20 text-dbi-cyan text-2xl font-medium">
                     {user?.fullName?.charAt(0).toUpperCase() || 'U'}
                   </AvatarFallback>

@@ -31,6 +31,9 @@ export interface NavSection {
   roles?: UserRole[]; // If undefined, accessible to all authenticated users
 }
 
+// Offline mode: Mail Settings and Microsoft Sign-in are hidden. Flip to true later to show them.
+const ENABLE_INTEGRATIONS = false;
+
 export const navigationSections: NavSection[] = [
   {
     label: 'HOME',
@@ -66,8 +69,13 @@ export const navigationSections: NavSection[] = [
       { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Admin Control Center', href: '/admin-control-center', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN', 'SUPER_ADMIN'] },
-      { name: 'Mail Settings', href: '/mail-settings', icon: Mail, roles: ['SUPER_ADMIN'] },
-      { name: 'Microsoft Sign-in', href: '/sso-settings', icon: KeyRound, roles: ['SUPER_ADMIN'] },
+      // Office 365 integrations: switch ENABLE_INTEGRATIONS on when mail / Microsoft sign-in are set up
+      ...(ENABLE_INTEGRATIONS
+        ? [
+            { name: 'Mail Settings', href: '/mail-settings', icon: Mail, roles: ['SUPER_ADMIN'] as UserRole[] },
+            { name: 'Microsoft Sign-in', href: '/sso-settings', icon: KeyRound, roles: ['SUPER_ADMIN'] as UserRole[] },
+          ]
+        : []),
     ],
   },
 ];
