@@ -11,6 +11,7 @@ import {
   Bell,
   Settings,
   Mail,
+  KeyRound,
   BookOpen,
   Shield,
 } from 'lucide-react';
@@ -66,6 +67,7 @@ export const navigationSections: NavSection[] = [
       { name: 'Admin Control Center', href: '/admin-control-center', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Mail Settings', href: '/mail-settings', icon: Mail, roles: ['SUPER_ADMIN'] },
+      { name: 'Microsoft Sign-in', href: '/sso-settings', icon: KeyRound, roles: ['SUPER_ADMIN'] },
     ],
   },
 ];

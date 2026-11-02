@@ -20,6 +20,7 @@ import { stickyAlertRoutes } from './sticky-alerts.js';
 import { workflowRoutes } from './workflows.js';
 import { fileRoutes } from './files.js';
 import { mailSettingsRoutes } from './mail-settings.js';
+import { ssoAuthRoutes, ssoSettingsRoutes } from './sso.js';
 
 export async function registerRoutes(app: FastifyInstance) {
   // Register all route modules
@@ -43,5 +44,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(stickyAlertRoutes, { prefix: '/api/v1/alerts' });
   await app.register(workflowRoutes, { prefix: '/api/v1/admin' });
   await app.register(mailSettingsRoutes, { prefix: '/api/v1/admin' });
+  await app.register(ssoSettingsRoutes, { prefix: '/api/v1/admin' });
+  await app.register(ssoAuthRoutes, { prefix: '/api/v1/auth/microsoft' });
   await app.register(fileRoutes, { prefix: '/api/v1/files' });
 }

@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/api/v1/auth/login',
   '/api/v1/auth/mfa',
   '/api/v1/auth/invite',
+  '/api/v1/auth/microsoft',
   '/api/v1/auth/register',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',

@@ -64,6 +64,11 @@ model Profile {
   recoveryCodeHashes          String[]  @default([])
   inviteTokens                InviteToken[]
 
+  // How the person signs in: password on this server, or their Microsoft 365 account
+  authProvider                AuthProvider @default(LOCAL)
+  externalId                  String?   // Entra object id, bound at first Microsoft sign-in (uniqueness enforced in code)
+
+  @@index([externalId])
   @@map("profiles")
 }
 
@@ -973,4 +978,22 @@ model MailSettings {
   updatedAt          DateTime     @updatedAt
 
   @@map("mail_settings")
+}
+
+enum AuthProvider {
+  LOCAL
+  MICROSOFT
+}
+
+// Single-row table: Microsoft 365 sign-in (OpenID Connect with an Entra ID app registration)
+model SsoSettings {
+  id              String   @id @default("default")
+  enabled         Boolean  @default(false)
+  tenantId        String?
+  clientId        String?
+  clientSecretEnc String?
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+
+  @@map("sso_settings")
 }

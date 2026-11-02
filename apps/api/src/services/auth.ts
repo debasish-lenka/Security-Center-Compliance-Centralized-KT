@@ -58,6 +58,11 @@ export class AuthService {
       return null;
     }
 
+    if (user.authProvider === 'MICROSOFT') {
+      await this.auditLogger.logAuth('LOGIN', user.id, ipAddress, userAgent, false, 'Microsoft account used password sign-in');
+      return null;
+    }
+
     const valid = await this.verifyPassword(password, user.passwordHash);
 
     if (!valid) {

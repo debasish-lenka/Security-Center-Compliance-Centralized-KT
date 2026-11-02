@@ -26,6 +26,7 @@ const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m
 const Reports = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.Reports })));
 const Assignments = lazy(() => import('@/pages/Assignments').then((m) => ({ default: m.Assignments })));
 const Activate = lazy(() => import('@/pages/Activate').then((m) => ({ default: m.Activate })));
+const SsoSettings = lazy(() => import('@/pages/SsoSettings').then((m) => ({ default: m.SsoSettings })));
 const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ default: m.MailSettings })));
 const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })));
 const AdminControlCenter = lazy(() => import('@/pages/AdminControlCenter').then((m) => ({ default: m.AdminControlCenter })));
@@ -126,6 +127,7 @@ function AppRoutes() {
           <Route path="/admin-control-center" element={<AdminControlCenter />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/mail-settings" element={<MailSettings />} />
+          <Route path="/sso-settings" element={<SsoSettings />} />
           <Route path="/roles" element={<Roles />} />
 
           {/* SEARCH */}

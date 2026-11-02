@@ -4,6 +4,7 @@ import { createAuditLogger } from '../services/audit-logger.js';
 import { createAuthService } from '../services/auth.js';
 import { randomBytes } from 'crypto';
 import { inviteAndEmail } from '../services/invites.js';
+import { getSsoSettings, isSsoReady } from '../services/sso.js';
 
 const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'SECURITY_ANALYST', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER', 'VIEWER'] as const;
 type AppUserRole = (typeof USER_ROLES)[number];
@@ -11,6 +12,12 @@ type AppUserRole = (typeof USER_ROLES)[number];
 const CreateUserSchema = z.object({
   email: z.string().email().max(255),
   fullName: z.string().trim().min(2).max(255),
+  // How the person signs in:
+  //   PASSWORD  - admin sets a password now and hands it over
+  //   INVITE    - emailed one-time link to choose a password
+  //   MICROSOFT - their Microsoft 365 account (no password on this server)
+  authType: z.enum(['PASSWORD', 'INVITE', 'MICROSOFT']).default('INVITE'),
+  password: z.string().min(10).max(128).regex(/[A-Za-z]/, 'Needs a letter').regex(/\d/, 'Needs a digit').optional(),
   // Either a UserRole enum value or the id of a Role (what the Users page dropdown sends)
   role: z.string().min(1),
   department: z.string().trim().max(255).optional().nullable(),
@@ -119,13 +126,20 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only a super admin can create admin accounts' } });
     }
 
+    if (data.authType === 'PASSWORD' && !data.password) {
+      return reply.code(400).send({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Enter a password (10+ characters, with a letter and a number)' } });
+    }
+    if (data.authType === 'MICROSOFT' && !isSsoReady(await getSsoSettings(app.prisma))) {
+      return reply.code(400).send({ success: false, error: { code: 'SSO_NOT_ENABLED', message: 'Microsoft sign-in is not enabled. A super admin can set it up under Microsoft Sign-in.' } });
+    }
+
     const email = data.email.toLowerCase();
     if (await app.prisma.profile.findUnique({ where: { email }, select: { id: true } })) {
       return reply.code(409).send({ success: false, error: { code: 'CONFLICT', message: 'A user with this email already exists' } });
     }
 
     // No password yet: the user chooses one via the emailed activation link
-    const passwordHash = await authService.hashPassword(randomBytes(32).toString('hex'));
+    const passwordHash = await authService.hashPassword(data.authType === 'PASSWORD' ? data.password! : randomBytes(32).toString('hex'));
     const departmentId = data.department
       ? (await app.prisma.department.upsert({ where: { name: data.department }, update: {}, create: { name: data.department } })).id
       : null;
@@ -137,18 +151,19 @@ export async function userRoutes(app: FastifyInstance) {
         fullName: data.fullName,
         departmentId,
         role,
-        status: 'PENDING',
+        status: data.authType === 'INVITE' ? 'PENDING' : 'ACTIVE',
+        authProvider: data.authType === 'MICROSOFT' ? 'MICROSOFT' : 'LOCAL',
         ...(roleRow ? { userRoles: { create: { roleId: roleRow.id, assignedBy: actorId } } } : {}),
       },
       select: { id: true, email: true, fullName: true, role: true, status: true, createdAt: true, department: { select: { name: true } } },
     });
 
-    await auditLogger.logResource('CREATE', actorId, 'user', user.id, { email, role }, request.ip, request.headers['user-agent']);
+    await auditLogger.logResource('CREATE', actorId, 'user', user.id, { email, role, authType: data.authType }, request.ip, request.headers['user-agent']);
 
-    const invite = await inviteAndEmail(app.prisma, user);
+    const invite = data.authType === 'INVITE' ? inviteResult(await inviteAndEmail(app.prisma, user), actorRole) : undefined;
     return reply.code(201).send({
       success: true,
-      data: { ...user, department: user.department?.name ?? null, invite: inviteResult(invite, actorRole) },
+      data: { ...user, department: user.department?.name ?? null, invite },
     });
   });
 

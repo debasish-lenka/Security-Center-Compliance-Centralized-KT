@@ -1521,10 +1521,17 @@ export const accessApi = {
   confirmInvite: (token: string, code: string) => api.post(`/v1/auth/invite/${token}/confirm`, { code }),
   resendInvite: (userId: string) => api.post(`/v1/users/${userId}/resend-invite`),
   resetMfa: (userId: string) => api.post(`/v1/users/${userId}/reset-mfa`),
+  ssoStatus: () => api.get('/v1/auth/microsoft/status'),
+  ssoExchange: (code: string) => api.post('/v1/auth/microsoft/exchange', { code }),
 };
 
 export const mailSettingsApi = {
   get: () => api.get('/v1/admin/mail-settings'),
   save: (data: Record<string, unknown>) => api.put('/v1/admin/mail-settings', data),
   sendTest: (to: string) => api.post('/v1/admin/mail-settings/test', { to }),
+};
+
+export const ssoSettingsApi = {
+  get: () => api.get('/v1/admin/sso-settings'),
+  save: (data: Record<string, unknown>) => api.put('/v1/admin/sso-settings', data),
 };

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,8 +28,19 @@ type Step =
 
 const apiMessage = (e: any, fallback: string) => e?.response?.data?.error?.message || fallback;
 
+const SSO_ERRORS: Record<string, string> = {
+  not_registered: 'This Microsoft account has not been added to DBI Security Center. Ask an administrator to create your account.',
+  not_enabled: 'Microsoft sign-in is not enabled.',
+  cancelled: 'Microsoft sign-in was cancelled.',
+  expired: 'The sign-in took too long. Please try again.',
+  invalid_request: 'The sign-in could not be verified. Please try again.',
+  microsoft_rejected: 'Microsoft did not accept the sign-in. Please try again.',
+};
+
 export function Login() {
   const [isLoading, setIsLoading] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [params, setParams] = useSearchParams();
   const [step, setStep] = useState<Step>({ name: 'credentials' });
   const [code, setCode] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
@@ -43,6 +54,33 @@ export function Login() {
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   });
+
+  // Is Microsoft sign-in switched on? Controls the button.
+  useEffect(() => {
+    accessApi.ssoStatus().then((r) => setSsoEnabled(!!r.data?.data?.enabled)).catch(() => setSsoEnabled(false));
+  }, []);
+
+  // Back from Microsoft: either an error, or a one-time code to trade for a session
+  useEffect(() => {
+    const code = params.get('sso');
+    const error = params.get('sso_error');
+    if (!code && !error) return;
+    setParams({}, { replace: true });
+    if (error) {
+      toast({ title: 'Microsoft sign-in failed', description: SSO_ERRORS[error] ?? 'Please try again.', variant: 'destructive' });
+      return;
+    }
+    setIsLoading(true);
+    accessApi
+      .ssoExchange(code!)
+      .then((res) => {
+        completeLogin(res.data.data.user, res.data.data.token);
+        navigate('/');
+      })
+      .catch((e) => toast({ title: 'Microsoft sign-in failed', description: apiMessage(e, 'Please try again'), variant: 'destructive' }))
+      .finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true);
@@ -137,6 +175,28 @@ export function Login() {
                   {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
               </form>
+              {ssoEnabled && (
+                <>
+                  <div className="my-5 flex items-center gap-3 text-xs text-dbi-textSecondary">
+                    <span className="h-px flex-1 bg-dbi-border" /> or <span className="h-px flex-1 bg-dbi-border" />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={isLoading}
+                    onClick={() => { window.location.href = '/api/v1/auth/microsoft/login'; }}
+                  >
+                    <svg className="mr-2 h-4 w-4" viewBox="0 0 21 21" aria-hidden="true">
+                      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                    </svg>
+                    Sign in with Microsoft
+                  </Button>
+                </>
+              )}
               {import.meta.env.DEV && (
                 <p className="mt-6 text-center text-sm text-dbi-textSecondary">
                   Dev default: admin@dbi.example.com / Admin@123

@@ -38,6 +38,12 @@ const userSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   role: z.string().min(1, 'Role is required'),
   department: z.string().optional(),
+  authType: z.enum(['PASSWORD', 'INVITE', 'MICROSOFT']),
+  password: z.string().optional(),
+}).superRefine((v, ctx) => {
+  if (v.authType === 'PASSWORD' && !(v.password && v.password.length >= 10 && /[A-Za-z]/.test(v.password) && /\d/.test(v.password))) {
+    ctx.addIssue({ code: 'custom', path: ['password'], message: 'At least 10 characters, with a letter and a number' });
+  }
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -110,6 +116,8 @@ export function Users() {
       fullName: '',
       role: '',
       department: '',
+      authType: 'INVITE',
+      password: '',
     },
   });
 
@@ -140,13 +148,19 @@ export function Users() {
   const onSubmit = async (data: UserFormData) => {
     setIsCreating(true);
     try {
-      const res = await usersApi.create(data);
+      const res = await usersApi.create({ ...data, password: data.authType === 'PASSWORD' ? data.password : undefined });
       const invite = res.data?.data?.invite ?? res.data?.invite;
       if (invite && !invite.emailed) {
         // Email isn't set up or failed: a super admin gets the link to pass on manually
         setInviteInfo({ email: data.email, url: invite.url, error: invite.error });
       } else {
-        toast({ title: 'Invitation sent', description: `An activation link (valid 24 hours) was emailed to ${data.email}` });
+        toast(
+          data.authType === 'INVITE'
+            ? { title: 'Invitation sent', description: `An activation link (valid 24 hours) was emailed to ${data.email}` }
+            : data.authType === 'MICROSOFT'
+              ? { title: 'User created', description: `${data.email} can now use "Sign in with Microsoft"` }
+              : { title: 'User created', description: `Give ${data.email} the password you set. They can sign in right away.` }
+        );
       }
       setIsCreating(false);
       form.reset();
@@ -241,9 +255,52 @@ export function Users() {
                     </FormItem>
                   )}
                 />
-                <p className="text-sm text-dbi-textSecondary">
-                  No password is needed: the user receives an email with a link (valid 24 hours) to set their own password.
-                  Admins also set up an authenticator app.
+                <div className="space-y-2">
+                  <FormLabel>How will this person sign in?</FormLabel>
+                  <div className="grid gap-2">
+                    {([
+                      ['INVITE', 'Email invitation', 'They get a link (valid 24 hours) and choose their own password'],
+                      ['PASSWORD', 'Password set by me', 'I set a password now and hand it over'],
+                      ['MICROSOFT', 'Microsoft 365 account', 'They sign in with their company Microsoft account'],
+                    ] as const).map(([value, title, hint]) => (
+                      <label
+                        key={value}
+                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                          form.watch('authType') === value ? 'border-dbi-cyan bg-dbi-cyan/10' : 'border-dbi-border hover:bg-dbi-elevated'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          className="mt-1"
+                          checked={form.watch('authType') === value}
+                          onChange={() => form.setValue('authType', value, { shouldValidate: true })}
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-dbi-textPrimary">{title}</span>
+                          <span className="block text-xs text-dbi-textSecondary">{hint}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {form.watch('authType') === 'PASSWORD' && (
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input type="text" autoComplete="off" placeholder="At least 10 characters, a letter and a number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                <p className="text-xs text-dbi-textSecondary">
+                  Admin and Super Admin accounts that use a password also set up an authenticator app at first sign-in.
+                  Microsoft 365 users are protected by your Microsoft security settings instead.
                 </p>
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => form.reset()}>Cancel</Button>
