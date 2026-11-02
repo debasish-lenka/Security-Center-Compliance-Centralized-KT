@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { usersApi, rolesApi, accessApi } from '@/lib/api';
+import { usersApi, accessApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,18 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 const statusOptions = ['ALL', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'];
-const roleOptions = ['ALL', 'SUPER_ADMIN', 'SECURITY_ADMIN', 'COMPLIANCE_ADMIN', 'PROJECT_ADMIN', 'AUDITOR', 'ANALYST', 'VIEWER'];
+// Mirrors the API's UserRole enum, so the dropdown never depends on a request succeeding
+const ROLES = [
+  { value: 'SUPER_ADMIN', label: 'Super Admin' },
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'SECURITY_ADMIN', label: 'Security Admin' },
+  { value: 'SECURITY_ANALYST', label: 'Security Analyst' },
+  { value: 'COMPLIANCE_OFFICER', label: 'Compliance Officer' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'USER', label: 'User' },
+  { value: 'VIEWER', label: 'Viewer' },
+];
+const roleOptions = ['ALL', ...ROLES.map((r) => r.value)];
 
 const userSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -32,6 +43,7 @@ const userSchema = z.object({
 type UserFormData = z.infer<typeof userSchema>;
 
 export function Users() {
+  const { user: me } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -39,16 +51,6 @@ export function Users() {
   const [pageSize, _setPageSize] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
-  const { data: rolesData } = useQuery({
-    queryKey: ['roles'],
-    queryFn: async () => {
-      const response = await rolesApi.list();
-      const body = response.data;
-      const list = body?.data?.items ?? body?.data ?? body?.items ?? body;
-      return Array.isArray(list) ? list : [];
-    },
-  });
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['users', search, statusFilter, roleFilter, currentPage, pageSize],
@@ -64,7 +66,8 @@ export function Users() {
   const users = data?.data?.items || [];
   const totalItems = data?.data?.total || users.length;
   const totalPages = Math.ceil(totalItems / pageSize);
-  const roles = rolesData || [];
+  // Only a super admin may create admin accounts (the API enforces this too)
+  const assignableRoles = ROLES.filter((r) => me?.role === 'SUPER_ADMIN' || !['SUPER_ADMIN', 'ADMIN'].includes(r.value));
 
   const sortedUsers = useMemo(() => {
     if (!sortConfig) return users;
@@ -111,7 +114,6 @@ export function Users() {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
-  const { user: me } = useAuth();
   const [inviteInfo, setInviteInfo] = useState<{ email: string; url?: string; error?: string } | null>(null);
 
   const resendInvite = async (u: { id: string; email: string }) => {
@@ -217,8 +219,8 @@ export function Users() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {roles.map((role: any) => (
-                            <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                          {assignableRoles.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -283,7 +285,7 @@ export function Users() {
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {roleOptions.map(r => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}
+                  {roleOptions.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
