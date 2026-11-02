@@ -37,7 +37,7 @@ export async function projectRoutes(app: FastifyInstance) {
 
   // Helper to check project access
   async function checkProjectAccess(userId: string, userRole: string, projectId: string, requiredPermission?: string) {
-    if (userRole === 'SUPER_ADMIN') return true;
+    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
 
     const membership = await app.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId } },
@@ -45,7 +45,7 @@ export async function projectRoutes(app: FastifyInstance) {
 
     if (!membership) return false;
 
-    if (requiredPermission === 'edit' && !['OWNER', 'LEAD', 'CONTRIBUTOR', 'REVIEWER'].includes(membership.role)) {
+    if (requiredPermission === 'edit' && !['OWNER', 'LEAD'].includes(membership.role)) {
       return false;
     }
 

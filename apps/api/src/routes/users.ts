@@ -61,7 +61,7 @@ export async function userRoutes(app: FastifyInstance) {
     const userRole = request.user!.role;
     const { page, limit, search, status, role } = request.query as any;
 
-    if (userRole !== 'SUPER_ADMIN') {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Super admin access required' } });
     }
 

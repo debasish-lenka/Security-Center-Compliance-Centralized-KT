@@ -27,8 +27,8 @@ export async function enforceProjectScope(
   const userId = request.userId!;
   const userRole = request.user!.role;
 
-  // SUPER_ADMIN bypasses project scope
-  if (userRole === 'SUPER_ADMIN') {
+  // Super admins and admins bypass project scope
+  if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') {
     request.projectId = projectId;
     return;
   }
@@ -47,6 +47,14 @@ export async function enforceProjectScope(
 
   request.projectId = projectId;
   request.projectRole = membership.role;
+
+  // The VIEWER project role is read-only
+  if (membership.role === 'VIEWER' && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+    return reply.code(403).send({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Viewers have read-only access to this project' },
+    });
+  }
 }
 
 declare module 'fastify' {

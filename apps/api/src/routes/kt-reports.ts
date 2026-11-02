@@ -25,7 +25,7 @@ const UpdateKTReportSchema = z.object({
 });
 
 async function checkProjectAccess(app: FastifyInstance, userId: string, userRole: string, projectId: string) {
-  if (userRole === 'SUPER_ADMIN') return true;
+  if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
   const membership = await app.prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId, userId } },
   });
@@ -59,7 +59,7 @@ export async function ktReportRoutes(app: FastifyInstance) {
     }
 
     const where: any = { projectId };
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && !['LEAD', 'OWNER'].includes(request.projectRole ?? '')) {
       where.userId = userId; // Users can only see their own reports
     } else if (filterUserId) {
       where.userId = filterUserId;
@@ -146,7 +146,7 @@ export async function ktReportRoutes(app: FastifyInstance) {
     }
 
     // Check if user can view this report
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && report.userId !== userId) {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && !['LEAD', 'OWNER'].includes(request.projectRole ?? '') && report.userId !== userId) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
     }
 
@@ -269,7 +269,7 @@ export async function ktReportRoutes(app: FastifyInstance) {
     const { projectId, reportId } = request.params as { projectId: string; reportId: string };
     const { action } = request.body as { action: 'APPROVE' | 'REJECT' };
 
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && !['LEAD', 'OWNER'].includes(request.projectRole ?? '')) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required' } });
     }
 
@@ -311,7 +311,7 @@ export async function ktReportRoutes(app: FastifyInstance) {
     const userRole = request.user!.role;
     const { projectId } = request.params as { projectId: string };
 
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && !['LEAD', 'OWNER'].includes(request.projectRole ?? '')) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required' } });
     }
 

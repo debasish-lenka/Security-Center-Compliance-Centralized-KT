@@ -65,13 +65,20 @@ export async function ktReportFlatRoutes(app: FastifyInstance) {
     };
 
     const where: any = {};
-    if (!isAdmin(request.user!.role)) where.userId = userId;
+    // everyone sees their own reports; a project's lead / owner also sees the team's
+    if (!isAdmin(request.user!.role)) {
+      where.OR = [
+        { userId },
+        { project: { members: { some: { userId, role: { in: ['LEAD', 'OWNER'] } } } } },
+      ];
+    }
     if (status && status !== 'ALL') where.status = status;
     if (projectId) where.projectId = projectId;
     if (search) {
-      where.OR = ['workCompleted', 'detailedWork', 'challenges', 'nextDayPlan'].map((f) => ({
+      const match = ['workCompleted', 'detailedWork', 'challenges', 'nextDayPlan'].map((f) => ({
         [f]: { contains: search, mode: 'insensitive' },
       }));
+      where.AND = [{ OR: match }];
     }
 
     const [reports, total] = await Promise.all([

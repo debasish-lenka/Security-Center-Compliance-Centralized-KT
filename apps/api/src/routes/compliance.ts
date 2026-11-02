@@ -36,7 +36,7 @@ const CreateRemediationTaskSchema = z.object({
 
 async function checkComplianceAccess(app: FastifyInstance, userId: string, userRole: string, controlId?: string) {
   if (userRole === 'SUPER_ADMIN') return true;
-  if (userRole === 'ADMIN') return true;
+  if (userRole === 'ADMIN' || userRole === 'COMPLIANCE_OFFICER') return true;
   // Check if user is owner of any control
   if (controlId) {
     const control = await app.prisma.complianceControl.findUnique({ where: { id: controlId }, select: { ownerId: true } });
@@ -66,7 +66,7 @@ export async function complianceRoutes(app: FastifyInstance) {
     const { page, limit, category, status, projectId, ownerId } = request.query as any;
 
     const where: any = {};
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && userRole !== 'COMPLIANCE_OFFICER') {
       where.ownerId = userId;
     }
     if (category) where.category = category;
@@ -163,7 +163,7 @@ export async function complianceRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && userRole !== 'COMPLIANCE_OFFICER') {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Admin access required' } });
     }
 

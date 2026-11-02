@@ -34,7 +34,7 @@ const UpdateKnowledgeBookSchema = z.object({
 });
 
 async function checkProjectAccess(app: FastifyInstance, userId: string, userRole: string, projectId: string) {
-  if (userRole === 'SUPER_ADMIN') return true;
+  if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
   const membership = await app.prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId, userId } },
   });

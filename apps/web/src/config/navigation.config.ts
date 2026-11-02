@@ -16,7 +16,14 @@ import {
   Shield,
 } from 'lucide-react';
 
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'COMPLIANCE_OFFICER' | 'MANAGER' | 'USER';
+export type UserRole =
+  | 'SUPER_ADMIN' | 'ADMIN' | 'SECURITY_ADMIN' | 'SECURITY_ANALYST' | 'COMPLIANCE_OFFICER' | 'MANAGER' | 'USER' | 'VIEWER';
+
+// Who may use what. These mirror the rules enforced by the API, which stays the real gatekeeper.
+export const LEADERSHIP_ROLES: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER'];
+export const ADMIN_ROLES: UserRole[] = ['SUPER_ADMIN', 'ADMIN'];
+export const SUPER_ADMIN_ROLES: UserRole[] = ['SUPER_ADMIN'];
+export const COMPLIANCE_WRITE_ROLES: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER'];
 
 export interface NavItem {
   name: string;
@@ -37,16 +44,15 @@ const ENABLE_INTEGRATIONS = false;
 export const navigationSections: NavSection[] = [
   {
     label: 'HOME',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER'],
+    roles: LEADERSHIP_ROLES,
     items: [
-      { name: 'Executive Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER'] },
+      { name: 'Executive Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: LEADERSHIP_ROLES },
     ],
   },
   {
     label: 'WORKSPACE',
-    roles: ['USER', 'COMPLIANCE_OFFICER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'],
     items: [
-      { name: 'My Assignments', href: '/assignments', icon: UserCheck, roles: ['USER', 'COMPLIANCE_OFFICER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'] },
+      { name: 'My Assignments', href: '/assignments', icon: UserCheck },
       { name: 'Projects', href: '/projects', icon: FolderKanban },
       { name: 'KT Reports', href: '/kt-reports', icon: ClipboardList },
       { name: 'Document Vault', href: '/documents', icon: FolderOpen },
@@ -58,22 +64,27 @@ export const navigationSections: NavSection[] = [
     items: [
       { name: 'Compliance Tracking', href: '/compliance', icon: ShieldCheck },
       { name: 'Reports & Analytics', href: '/reports', icon: BarChart },
-      { name: 'Audit Logs', href: '/audit-logs', icon: FileSearch },
+      { name: 'Audit Logs', href: '/audit-logs', icon: FileSearch, roles: ADMIN_ROLES },
+    ],
+  },
+  {
+    label: 'ACCOUNT',
+    items: [
+      { name: 'Notifications', href: '/notifications', icon: Bell },
+      { name: 'Settings', href: '/settings', icon: Settings },
     ],
   },
   {
     label: 'ADMINISTRATION',
-    roles: ['ADMIN', 'SUPER_ADMIN'],
+    roles: ADMIN_ROLES,
     items: [
-      { name: 'Team & Users', href: '/users', icon: Users, roles: ['ADMIN', 'SUPER_ADMIN'] },
-      { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['ADMIN', 'SUPER_ADMIN'] },
-      { name: 'Admin Control Center', href: '/admin-control-center', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
-      { name: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN', 'SUPER_ADMIN'] },
+      { name: 'Team & Users', href: '/users', icon: Users, roles: ADMIN_ROLES },
+      { name: 'Admin Control Center', href: '/admin-control-center', icon: Shield, roles: ADMIN_ROLES },
       // Office 365 integrations: switch ENABLE_INTEGRATIONS on when mail / Microsoft sign-in are set up
       ...(ENABLE_INTEGRATIONS
         ? [
-            { name: 'Mail Settings', href: '/mail-settings', icon: Mail, roles: ['SUPER_ADMIN'] as UserRole[] },
-            { name: 'Microsoft Sign-in', href: '/sso-settings', icon: KeyRound, roles: ['SUPER_ADMIN'] as UserRole[] },
+            { name: 'Mail Settings', href: '/mail-settings', icon: Mail, roles: SUPER_ADMIN_ROLES },
+            { name: 'Microsoft Sign-in', href: '/sso-settings', icon: KeyRound, roles: SUPER_ADMIN_ROLES },
           ]
         : []),
     ],

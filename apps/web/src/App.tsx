@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 import { Layout } from '@/components/layout/Layout';
 import { PublicLayout } from '@/components/layout/Layout';
 import { Login } from '@/pages/Login';
@@ -31,6 +32,7 @@ const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ de
 const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })));
 const AdminControlCenter = lazy(() => import('@/pages/AdminControlCenter').then((m) => ({ default: m.AdminControlCenter })));
 import { useAuth } from '@/context/AuthContext';
+import { ADMIN_ROLES, COMPLIANCE_WRITE_ROLES, LEADERSHIP_ROLES, SUPER_ADMIN_ROLES, type UserRole } from '@/config/navigation.config';
 import { ProjectProvider } from '@/context/ProjectContext';
 
 function ProtectedRoute() {
@@ -69,6 +71,27 @@ function PublicRoute() {
   return <Outlet />;
 }
 
+// Shows a page only to the listed roles (the API enforces the same rules; this just avoids empty, broken pages)
+function RoleGate({ roles }: { roles: UserRole[] }) {
+  const { user } = useAuth();
+  if (!user || !roles.includes(user.role as UserRole)) {
+    return (
+      <div className="mx-auto max-w-md py-20 text-center">
+        <h1 className="text-2xl font-bold text-dbi-textPrimary">You don't have access to this page</h1>
+        <p className="mt-2 text-dbi-textSecondary">Ask an administrator if you think you should.</p>
+        <Button asChild className="mt-6"><Link to="/">Go to my home</Link></Button>
+      </div>
+    );
+  }
+  return <Outlet />;
+}
+
+// Leadership lands on the executive dashboard, everyone else on their own work
+function HomeRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={LEADERSHIP_ROLES.includes(user?.role as UserRole) ? '/dashboard' : '/assignments'} replace />;
+}
+
 function PageLoader() {
   return (
     <div className="flex h-64 items-center justify-center">
@@ -95,10 +118,12 @@ function AppRoutes() {
       <Route element={<Layout />}>
         <Route element={<ProtectedRoute />}>
           {/* Redirect root to Executive Dashboard */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<HomeRedirect />} />
 
           {/* HOME - Executive Dashboard for leadership */}
-          <Route path="/dashboard" element={<ExecutiveDashboard />} />
+          <Route element={<RoleGate roles={LEADERSHIP_ROLES} />}>
+            <Route path="/dashboard" element={<ExecutiveDashboard />} />
+          </Route>
 
           {/* WORKSPACE - My Assignments for individual contributors */}
           <Route path="/assignments" element={<Assignments />} />
@@ -115,27 +140,33 @@ function AppRoutes() {
 
           {/* GOVERNANCE */}
           <Route path="/compliance" element={<Compliance />} />
-          <Route path="/compliance/new" element={<ComplianceCreate />} />
+          <Route element={<RoleGate roles={COMPLIANCE_WRITE_ROLES} />}>
+            <Route path="/compliance/new" element={<ComplianceCreate />} />
+            <Route path="/compliance/:id/edit" element={<ComplianceEdit />} />
+          </Route>
           <Route path="/compliance/:id" element={<ComplianceDetail />} />
-          <Route path="/compliance/:id/edit" element={<ComplianceEdit />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/audit-logs" element={<AuditLogs />} />
+          <Route element={<RoleGate roles={ADMIN_ROLES} />}>
+            <Route path="/audit-logs" element={<AuditLogs />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/admin-control-center" element={<AdminControlCenter />} />
+          </Route>
 
           {/* ADMINISTRATION */}
-          <Route path="/users" element={<Users />} />
           <Route path="/notifications" element={<Notifications />} />
-          <Route path="/admin-control-center" element={<AdminControlCenter />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/mail-settings" element={<MailSettings />} />
-          <Route path="/sso-settings" element={<SsoSettings />} />
-          <Route path="/roles" element={<Roles />} />
+          <Route element={<RoleGate roles={SUPER_ADMIN_ROLES} />}>
+            <Route path="/roles" element={<Roles />} />
+            <Route path="/mail-settings" element={<MailSettings />} />
+            <Route path="/sso-settings" element={<SsoSettings />} />
+          </Route>
 
           {/* SEARCH */}
           <Route path="/search" element={<Search />} />
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<HomeRedirect />} />
     </Routes>
     </Suspense>
   );
