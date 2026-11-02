@@ -13,7 +13,7 @@ import { ArrowLeft, Save, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const frameworkOptions = ['NIST_CSF', 'ISO_27001', 'SOC2', 'PCI_DSS', 'GDPR', 'HIPAA', 'FEDRAMP', 'CIS_CONTROLS', 'MITRE_ATTACK', 'CUSTOM'];
-const statusOptions = ['NOT_APPLICABLE', 'NOT_IMPLEMENTED', 'PARTIALLY_IMPLEMENTED', 'IMPLEMENTED', 'VERIFIED', 'EXCEPTION_GRANTED'];
+const statusOptions = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'AT_RISK'];
 
 const frameworkLabels: Record<string, string> = {
   NIST_CSF: 'NIST CSF',
@@ -29,21 +29,19 @@ const frameworkLabels: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
-  NOT_APPLICABLE: 'Not Applicable',
-  NOT_IMPLEMENTED: 'Not Implemented',
-  PARTIALLY_IMPLEMENTED: 'Partially Implemented',
-  IMPLEMENTED: 'Implemented',
-  VERIFIED: 'Verified',
-  EXCEPTION_GRANTED: 'Exception Granted',
+  NOT_STARTED: 'Not Started',
+  IN_PROGRESS: 'In Progress',
+  COMPLETED: 'Completed',
+  OVERDUE: 'Overdue',
+  AT_RISK: 'At Risk',
 };
 
 const statusBadges: Record<string, string> = {
-  NOT_APPLICABLE: 'bg-slate-500/20 text-slate-300',
-  NOT_IMPLEMENTED: 'bg-rose-500/20 text-rose-300',
-  PARTIALLY_IMPLEMENTED: 'bg-amber-500/20 text-amber-300',
-  IMPLEMENTED: 'bg-emerald-500/20 text-emerald-300',
-  VERIFIED: 'bg-indigo-500/20 text-indigo-300',
-  EXCEPTION_GRANTED: 'bg-violet-500/20 text-violet-300',
+  NOT_STARTED: 'bg-slate-500/20 text-slate-300',
+  IN_PROGRESS: 'bg-cyan-500/20 text-cyan-300',
+  COMPLETED: 'bg-emerald-500/20 text-emerald-300',
+  OVERDUE: 'bg-rose-500/20 text-rose-300',
+  AT_RISK: 'bg-amber-500/20 text-amber-300',
 };
 
 export function ComplianceEdit() {
@@ -55,7 +53,7 @@ export function ComplianceEdit() {
     controlId: '',
     name: '',
     framework: 'ISO_27001',
-    status: 'NOT_IMPLEMENTED',
+    status: 'NOT_STARTED',
     description: '',
     ownerId: '',
     lastAssessed: '',
@@ -83,9 +81,9 @@ export function ComplianceEdit() {
         controlId: c.controlId || c.id || '',
         name: c.name || '',
         framework: c.framework || 'ISO_27001',
-        status: c.status || 'NOT_IMPLEMENTED',
+        status: c.status || 'NOT_STARTED',
         description: c.description || '',
-        ownerId: c.owner?.id || '',
+        ownerId: c.ownerId || c.owner?.id || '',
         lastAssessed: c.lastAssessed ? c.lastAssessed.split('T')[0] : '',
         nextReviewDate: c.nextReviewDate ? c.nextReviewDate.split('T')[0] : '',
         tags: c.tags?.join(', ') || '',
@@ -214,29 +212,18 @@ export function ComplianceEdit() {
               </div>
 
               <div>
-                <Label htmlFor="ownerId">Owner</Label>
+                <Label htmlFor="ownerId">Owner *</Label>
                 <Select value={formData.ownerId} onValueChange={v => setFormData(prev => ({ ...prev, ownerId: v }))}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select owner (optional)" />
+                    <SelectValue placeholder="Select owner" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    
                     {users.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>{u.fullName} ({u.email})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="lastAssessed">Last Assessed</Label>
-                <Input
-                  id="lastAssessed"
-                  type="date"
-                  value={formData.lastAssessed}
-                  onChange={e => setFormData(prev => ({ ...prev, lastAssessed: e.target.value }))}
-                  className="mt-1"
-                />
               </div>
 
               <div>
@@ -258,17 +245,6 @@ export function ComplianceEdit() {
                   onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe the control requirements, implementation details, and assessment criteria"
                   rows={6}
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <Label htmlFor="tags">Tags (comma separated)</Label>
-                <Input
-                  id="tags"
-                  value={formData.tags}
-                  onChange={e => setFormData(prev => ({ ...prev, tags: e.target.value }))}
-                  placeholder="access-control, policy, quarterly, evidence-required"
                   className="mt-1"
                 />
               </div>

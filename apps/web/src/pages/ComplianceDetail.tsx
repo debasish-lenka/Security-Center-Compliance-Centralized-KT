@@ -9,12 +9,11 @@ import { ArrowLeft, Edit, Trash2, Shield, Calendar, User, Clock, AlertTriangle, 
 import { toast } from '@/hooks/use-toast';
 
 const statusBadges: Record<string, string> = {
-  NOT_APPLICABLE: 'bg-slate-500/20 text-slate-300',
-  NOT_IMPLEMENTED: 'bg-rose-500/20 text-rose-300',
-  PARTIALLY_IMPLEMENTED: 'bg-amber-500/20 text-amber-300',
-  IMPLEMENTED: 'bg-emerald-500/20 text-emerald-300',
-  VERIFIED: 'bg-indigo-500/20 text-indigo-300',
-  EXCEPTION_GRANTED: 'bg-violet-500/20 text-violet-300',
+  NOT_STARTED: 'bg-slate-500/20 text-slate-300',
+  IN_PROGRESS: 'bg-cyan-500/20 text-cyan-300',
+  COMPLETED: 'bg-emerald-500/20 text-emerald-300',
+  OVERDUE: 'bg-rose-500/20 text-rose-300',
+  AT_RISK: 'bg-amber-500/20 text-amber-300',
 };
 
 const frameworkIcons: Record<string, React.ReactNode> = {
@@ -31,9 +30,9 @@ const frameworkIcons: Record<string, React.ReactNode> = {
 };
 
 const getStatusIcon = (status: string) => {
-  if (status === 'VERIFIED' || status === 'IMPLEMENTED') return <CheckCircle className="h-4 w-4 text-dbi-success" />;
-  if (status === 'PARTIALLY_IMPLEMENTED') return <AlertTriangle className="h-4 w-4 text-dbi-warning" />;
-  if (status === 'NOT_IMPLEMENTED' || status === 'NOT_APPLICABLE') return <Shield className="h-4 w-4 text-dbi-textSecondary" />;
+  if (status === 'COMPLETED') return <CheckCircle className="h-4 w-4 text-dbi-success" />;
+  if (status === 'IN_PROGRESS') return <AlertTriangle className="h-4 w-4 text-dbi-warning" />;
+  if (status === 'NOT_STARTED' || status === 'NOT_APPLICABLE') return <Shield className="h-4 w-4 text-dbi-textSecondary" />;
   return <AlertTriangle className="h-4 w-4 text-dbi-critical" />;
 };
 

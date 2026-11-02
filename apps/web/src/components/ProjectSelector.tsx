@@ -16,14 +16,14 @@ export function ProjectSelector() {
   }
 
   return (
-    <Select value={currentProject?.id || ''} onValueChange={setCurrentProject}>
+    <Select value={currentProject?.id || '__all__'} onValueChange={(v) => setCurrentProject(v === '__all__' ? null : v)}>
       <SelectTrigger className="w-48 bg-dbi-elevated border-dbi-border flex items-center gap-2">
         <FolderKanban className="h-4 w-4 text-dbi-cyan" />
         <SelectValue placeholder="Select project" className="flex-1 truncate" />
         <ChevronDown className="h-4 w-4 text-dbi-textSecondary" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="">All Projects</SelectItem>
+        <SelectItem value="__all__">All Projects</SelectItem>
         {availableProjects.map((project) => (
           <SelectItem key={project.id} value={project.id}>
             <div className="flex items-center gap-2 w-full">

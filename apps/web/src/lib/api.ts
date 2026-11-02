@@ -1105,12 +1105,46 @@ export const rolesApi = MOCK_MODE ? mockRolesApi : {
   unassign: (userId: string, roleId: string) => api.delete('/v1/roles/assign', { data: { userId, roleId } }),
 };
 
+// The compliance pages use friendlier field names than the API stores
+const mapControl = (c: any) => c && ({
+  ...c,
+  name: c.title,
+  framework: c.category,
+  nextReviewDate: c.dueDate,
+  lastAssessed: c.lastReviewedAt,
+  evidence: c.evidence ? [{ name: 'Evidence notes', description: c.evidence }] : [],
+});
+
+const toControlPayload = (d: any) => {
+  const out: Record<string, unknown> = {};
+  if (d.controlId !== undefined) out.controlId = d.controlId;
+  if (d.name !== undefined) out.title = d.name;
+  if (d.framework !== undefined) out.category = d.framework;
+  if (d.status !== undefined) out.status = d.status;
+  if (d.description !== undefined) out.description = d.description || null;
+  if (d.ownerId) out.ownerId = d.ownerId;
+  if (d.nextReviewDate !== undefined) out.dueDate = d.nextReviewDate || null;
+  return out;
+};
+
+const realControlsList = async (params?: Record<string, string>): Promise<any> => {
+  const { framework, search, ...rest } = params ?? {};
+  const res = await api.get('/v1/compliance/controls', { params: { ...rest, ...(framework && framework !== 'ALL' ? { category: framework } : {}) } });
+  const q = search?.toLowerCase();
+  let items = (res.data?.items ?? []).map(mapControl);
+  if (q) items = items.filter((c: any) => [c.name, c.controlId, c.framework].some((v) => String(v ?? '').toLowerCase().includes(q)));
+  return { ...res, data: { ...res.data, items, total: q ? items.length : res.data?.total } };
+};
+
 export const complianceApi = MOCK_MODE ? mockComplianceApi : {
-  list: (params?: Record<string, string>) => api.get('/v1/compliance/controls', { params }),
-  getControls: (params?: Record<string, string>) => api.get('/v1/compliance/controls', { params }),
-  getControl: (id: string) => api.get(`/v1/compliance/controls/${id}`),
-  createControl: (data: any) => api.post('/v1/compliance/controls', data),
-  updateControl: (id: string, data: any) => api.patch(`/v1/compliance/controls/${id}`, data),
+  list: (params?: Record<string, string>) => realControlsList(params),
+  getControls: (params?: Record<string, string>) => realControlsList(params),
+  getControl: async (id: string): Promise<any> => {
+    const res = await api.get(`/v1/compliance/controls/${id}`);
+    return { ...res, data: mapControl(res.data?.data) }; // pages read the control straight from response.data
+  },
+  createControl: (data: any) => api.post('/v1/compliance/controls', toControlPayload(data)),
+  updateControl: (id: string, data: any) => api.patch(`/v1/compliance/controls/${id}`, toControlPayload(data)),
   deleteControl: (id: string) => api.delete(`/v1/compliance/controls/${id}`),
   delete: (id: string) => api.delete(`/v1/compliance/controls/${id}`),
   createRemediationTask: (controlId: string, data: any) => api.post(`/v1/compliance/controls/${controlId}/remediation-tasks`, data),

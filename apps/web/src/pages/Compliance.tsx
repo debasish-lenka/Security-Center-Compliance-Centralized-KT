@@ -13,7 +13,7 @@ import { Plus, Search, Edit, Trash2, Eye, Shield, AlertTriangle, CheckCircle } f
 import { formatDate, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
-const statusOptions = ['ALL', 'NOT_APPLICABLE', 'NOT_IMPLEMENTED', 'PARTIALLY_IMPLEMENTED', 'IMPLEMENTED', 'VERIFIED', 'EXCEPTION_GRANTED'];
+const statusOptions = ['ALL', 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'AT_RISK'];
 const frameworkOptions = ['ALL', 'NIST_CSF', 'ISO_27001', 'SOC2', 'PCI_DSS', 'GDPR', 'HIPAA', 'FEDRAMP', 'CIS_CONTROLS', 'MITRE_ATTACK', 'CUSTOM'];
 
 export function Compliance() {
@@ -87,9 +87,9 @@ export function Compliance() {
   };
 
   const getStatusIcon = (status: string) => {
-    if (status === 'VERIFIED' || status === 'IMPLEMENTED') return <CheckCircle className="h-4 w-4 text-dbi-success" />;
-    if (status === 'PARTIALLY_IMPLEMENTED') return <AlertTriangle className="h-4 w-4 text-dbi-warning" />;
-    if (status === 'NOT_IMPLEMENTED' || status === 'NOT_APPLICABLE') return <Shield className="h-4 w-4 text-dbi-textSecondary" />;
+    if (status === 'COMPLETED') return <CheckCircle className="h-4 w-4 text-dbi-success" />;
+    if (status === 'IN_PROGRESS') return <AlertTriangle className="h-4 w-4 text-dbi-warning" />;
+    if (status === 'NOT_STARTED' || status === 'NOT_APPLICABLE') return <Shield className="h-4 w-4 text-dbi-textSecondary" />;
     return <AlertTriangle className="h-4 w-4 text-dbi-critical" />;
   };
 

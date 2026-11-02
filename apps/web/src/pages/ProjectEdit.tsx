@@ -237,12 +237,12 @@ export function ProjectEdit() {
 
               <div>
                 <Label htmlFor="reviewerId">Reviewer</Label>
-                <Select value={formData.reviewerId} onValueChange={v => setFormData(prev => ({ ...prev, reviewerId: v }))}>
+                <Select value={formData.reviewerId || '__none__'} onValueChange={v => setFormData(prev => ({ ...prev, reviewerId: v === '__none__' ? '' : v }))}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select reviewer" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="__none__">None</SelectItem>
                     {users.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>{u.fullName} ({u.email})</SelectItem>
                     ))}

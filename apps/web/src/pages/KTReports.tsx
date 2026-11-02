@@ -13,25 +13,22 @@ import { Plus, Search, Edit, Trash2, Eye, FileText } from 'lucide-react';
 import { formatDate, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
-const statusOptions = ['ALL', 'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'PUBLISHED', 'ARCHIVED'];
-const typeOptions = ['ALL', 'SECURITY_ASSESSMENT', 'INCIDENT_REPORT', 'COMPLIANCE_AUDIT', 'VULNERABILITY_SCAN', 'PENETRATION_TEST', 'KT_SESSION', 'PROJECT_HANDOVER', 'BEST_PRACTICES', 'LESSONS_LEARNED', 'OTHER'];
+const statusOptions = ['ALL', 'DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'];
 
 export function KTReports() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [typeFilter, setTypeFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, _setPageSize] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['kt-reports', search, statusFilter, typeFilter, currentPage, pageSize],
+    queryKey: ['kt-reports', search, statusFilter, currentPage, pageSize],
     queryFn: () => {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       if (statusFilter !== 'ALL') params.status = statusFilter;
-      if (typeFilter !== 'ALL') params.type = typeFilter;
       return ktReportsApi.list(params);
     },
   });
@@ -106,14 +103,6 @@ export function KTReports() {
                   {statusOptions.map(s => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Select value={typeFilter} onValueChange={v => { setTypeFilter(v); setCurrentPage(1); }}>
-                <SelectTrigger className="w-48 bg-dbi-elevated border-dbi-border">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {typeOptions.map(t => <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>)}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardHeader>
@@ -145,7 +134,6 @@ export function KTReports() {
                     <TableRow>
                       {[
                         { key: 'title', label: 'Title' },
-                        { key: 'type', label: 'Type' },
                         { key: 'project', label: 'Project' },
                         { key: 'author', label: 'Author' },
                         { key: 'status', label: 'Status' },
@@ -178,10 +166,7 @@ export function KTReports() {
                           <Link to={`/kt-reports/${report.id}`} className="font-medium text-dbi-textPrimary hover:text-dbi-cyan">
                             {report.title}
                           </Link>
-                          <p className="text-sm text-dbi-textSecondary line-clamp-1 mt-1">{report.content?.substring(0, 100)}...</p>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">{report.type.replace('_', ' ')}</Badge>
+                          <p className="text-sm text-dbi-textSecondary line-clamp-1 mt-1">{(report.workCompleted || report.detailedWork || '').substring(0, 100)}</p>
                         </TableCell>
                         <TableCell>
                           {report.project ? (

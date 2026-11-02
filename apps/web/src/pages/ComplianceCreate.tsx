@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
 import { complianceApi, usersApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { ArrowLeft, Save, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const frameworkOptions = ['NIST_CSF', 'ISO_27001', 'SOC2', 'PCI_DSS', 'GDPR', 'HIPAA', 'FEDRAMP', 'CIS_CONTROLS', 'MITRE_ATTACK', 'CUSTOM'];
-const statusOptions = ['NOT_APPLICABLE', 'NOT_IMPLEMENTED', 'PARTIALLY_IMPLEMENTED', 'IMPLEMENTED', 'VERIFIED', 'EXCEPTION_GRANTED'];
+const statusOptions = ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'AT_RISK'];
 
 const frameworkLabels: Record<string, string> = {
   NIST_CSF: 'NIST CSF',
@@ -28,25 +29,25 @@ const frameworkLabels: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
-  NOT_APPLICABLE: 'Not Applicable',
-  NOT_IMPLEMENTED: 'Not Implemented',
-  PARTIALLY_IMPLEMENTED: 'Partially Implemented',
-  IMPLEMENTED: 'Implemented',
-  VERIFIED: 'Verified',
-  EXCEPTION_GRANTED: 'Exception Granted',
+  NOT_STARTED: 'Not Started',
+  IN_PROGRESS: 'In Progress',
+  COMPLETED: 'Completed',
+  OVERDUE: 'Overdue',
+  AT_RISK: 'At Risk',
 };
 
 export function ComplianceCreate() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user: me } = useAuth();
 
   const [formData, setFormData] = useState({
     controlId: '',
     name: '',
     framework: 'ISO_27001',
-    status: 'NOT_IMPLEMENTED',
+    status: 'NOT_STARTED',
     description: '',
-    ownerId: '',
+    ownerId: me?.id ?? '',
     lastAssessed: '',
     nextReviewDate: '',
     tags: '',
@@ -151,29 +152,18 @@ export function ComplianceCreate() {
               </div>
 
               <div>
-                <Label htmlFor="ownerId">Owner</Label>
+                <Label htmlFor="ownerId">Owner *</Label>
                 <Select value={formData.ownerId} onValueChange={v => setFormData(prev => ({ ...prev, ownerId: v }))}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select owner (optional)" />
+                    <SelectValue placeholder="Select owner" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    
                     {users.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>{u.fullName} ({u.email})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="lastAssessed">Last Assessed</Label>
-                <Input
-                  id="lastAssessed"
-                  type="date"
-                  value={formData.lastAssessed}
-                  onChange={e => setFormData(prev => ({ ...prev, lastAssessed: e.target.value }))}
-                  className="mt-1"
-                />
               </div>
 
               <div>
@@ -195,17 +185,6 @@ export function ComplianceCreate() {
                   onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe the control requirements, implementation details, and assessment criteria"
                   rows={6}
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <Label htmlFor="tags">Tags (comma separated)</Label>
-                <Input
-                  id="tags"
-                  value={formData.tags}
-                  onChange={e => setFormData(prev => ({ ...prev, tags: e.target.value }))}
-                  placeholder="access-control, policy, quarterly, evidence-required"
                   className="mt-1"
                 />
               </div>
