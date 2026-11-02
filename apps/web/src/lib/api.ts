@@ -1481,17 +1481,20 @@ api.interceptors.request.use(
 );
 
 // Response interceptor for error handling
+let redirectingToLogin = false;
+
 api.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      // Try to refresh token
-      try {
-        await api.post('/v1/auth/refresh');
-        // Retry original request
-        return api.request(error.config!);
-      } catch {
-        clearAuth();
+  (error: AxiosError) => {
+    // A 401 on a login attempt is just "wrong password": let the form show it.
+    // For any other 401 the session is gone: clear it and go to /login once.
+    // (There is no refresh endpoint to retry against, and redirecting while already
+    // on /login made the page reload in a loop.)
+    const isAuthCall = error.config?.url?.includes('/v1/auth/');
+    if (error.response?.status === 401 && !isAuthCall) {
+      clearAuth();
+      if (!redirectingToLogin && window.location.pathname !== '/login') {
+        redirectingToLogin = true;
         window.location.href = '/login';
       }
     }
