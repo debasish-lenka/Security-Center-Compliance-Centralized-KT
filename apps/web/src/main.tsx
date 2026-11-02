@@ -14,7 +14,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
+      // retry transient failures only; a 4xx (missing endpoint, no access) won't fix itself
+      retry: (count: number, error: any) => !(error?.response?.status >= 400 && error?.response?.status < 500) && count < 1,
       refetchOnWindowFocus: false,
     },
   },

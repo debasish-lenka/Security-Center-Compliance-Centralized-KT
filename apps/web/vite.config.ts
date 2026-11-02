@@ -10,6 +10,17 @@ export default defineConfig({
       '@dbi/shared': path.resolve(__dirname, '../../packages/shared/src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // stable vendor chunks cache across deploys and load in parallel
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query', 'axios'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

@@ -1,31 +1,32 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { PublicLayout } from '@/components/layout/Layout';
 import { Login } from '@/pages/Login';
-import { ExecutiveDashboard } from '@/pages/ExecutiveDashboard';
-import { Projects } from '@/pages/Projects';
-import { ProjectDetail } from '@/pages/ProjectDetail';
-import { ProjectCreate } from '@/pages/ProjectCreate';
-import { ProjectEdit } from '@/pages/ProjectEdit';
-import { KTReports } from '@/pages/KTReports';
-import { KTReportDetail } from '@/pages/KTReportDetail';
-import { KTReportCreate } from '@/pages/KTReportCreate';
-import { KTReportEdit } from '@/pages/KTReportEdit';
-import { Documents } from '@/pages/Documents';
-import { KnowledgeBooks } from '@/pages/KnowledgeBooks';
-import { Compliance } from '@/pages/Compliance';
-import { ComplianceDetail } from '@/pages/ComplianceDetail';
-import { ComplianceCreate } from '@/pages/ComplianceCreate';
-import { ComplianceEdit } from '@/pages/ComplianceEdit';
-import { Users } from '@/pages/Users';
-import { Roles } from '@/pages/Roles';
-import { Notifications } from '@/pages/Notifications';
-import { AuditLogs } from '@/pages/AuditLogs';
-import { Settings } from '@/pages/Settings';
-import { Reports } from '@/pages/Reports';
-import { Assignments } from '@/pages/Assignments';
-import { Search } from '@/pages/Search';
-import { AdminControlCenter } from '@/pages/AdminControlCenter';
+const ExecutiveDashboard = lazy(() => import('@/pages/ExecutiveDashboard').then((m) => ({ default: m.ExecutiveDashboard })));
+const Projects = lazy(() => import('@/pages/Projects').then((m) => ({ default: m.Projects })));
+const ProjectDetail = lazy(() => import('@/pages/ProjectDetail').then((m) => ({ default: m.ProjectDetail })));
+const ProjectCreate = lazy(() => import('@/pages/ProjectCreate').then((m) => ({ default: m.ProjectCreate })));
+const ProjectEdit = lazy(() => import('@/pages/ProjectEdit').then((m) => ({ default: m.ProjectEdit })));
+const KTReports = lazy(() => import('@/pages/KTReports').then((m) => ({ default: m.KTReports })));
+const KTReportDetail = lazy(() => import('@/pages/KTReportDetail').then((m) => ({ default: m.KTReportDetail })));
+const KTReportCreate = lazy(() => import('@/pages/KTReportCreate').then((m) => ({ default: m.KTReportCreate })));
+const KTReportEdit = lazy(() => import('@/pages/KTReportEdit').then((m) => ({ default: m.KTReportEdit })));
+const Documents = lazy(() => import('@/pages/Documents').then((m) => ({ default: m.Documents })));
+const KnowledgeBooks = lazy(() => import('@/pages/KnowledgeBooks').then((m) => ({ default: m.KnowledgeBooks })));
+const Compliance = lazy(() => import('@/pages/Compliance').then((m) => ({ default: m.Compliance })));
+const ComplianceDetail = lazy(() => import('@/pages/ComplianceDetail').then((m) => ({ default: m.ComplianceDetail })));
+const ComplianceCreate = lazy(() => import('@/pages/ComplianceCreate').then((m) => ({ default: m.ComplianceCreate })));
+const ComplianceEdit = lazy(() => import('@/pages/ComplianceEdit').then((m) => ({ default: m.ComplianceEdit })));
+const Users = lazy(() => import('@/pages/Users').then((m) => ({ default: m.Users })));
+const Roles = lazy(() => import('@/pages/Roles').then((m) => ({ default: m.Roles })));
+const Notifications = lazy(() => import('@/pages/Notifications').then((m) => ({ default: m.Notifications })));
+const AuditLogs = lazy(() => import('@/pages/AuditLogs').then((m) => ({ default: m.AuditLogs })));
+const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })));
+const Reports = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.Reports })));
+const Assignments = lazy(() => import('@/pages/Assignments').then((m) => ({ default: m.Assignments })));
+const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })));
+const AdminControlCenter = lazy(() => import('@/pages/AdminControlCenter').then((m) => ({ default: m.AdminControlCenter })));
 import { useAuth } from '@/context/AuthContext';
 import { ProjectProvider } from '@/context/ProjectContext';
 
@@ -65,8 +66,17 @@ function PublicRoute() {
   return <Outlet />;
 }
 
+function PageLoader() {
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-dbi-cyan" />
+    </div>
+  );
+}
+
 function AppRoutes() {
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/login" element={<PublicRoute />}>
@@ -117,6 +127,7 @@ function AppRoutes() {
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 
