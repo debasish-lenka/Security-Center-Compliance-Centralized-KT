@@ -15,8 +15,8 @@ export function formatWhen(d: Date): string {
 }
 
 /**
- * Stamps every page with a diagonal text and a footer line, so a copy that
- * leaks can be traced to the person who downloaded it.
+ * Stamps every page with one diagonal text ("CONFIDENTIAL - <project name>"). The optional `note` is a plain
+ * line at the bottom (who uploaded the document and when). Nothing else is printed.
  */
 export async function watermarkPdf(input: Buffer, text: string, note?: string): Promise<Buffer> {
   const pdf = await PDFDocument.load(input, { ignoreEncryption: false });
@@ -25,7 +25,7 @@ export async function watermarkPdf(input: Buffer, text: string, note?: string): 
   const label = latin(text);
   const pages = pdf.getPages();
 
-  pages.forEach((page, i) => {
+  pages.forEach((page) => {
     const { width, height } = page.getSize();
 
     // diagonal, sized so the whole text fits across the page
@@ -46,18 +46,8 @@ export async function watermarkPdf(input: Buffer, text: string, note?: string): 
     // who made the document and when, printed on every page
     if (note) {
       const n = latin(note);
-      page.drawText(n, { x: Math.max(8, (width - small.widthOfTextAtSize(n, 7)) / 2), y: 21, size: 7, font: small, color: rgb(0.25, 0.25, 0.25) });
+      page.drawText(n, { x: Math.max(8, (width - small.widthOfTextAtSize(n, 7)) / 2), y: 12, size: 7, font: small, color: rgb(0.25, 0.25, 0.25) });
     }
-    const footer = `${label}  |  page ${i + 1} of ${pages.length}`;
-    const fs = 7;
-    page.drawText(footer, {
-      x: Math.max(8, (width - small.widthOfTextAtSize(footer, fs)) / 2),
-      y: 10,
-      size: fs,
-      font: small,
-      color: rgb(0.4, 0.4, 0.4),
-      opacity: 0.9,
-    });
   });
 
   return Buffer.from(await pdf.save());
