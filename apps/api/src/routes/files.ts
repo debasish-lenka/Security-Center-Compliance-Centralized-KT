@@ -11,6 +11,7 @@ const SAFE_INLINE: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
+  '.webp': 'image/webp',
   '.txt': 'text/plain',
 };
 

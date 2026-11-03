@@ -647,6 +647,7 @@ const mockComplianceApi = {
 };
 
 const mockDocumentsApi = {
+  timeline: async (_projectId: string) => createMockResponse({ items: [] as any[] }),
   list: async (params?: Record<string, string>) => {
     let items = [...mockDocuments];
     if (params?.projectId) {
@@ -1250,6 +1251,8 @@ const realDocumentsDelete = (id: string) => {
 
 export const documentsApi = MOCK_MODE ? mockDocumentsApi : {
   list: realDocumentsList,
+  // every file of one project, oldest first, with uploader and time
+  timeline: (projectId: string) => api.get(`/v1/projects/${projectId}/documents/timeline`),
   get: (id: string) => api.get(`/v1/documents/${id}`),
   create: (data: any) => api.post('/v1/documents', data),
   update: (id: string, data: any) => api.patch(`/v1/documents/${id}`, data),

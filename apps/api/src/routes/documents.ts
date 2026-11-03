@@ -316,6 +316,37 @@ export async function documentRoutes(app: FastifyInstance) {
   });
 
   // Get document metadata
+  // Everything uploaded to a project, oldest first, with who uploaded it and when (the vault's timeline view).
+  // Only what this person is allowed to see; images carry a short-lived link so they can be shown in place.
+  app.get('/:projectId/documents/timeline', async (request, reply) => {
+    const userId = request.userId!;
+    const userRole = request.user!.role;
+    const { projectId } = request.params as { projectId: string };
+
+    const rows = await app.prisma.projectDocument.findMany({
+      where: { projectId },
+      orderBy: { createdAt: 'asc' },
+      take: 300,
+      select: {
+        id: true, name: true, mimeType: true, size: true, category: true, version: true, createdAt: true, storageKey: true, metadata: true,
+        uploader: { select: { id: true, fullName: true } },
+      },
+    });
+    const visible = [];
+    for (const d of rows) if (await checkDocumentAccess(app, userId, userRole, d.id)) visible.push(d);
+
+    const items = await Promise.all(visible.map(async ({ storageKey, metadata, ...d }) => {
+      const isImage = d.mimeType.startsWith('image/') && /\.(png|jpe?g|gif|webp)$/i.test(storageKey);
+      return {
+        ...d,
+        description: ((metadata as { description?: string } | null)?.description) ?? null,
+        isImage,
+        previewUrl: isImage ? await storage.getPreviewUrl(storageKey, 900) : null,
+      };
+    }));
+    return reply.send({ success: true, data: { items } });
+  });
+
   app.get('/:projectId/documents/:documentId', async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;

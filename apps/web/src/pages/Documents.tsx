@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, projectsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { DocumentTimeline } from '@/components/DocumentTimeline';
 import { DeleteRequestDialog } from '@/components/DeleteRequestDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,8 @@ const typeOptions = ['ALL', 'PDF', 'DOC', 'DOCX', 'XLS', 'XLSX', 'PPT', 'PPTX', 
 
 export function Documents() {
   const { user: me } = useAuth();
+  const queryClient = useQueryClient();
+  const [view, setView] = useState<'list' | 'timeline'>('list');
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId');
   const urlSearch = searchParams.get('search') || '';
@@ -107,6 +110,14 @@ export function Documents() {
         </Button>
       </div>
 
+      <div className="inline-flex rounded-lg border border-dbi-border p-1" role="tablist" aria-label="View">
+        <Button type="button" size="sm" variant={view === 'list' ? 'default' : 'ghost'} onClick={() => setView('list')}>List</Button>
+        <Button type="button" size="sm" variant={view === 'timeline' ? 'default' : 'ghost'} onClick={() => setView('timeline')}>Timeline</Button>
+      </div>
+
+      {view === 'timeline' ? (
+        <DocumentTimeline projects={projects} initialProjectId={projectFilter !== 'ALL' ? projectFilter : undefined} />
+      ) : (
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -310,6 +321,7 @@ export function Documents() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Document Detail Dialog */}
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
@@ -423,6 +435,7 @@ export function Documents() {
                 setUploadProject('');
                 setUploadCategory('OTHER');
                 refetch();
+                queryClient.invalidateQueries({ queryKey: ['documents-timeline'] });
               } catch (err: any) {
                 toast({ title: 'Upload failed', description: err?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
               } finally {
