@@ -8,3 +8,4 @@ Documents
 *.log
 credentials
 .pgdata
+backups

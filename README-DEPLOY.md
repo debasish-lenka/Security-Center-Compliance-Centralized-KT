@@ -37,8 +37,14 @@ docker compose restart api
 docker compose down            # stop (data kept); add -v to ALSO delete the database
 ```
 
-## Backup
+## Backup and restore
+`./backup.sh` saves the database, the `Documents` folder and `.env` (it holds the keys that decrypt 2FA secrets) into `backups/<date>/`, checks the files, and keeps the newest 14 (`KEEP=30 ./backup.sh` to change). A failed backup is deleted, never left looking good.
+
+Daily at 02:00:
 ```bash
-docker compose exec db pg_dump -U dbi dbi_security > backup.sql
-tar czf documents-backup.tgz Documents
+crontab -e
+0 2 * * * cd /opt/dbi-security && ./backup.sh >> /var/log/dbi-backup.log 2>&1
 ```
+Restore (replaces the current data, asks first): `./restore.sh backups/<date>`
+
+The backups sit on the same machine, so they do not protect against a dead disk. Copy `backups/` to another computer or an external drive now and then. The folder contains `.env` (secrets), so keep it private.
