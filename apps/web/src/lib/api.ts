@@ -1157,7 +1157,11 @@ export const complianceApi = MOCK_MODE ? mockComplianceApi : {
 
 export const notificationsApi = MOCK_MODE ? mockNotificationsApi : {
   list: (params?: Record<string, string>) => api.get('/v1/notifications', { params }),
-  getUnreadCount: () => api.get('/v1/notifications/unread-count'),
+  // { success, data: { count } } -> the hook reads response.data.count
+  getUnreadCount: async (): Promise<any> => {
+    const res = await api.get('/v1/notifications/unread-count');
+    return { ...res, data: res.data?.data ?? res.data };
+  },
   markAsRead: (id: string) => api.patch(`/v1/notifications/${id}/read`),
   markAllAsRead: () => api.post('/v1/notifications/mark-all-read'),
   delete: (id: string) => api.delete(`/v1/notifications/${id}`),

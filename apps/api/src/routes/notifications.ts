@@ -20,7 +20,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       querystring: z.object({
         page: z.coerce.number().int().positive().default(1),
         limit: z.coerce.number().int().positive().max(100).default(20),
-        isRead: z.boolean().optional(),
+        isRead: z.enum(['true', 'false']).optional(),
         type: z.string().optional(),
       }),
     },
@@ -29,7 +29,7 @@ export async function notificationRoutes(app: FastifyInstance) {
     const { page, limit, isRead, type } = request.query as any;
 
     const where: any = { userId };
-    if (isRead !== undefined) where.isRead = isRead;
+    if (isRead !== undefined) where.isRead = isRead === 'true';
     if (type) where.type = type;
 
     const [notifications, total, unreadCount] = await Promise.all([
@@ -55,7 +55,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 
     return reply.send({
       success: true,
-      data: { items: notifications.map((n) => ({ ...n, link: linkFor(n) })), total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
+      data: { items: notifications.map((n) => ({ ...n, read: n.isRead, link: linkFor(n) })), total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
     });
   });
 
@@ -71,10 +71,14 @@ export async function notificationRoutes(app: FastifyInstance) {
     const userId = request.userId!;
     const { notificationId } = request.params as { notificationId: string };
 
-    await app.prisma.notification.updateMany({
+    const result = await app.prisma.notification.updateMany({
       where: { id: notificationId, userId },
       data: { isRead: true },
     });
+    // only your own notifications can be touched
+    if (result.count === 0) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Notification not found' } });
+    }
 
     return reply.send({ success: true, data: null });
   });
@@ -96,9 +100,12 @@ export async function notificationRoutes(app: FastifyInstance) {
     const userId = request.userId!;
     const { notificationId } = request.params as { notificationId: string };
 
-    await app.prisma.notification.deleteMany({
+    const result = await app.prisma.notification.deleteMany({
       where: { id: notificationId, userId },
     });
+    if (result.count === 0) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Notification not found' } });
+    }
 
     return reply.send({ success: true, data: null });
   });

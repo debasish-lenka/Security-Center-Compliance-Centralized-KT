@@ -12,7 +12,6 @@ import { formatDate, formatRelativeTime } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useNotifications } from '@/hooks/useNotifications';
 
-const typeOptions = ['ALL', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'SECURITY_ALERT', 'PROJECT_UPDATE', 'KT_REPORT', 'COMPLIANCE', 'SYSTEM'];
 const readOptions = ['ALL', 'UNREAD', 'READ'];
 
 export function Notifications() {
@@ -37,6 +36,9 @@ export function Notifications() {
     deleteNotification,
     refetch
   } = useNotifications({ pollInterval: 30000 });
+
+  // the types that really occur (they differ per kind of event)
+  const typeOptions = ['ALL', ...Array.from(new Set(allNotifications.map(n => n.type)))];
 
   // Filter notifications based on search and filters
   const filteredNotifications = useMemo(() => {
@@ -242,7 +244,7 @@ export function Notifications() {
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {typeOptions.map(t => <SelectItem key={t} value={t}>{t.replace('_', ' ')}</SelectItem>)}
+                  {typeOptions.map(t => <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={readFilter} onValueChange={v => { setReadFilter(v); setCurrentPage(1); }}>

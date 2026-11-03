@@ -14,6 +14,10 @@ const UpdateRoleSchema = z.object({
   permissionIds: z.array(z.string().uuid()).optional(),
 });
 
+// Built-in roles the seed creates: they cannot be renamed or deleted
+const SYSTEM_ROLES = ['Super Admin', 'Admin', 'Project Member'];
+const isSystem = (name: string) => SYSTEM_ROLES.includes(name);
+
 export async function roleRoutes(app: FastifyInstance) {
   const auditLogger = createAuditLogger(app);
 
@@ -26,10 +30,14 @@ export async function roleRoutes(app: FastifyInstance) {
 
     const roles = await app.prisma.role.findMany({
       orderBy: { name: 'asc' },
-      include: { permissions: { select: { id: true, name: true, description: true } } },
+      include: {
+        permissions: { select: { id: true, name: true, description: true } },
+        _count: { select: { userRoles: true } },
+      },
     });
 
-    return reply.send({ success: true, data: roles });
+    const items = roles.map(({ _count, ...r }) => ({ ...r, isSystem: isSystem(r.name), userCount: _count.userRoles }));
+    return reply.send({ success: true, data: { items, total: items.length } });
   });
 
   // List all permissions
@@ -60,7 +68,7 @@ export async function roleRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Role not found' } });
     }
 
-    return reply.send({ success: true, data: role });
+    return reply.send({ success: true, data: { ...role, isSystem: isSystem(role.name) } });
   });
 
   // Create role
@@ -104,6 +112,14 @@ export async function roleRoutes(app: FastifyInstance) {
 
     const { permissionIds, ...rest } = data;
 
+    const existing = await app.prisma.role.findUnique({ where: { id: roleId }, select: { name: true } });
+    if (!existing) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Role not found' } });
+    }
+    if (isSystem(existing.name) && rest.name && rest.name !== existing.name) {
+      return reply.code(400).send({ success: false, error: { code: 'CANNOT_RENAME', message: 'Built-in roles cannot be renamed' } });
+    }
+
     const role = await app.prisma.role.update({
       where: { id: roleId },
       data: {
@@ -130,8 +146,11 @@ export async function roleRoutes(app: FastifyInstance) {
 
     // Prevent deleting system roles
     const role = await app.prisma.role.findUnique({ where: { id: roleId } });
-    if (role?.name === 'Super Admin') {
-      return reply.code(400).send({ success: false, error: { code: 'CANNOT_DELETE', message: 'Cannot delete system role' } });
+    if (!role) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Role not found' } });
+    }
+    if (isSystem(role.name)) {
+      return reply.code(400).send({ success: false, error: { code: 'CANNOT_DELETE', message: 'Built-in roles cannot be deleted' } });
     }
 
     await app.prisma.role.delete({ where: { id: roleId } });

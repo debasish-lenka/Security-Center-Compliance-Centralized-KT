@@ -1,251 +1,124 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { rolesApi } from '@/lib/api';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Edit, Info, Key, Loader2, Plus, Search, Shield, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Plus, Search, Edit, Trash2, Shield, Key, Loader2, Users, Check, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { rolesApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 
-const permissionCategories = {
-  'Users': ['users.read', 'users.write', 'users.delete', 'users.manage_roles'],
-  'Projects': ['projects.read', 'projects.write', 'projects.delete', 'projects.manage_members'],
-  'Documents': ['documents.read', 'documents.write', 'documents.delete', 'documents.manage'],
-  'KT Reports': ['kt_reports.read', 'kt_reports.write', 'kt_reports.delete', 'kt_reports.publish'],
-  'Compliance': ['compliance.read', 'compliance.write', 'compliance.delete', 'compliance.manage'],
-  'Notifications': ['notifications.read', 'notifications.write', 'notifications.manage'],
-  'Audit Logs': ['audit_logs.read', 'audit_logs.export'],
-  'Settings': ['settings.read', 'settings.write', 'settings.manage_system'],
-  'Roles': ['roles.read', 'roles.write', 'roles.delete', 'roles.manage_permissions'],
-};
+interface Permission { id: string; name: string; description: string | null; resource: string; action: string }
+interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  userCount: number;
+  permissions: { id: string; name: string }[];
+}
 
-const roleSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  description: z.string().optional(),
-  permissions: z.array(z.string()).min(1, 'At least one permission is required'),
-});
-
-type RoleFormData = z.infer<typeof roleSchema>;
+const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
+const titleCase = (s: string) => s.replace(/[_.]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export function Roles() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingRole, setEditingRole] = useState<any>(null);
-  const [viewingPermissions, setViewingPermissions] = useState<any>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Role | null>(null);
+  const [viewing, setViewing] = useState<Role | null>(null);
+  const [form, setForm] = useState({ name: '', description: '', permissionIds: [] as string[] });
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['roles', search],
-    queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (search) params.search = search;
-      return rolesApi.list(params);
-    },
+  const { data: roles = [], isLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => ((await rolesApi.list()).data?.items ?? []) as Role[],
+  });
+  const { data: permissions = [] } = useQuery({
+    queryKey: ['permissions'],
+    queryFn: async () => ((await rolesApi.getPermissions()).data?.data ?? []) as Permission[],
   });
 
-  const roles = data?.data?.items || [];
-  const totalItems = data?.data?.total || roles.length;
+  // permissions grouped by what they apply to
+  const groups = useMemo(() => {
+    const map = new Map<string, Permission[]>();
+    for (const p of permissions) map.set(p.resource, [...(map.get(p.resource) ?? []), p]);
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [permissions]);
 
-  // Create/Edit Role Form
-  const form = useForm<RoleFormData>({
-    resolver: zodResolver(roleSchema),
-    defaultValues: {
-      name: '',
-      description: '',
-      permissions: [],
+  const visible = roles.filter((r) => `${r.name} ${r.description ?? ''}`.toLowerCase().includes(search.toLowerCase()));
+
+  const openCreate = () => { setEditing(null); setForm({ name: '', description: '', permissionIds: [] }); setDialogOpen(true); };
+  const openEdit = (r: Role) => {
+    setEditing(r);
+    setForm({ name: r.name, description: r.description ?? '', permissionIds: r.permissions.map((p) => p.id) });
+    setDialogOpen(true);
+  };
+  const toggle = (id: string) =>
+    setForm((f) => ({ ...f, permissionIds: f.permissionIds.includes(id) ? f.permissionIds.filter((x) => x !== id) : [...f.permissionIds, id] }));
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const body = { name: form.name.trim(), description: form.description.trim() || null, permissionIds: form.permissionIds };
+      if (editing) await rolesApi.update(editing.id, body);
+      else await rolesApi.create(body);
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      toast({ title: editing ? 'Role updated' : 'Role created' });
+      setDialogOpen(false);
+    },
+    onError: (e) => toast({ title: 'Could not save the role', description: errMsg(e), variant: 'destructive' }),
   });
 
-  const onSubmit = async (data: RoleFormData) => {
-    setIsCreating(true);
-    try {
-      if (editingRole) {
-        await rolesApi.update(editingRole.id, data);
-        toast({ title: 'Role updated', description: 'The role has been updated successfully' });
-      } else {
-        await rolesApi.create(data);
-        toast({ title: 'Role created', description: 'The role has been created successfully' });
-      }
-      setIsCreating(false);
-      form.reset();
-      setEditingRole(null);
-      refetch();
-    } catch {
-      toast({ title: 'Error', description: editingRole ? 'Failed to update role' : 'Failed to create role', variant: 'destructive' });
-      setIsCreating(false);
-    }
-  };
+  const remove = useMutation({
+    mutationFn: async (id: string) => { await rolesApi.delete(id); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['roles'] }); toast({ title: 'Role deleted' }); },
+    onError: (e) => toast({ title: 'Could not delete the role', description: errMsg(e), variant: 'destructive' }),
+  });
 
-  const handleEdit = (role: any) => {
-    form.reset({
-      name: role.name,
-      description: role.description || '',
-      permissions: role.permissions || [],
-    });
-    setEditingRole(role);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this role?')) return;
-    try {
-      await rolesApi.delete(id);
-      toast({ title: 'Role deleted', description: 'The role has been deleted successfully' });
-      refetch();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete role', variant: 'destructive' });
-    }
-  };
-
-  const handleViewPermissions = (role: any) => {
-    setViewingPermissions(role);
-  };
-
-  const formatPermission = (perm: string) => {
-    const [resource, action] = perm.split('.');
-    return `${resource.charAt(0).toUpperCase() + resource.slice(1)}: ${action.charAt(0).toUpperCase() + action.slice(1)}`;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 bg-dbi-elevated rounded w-1/4" />
-        <div className="h-64 bg-dbi-elevated rounded-lg" />
-      </div>
-    );
-  }
+  const valid = form.name.trim().length >= 2 && form.permissionIds.length > 0;
+  const renameLocked = !!editing?.isSystem;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dbi-textPrimary">Roles & Permissions</h1>
-          <p className="text-dbi-textSecondary">Manage role-based access control</p>
+          <h1 className="text-3xl font-bold tracking-tight dbi-gradient-text">Roles & Permissions</h1>
+          <p className="text-dbi-textSecondary">Named sets of permissions</p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button onClick={() => { form.reset(); setEditingRole(null); }}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Role
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingRole ? 'Edit Role' : 'Create New Role'}</DialogTitle>
-              <DialogDescription>
-                {editingRole ? 'Modify the role details and permissions below.' : 'Define a new role with specific permissions.'}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Role Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., SECURITY_ANALYST" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Role description" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="permissions"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Permissions</FormLabel>
-                      <div className="space-y-4">
-                        {Object.entries(permissionCategories).map(([category, permissions]) => (
-                          <div key={category} className="space-y-2">
-                            <h4 className="text-sm font-medium text-dbi-textSecondary uppercase tracking-wider">{category}</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {permissions.map((perm) => (
-                                <label key={perm} className="flex items-center gap-2 p-2 bg-dbi-elevated/50 rounded-lg hover:bg-dbi-elevated cursor-pointer transition-colors">
-                                  <input
-                                    type="checkbox"
-                                    checked={field.value.includes(perm)}
-                                    onChange={(e) => {
-                                      const newValue = e.target.checked
-                                        ? [...field.value, perm]
-                                        : field.value.filter((p: string) => p !== perm);
-                                      field.onChange(newValue);
-                                    }}
-                                    className="h-4 w-4 rounded border-dbi-border text-dbi-cyan focus:ring-dbi-cyan"
-                                  />
-                                  <span className="text-sm text-dbi-textPrimary">{formatPermission(perm)}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                  <Button type="button" variant="outline" onClick={() => { form.reset(); setEditingRole(null); }}>Cancel</Button>
-                  <Button type="submit" disabled={isCreating}>
-                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {editingRole ? 'Update Role' : 'Create Role'}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> New Role</Button>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-lg border border-dbi-cyan/30 bg-dbi-cyan/5 p-4 text-sm text-dbi-textSecondary">
+        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-dbi-cyan" />
+        <p>
+          What a person can do in the app is decided by their <b className="text-dbi-textPrimary">account role</b> (set on the Users page) and their{' '}
+          <b className="text-dbi-textPrimary">role in each project</b> (set on the project's Team tab). The roles listed here are a catalogue of
+          permission sets for documentation and reviews; changing them does not change what anyone can do today.
+        </p>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle>All Roles ({totalItems})</CardTitle>
-            <div className="relative">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>All Roles ({visible.length})</CardTitle>
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dbi-textSecondary" />
-              <Input
-                placeholder="Search roles..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9 pr-10 w-64 bg-dbi-elevated border-dbi-border"
-              />
+              <Input placeholder="Search roles..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {error ? (
-            <div className="text-center py-8 text-dbi-critical">Failed to load roles</div>
-          ) : roles.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto h-16 w-16 text-dbi-textSecondary">
-                <Shield className="h-16 w-16" />
-              </div>
-              <p className="mt-4 text-dbi-textSecondary">No roles found</p>
-              <Button onClick={() => { form.reset(); setEditingRole(null); }} className="mt-4">
-                <Plus className="mr-2 h-4 w-4" />
-                Create First Role
-              </Button>
+          {isLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-dbi-cyan" /></div>
+          ) : visible.length === 0 ? (
+            <div className="py-12 text-center">
+              <Shield className="mx-auto h-14 w-14 text-dbi-textSecondary" />
+              <p className="mt-4 text-dbi-textSecondary">{roles.length === 0 ? 'No roles yet' : 'No role matches your search'}</p>
+              {roles.length === 0 && <Button onClick={openCreate} className="mt-4"><Plus className="mr-2 h-4 w-4" /> Create first role</Button>}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -253,66 +126,35 @@ export function Roles() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Role</TableHead>
-                    <TableHead>Description</TableHead>
                     <TableHead>Permissions</TableHead>
-                    <TableHead>Users</TableHead>
-                    <TableHead>System</TableHead>
+                    <TableHead>People</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {roles.map((role: any) => (
-                    <TableRow key={role.id} className="hover:bg-dbi-elevated/50">
+                  {visible.map((r) => (
+                    <TableRow key={r.id}>
                       <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-lg bg-dbi-indigo/20 flex items-center justify-center">
-                            <Shield className="h-5 w-5 text-dbi-indigo" />
-                          </div>
-                          <div>
-                            <Link to={`/roles/${role.id}`} className="font-medium text-dbi-textPrimary hover:text-dbi-cyan">
-                              {role.name}
-                            </Link>
-                          </div>
-                        </div>
+                        <p className="font-medium text-dbi-textPrimary">{r.name}</p>
+                        <p className="text-xs text-dbi-textSecondary">{r.description || 'No description'}</p>
                       </TableCell>
-                      <TableCell className="text-sm text-dbi-textSecondary max-w-xs truncate">
-                        {role.description || 'No description'}
-                      </TableCell>
+                      <TableCell className="text-sm text-dbi-textSecondary">{r.permissions.length}</TableCell>
+                      <TableCell className="text-sm text-dbi-textSecondary">{r.userCount}</TableCell>
+                      <TableCell><Badge variant={r.isSystem ? 'secondary' : 'outline'} className="text-xs">{r.isSystem ? 'System' : 'Custom'}</Badge></TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(role.permissions || []).slice(0, 4).map((perm: string) => (
-                            <Badge key={perm} variant="secondary" className="text-xs h-5 px-2">
-                              {formatPermission(perm)}
-                            </Badge>
-                          ))}
-                          {(role.permissions || []).length > 4 && (
-                            <Badge variant="outline" className="text-xs h-5 px-2">
-                              +{(role.permissions || []).length - 4} more
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-dbi-textSecondary">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {role._count?.users || 0}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={role.isSystem ? 'secondary' : 'outline'} className="text-xs">
-                          {role.isSystem ? 'System' : 'Custom'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => handleViewPermissions(role)} title="View Permissions">
-                            <Key className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(role)} title="Edit">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {!role.isSystem && (
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(role.id)} className="text-dbi-critical hover:text-dbi-critical" title="Delete">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" title="View permissions" aria-label={`View permissions of ${r.name}`} onClick={() => setViewing(r)}><Key className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Edit" aria-label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Edit className="h-4 w-4" /></Button>
+                          {!r.isSystem && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Delete"
+                              aria-label={`Delete ${r.name}`}
+                              className="text-dbi-critical hover:text-dbi-critical"
+                              onClick={() => { if (confirm(`Delete the role "${r.name}"?${r.userCount ? ` It is assigned to ${r.userCount} ${r.userCount === 1 ? 'person' : 'people'}.` : ''}`)) remove.mutate(r.id); }}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
@@ -327,36 +169,76 @@ export function Roles() {
         </CardContent>
       </Card>
 
-      {/* Permissions Detail Dialog */}
-      <Dialog open={!!viewingPermissions} onOpenChange={open => !open && setViewingPermissions(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      {/* create / edit */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Permissions for {viewingPermissions?.name}</DialogTitle>
-            <DialogDescription>All permissions assigned to this role</DialogDescription>
+            <DialogTitle>{editing ? 'Edit role' : 'Create new role'}</DialogTitle>
+            <DialogDescription>{editing ? 'Change the details and permissions.' : 'Name the role and choose its permissions.'}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {Object.entries(permissionCategories).map(([category, permissions]) => (
-              <div key={category}>
-                <h4 className="text-sm font-medium text-dbi-textSecondary uppercase tracking-wider mb-2">{category}</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {permissions.map((perm) => (
-                    <div
-                      key={perm}
-                      className={`flex items-center gap-2 p-2 rounded-lg ${viewingPermissions?.permissions?.includes(perm)
-                        ? 'bg-dbi-success/10 text-dbi-success'
-                        : 'bg-dbi-elevated/50 text-dbi-textSecondary'}`}
-                    >
-                      {viewingPermissions?.permissions?.includes(perm) ? (
-                        <Check className="h-4 w-4 flex-shrink-0" />
-                      ) : (
-                        <X className="h-4 w-4 flex-shrink-0" />
-                      )}
-                      <span className="text-sm">{formatPermission(perm)}</span>
-                    </div>
-                  ))}
-                </div>
+          <form onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate(); }} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="role-name">Name *</Label>
+              <Input id="role-name" value={form.name} maxLength={100} disabled={renameLocked} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Security Analyst" />
+              {renameLocked && <p className="text-xs text-dbi-textSecondary">Built-in roles cannot be renamed.</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role-desc">Description</Label>
+              <Input id="role-desc" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What is this role for?" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Permissions * <span className="font-normal text-dbi-textSecondary">({form.permissionIds.length} selected)</span></Label>
+                <button type="button" className="text-xs text-dbi-cyan" onClick={() => setForm({ ...form, permissionIds: form.permissionIds.length === permissions.length ? [] : permissions.map((p) => p.id) })}>
+                  {form.permissionIds.length === permissions.length ? 'Clear all' : 'Select all'}
+                </button>
               </div>
-            ))}
+              {groups.map(([resource, list]) => (
+                <div key={resource} className="space-y-2">
+                  <h4 className="text-xs font-medium uppercase tracking-wider text-dbi-textSecondary">{titleCase(resource)}</h4>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {list.map((p) => (
+                      <label key={p.id} className="flex cursor-pointer items-center gap-2 rounded-lg bg-dbi-elevated/50 p-2 hover:bg-dbi-elevated" title={p.description ?? ''}>
+                        <input type="checkbox" className="h-4 w-4" checked={form.permissionIds.includes(p.id)} onChange={() => toggle(p.id)} />
+                        <span className="text-sm text-dbi-textPrimary">{titleCase(p.action)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={!valid || save.isPending}>
+                {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editing ? 'Update role' : 'Create role'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* read-only view */}
+      <Dialog open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Permissions of {viewing?.name}</DialogTitle>
+            <DialogDescription>{viewing?.permissions.length ?? 0} of {permissions.length} permissions</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {groups.map(([resource, list]) => {
+              const granted = list.filter((p) => viewing?.permissions.some((g) => g.id === p.id));
+              if (granted.length === 0) return null;
+              return (
+                <div key={resource}>
+                  <h4 className="mb-1 text-xs font-medium uppercase tracking-wider text-dbi-textSecondary">{titleCase(resource)}</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {granted.map((p) => <Badge key={p.id} className="bg-dbi-success/15 text-dbi-success">{titleCase(p.action)}</Badge>)}
+                  </div>
+                </div>
+              );
+            })}
+            {viewing?.permissions.length === 0 && <p className="text-sm text-dbi-textSecondary">This role has no permissions.</p>}
           </div>
         </DialogContent>
       </Dialog>

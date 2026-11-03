@@ -62,7 +62,7 @@ export class AuditLogger {
   }
 
   async logResource(
-    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'ASSIGN' | 'UNASSIGN' | 'UPLOAD' | 'DOWNLOAD' | 'APPROVE' | 'REJECT',
+    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'ASSIGN' | 'UNASSIGN' | 'UPLOAD' | 'DOWNLOAD' | 'APPROVE' | 'REJECT' | 'EXPORT',
     actorId: string,
     resourceType: string,
     resourceId: string,

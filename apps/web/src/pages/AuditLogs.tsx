@@ -13,9 +13,7 @@ import { Search, Eye, FileText, AlertTriangle, User, Download, Shield, Database,
 import { formatDate, formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
-const actionOptions = ['ALL', 'CREATE', 'READ', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'EXPORT', 'IMPORT', 'APPROVE', 'REJECT', 'ASSIGN', 'UNASSIGN', 'ARCHIVE', 'RESTORE'];
-const resourceOptions = ['ALL', 'USER', 'PROJECT', 'DOCUMENT', 'KT_REPORT', 'COMPLIANCE_CONTROL', 'NOTIFICATION', 'ROLE', 'SETTING', 'AUDIT_LOG', 'SYSTEM'];
-const outcomeOptions = ['ALL', 'success', 'failure'];
+const outcomeOptions = ['ALL', 'SUCCESS', 'FAILURE'];
 
 export function AuditLogs() {
   const [search, setSearch] = useState('');
@@ -27,15 +25,23 @@ export function AuditLogs() {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'createdAt', direction: 'desc' });
   const [viewingLog, setViewingLog] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Filter choices come from what is really in the log
+  const { data: actions = [] } = useQuery({ queryKey: ['audit-actions'], queryFn: async () => ((await auditLogsApi.getActions()).data?.data ?? []) as string[] });
+  const { data: resourceTypes = [] } = useQuery({ queryKey: ['audit-resource-types'], queryFn: async () => ((await auditLogsApi.getResourceTypes()).data?.data ?? []) as string[] });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['audit-logs', search, actionFilter, resourceFilter, outcomeFilter, currentPage, pageSize, sortConfig],
+    queryKey: ['audit-logs', search, actionFilter, resourceFilter, outcomeFilter, startDate, endDate, currentPage, pageSize, sortConfig],
     queryFn: () => {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       if (actionFilter !== 'ALL') params.action = actionFilter;
       if (resourceFilter !== 'ALL') params.resourceType = resourceFilter;
       if (outcomeFilter !== 'ALL') params.outcome = outcomeFilter;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
       params.page = String(currentPage);
       params.limit = String(pageSize);
       if (sortConfig?.key) params.sortBy = sortConfig.key;
@@ -78,6 +84,8 @@ export function AuditLogs() {
       if (actionFilter !== 'ALL') params.action = actionFilter;
       if (resourceFilter !== 'ALL') params.resourceType = resourceFilter;
       if (outcomeFilter !== 'ALL') params.outcome = outcomeFilter;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
       const response = await auditLogsApi.export(params);
       const blob = response.data;
       const url = window.URL.createObjectURL(blob);
@@ -125,7 +133,7 @@ export function AuditLogs() {
   };
 
   const getResourceIcon = (resource: string) => {
-    switch (resource) {
+    switch (resource.toUpperCase()) {
       case 'USER': return <User className="h-3 w-3" />;
       case 'PROJECT': return <FileText className="h-3 w-3" />;
       case 'DOCUMENT': return <FileText className="h-3 w-3" />;
@@ -175,7 +183,7 @@ export function AuditLogs() {
                   <SelectValue placeholder="Action" />
                 </SelectTrigger>
                 <SelectContent>
-                  {actionOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  {['ALL', ...actions].map(a => <SelectItem key={a} value={a}>{a.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={resourceFilter} onValueChange={v => { setResourceFilter(v); setCurrentPage(1); }}>
@@ -183,7 +191,7 @@ export function AuditLogs() {
                   <SelectValue placeholder="Resource" />
                 </SelectTrigger>
                 <SelectContent>
-                  {resourceOptions.map(r => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}
+                  {['ALL', ...resourceTypes].map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={outcomeFilter} onValueChange={v => { setOutcomeFilter(v); setCurrentPage(1); }}>
@@ -191,9 +199,11 @@ export function AuditLogs() {
                   <SelectValue placeholder="Outcome" />
                 </SelectTrigger>
                 <SelectContent>
-                  {outcomeOptions.map(s => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                  {outcomeOptions.map(s => <SelectItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <input type="date" aria-label="From date" title="From date" value={startDate} max={endDate || undefined} onChange={e => { setStartDate(e.target.value); setCurrentPage(1); }} className="h-10 rounded-md border border-dbi-border bg-dbi-elevated px-3 text-sm text-dbi-textPrimary" />
+              <input type="date" aria-label="To date" title="To date" value={endDate} min={startDate || undefined} onChange={e => { setEndDate(e.target.value); setCurrentPage(1); }} className="h-10 rounded-md border border-dbi-border bg-dbi-elevated px-3 text-sm text-dbi-textPrimary" />
             </div>
           </div>
         </CardHeader>
