@@ -45,7 +45,7 @@ export async function authMiddleware(
     }
 
     // Verify JWT
-    const payload = request.server.jwt.verify<{ sub: string; email: string; role: string; purpose?: string }>(token);
+    const payload = request.server.jwt.verify<{ sub: string; email: string; role: string; purpose?: string; iat?: number }>(token);
     if (payload.purpose) throw new Error('Not a session token');
 
     // Get user from database
@@ -60,6 +60,7 @@ export async function authMiddleware(
         role: true,
         status: true,
         lastActivityAt: true,
+        sessionsValidFrom: true,
       },
     });
 
@@ -71,8 +72,14 @@ export async function authMiddleware(
       throw new Error('Account is not active');
     }
 
+    // A password change or 2FA reset ends every session started before it (iat is in whole seconds)
+    if (user.sessionsValidFrom && (payload.iat ?? 0) < Math.floor(user.sessionsValidFrom.getTime() / 1000)) {
+      throw new Error('Session ended');
+    }
+
+    const { sessionsValidFrom: _sv, ...publicUser } = user;
     // Attach user to request
-    request.user = { ...user, department: user.department?.name ?? null };
+    request.user = { ...publicUser, department: user.department?.name ?? null };
     request.userId = user.id;
 
     // Update last activity (async, don't await)

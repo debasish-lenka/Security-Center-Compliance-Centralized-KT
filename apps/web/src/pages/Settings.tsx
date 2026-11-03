@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { setAuthToken } from '@/lib/auth';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { toast } from '@/hooks/use-toast';
@@ -97,7 +98,10 @@ export function Settings() {
   const changePassword = async () => {
     setIsSaving(true);
     try {
-      await authApi.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      const res: any = await authApi.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      // the server ended all other sessions and sent this one a fresh token
+      const fresh = res?.data?.data?.token ?? res?.data?.token;
+      if (fresh) setAuthToken(fresh);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       toast({ title: 'Password changed', description: 'Use the new password next time you sign in' });
     } catch (e: any) {

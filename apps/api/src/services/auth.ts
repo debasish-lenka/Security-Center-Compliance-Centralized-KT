@@ -200,10 +200,8 @@ export class AuthService {
     const newHash = await this.hashPassword(newPassword);
     await this.prisma.profile.update({
       where: { id: userId },
-      data: { passwordHash: newHash },
+      data: { passwordHash: newHash, sessionsValidFrom: new Date() },
     });
-
-    // Revoke all sessions except current (handled by token expiration)
     return true;
   }
 

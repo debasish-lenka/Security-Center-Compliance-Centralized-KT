@@ -194,7 +194,7 @@ export async function userRoutes(app: FastifyInstance) {
     await app.prisma.$transaction([
       app.prisma.profile.update({
         where: { id: userId },
-        data: { passwordHash: await authService.hashPassword(password), ...(target.status === 'PENDING' ? { status: 'ACTIVE' } : {}) },
+        data: { passwordHash: await authService.hashPassword(password), sessionsValidFrom: new Date(), ...(target.status === 'PENDING' ? { status: 'ACTIVE' } : {}) },
       }),
       app.prisma.inviteToken.deleteMany({ where: { userId } }),
     ]);
@@ -224,7 +224,7 @@ export async function userRoutes(app: FastifyInstance) {
     const { userId } = request.params as { userId: string };
     const user = await app.prisma.profile.findUnique({ where: { id: userId }, select: { id: true } });
     if (!user) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
-    await app.prisma.profile.update({ where: { id: userId }, data: { totpEnabled: false, totpSecretEnc: null, recoveryCodeHashes: [] } });
+    await app.prisma.profile.update({ where: { id: userId }, data: { totpEnabled: false, totpSecretEnc: null, recoveryCodeHashes: [], sessionsValidFrom: new Date() } });
     await auditLogger.logResource('UPDATE', request.userId!, 'user', userId, { action: 'reset_mfa' }, request.ip, request.headers['user-agent']);
     return reply.send({ success: true, data: null });
   });

@@ -25,6 +25,7 @@ model Profile {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   lastActivityAt  DateTime?
+  sessionsValidFrom DateTime? // tokens issued before this moment are rejected (password change, 2FA reset)
 
   userRoles                   UserRoleAssignment[] @relation("UserRoleAssignments")
   assignedRoles               UserRoleAssignment[] @relation("AssignedRoles")

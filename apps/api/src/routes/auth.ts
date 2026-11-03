@@ -202,7 +202,11 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     await auditLogger.logConfigChange(request.userId!, 'password_changed', null, { userId: request.userId }, request.ip, request.headers['user-agent']);
-    return reply.send({ success: true, data: null });
+
+    // Every other session just ended; give this one a fresh token so the person stays signed in
+    const fresh = app.jwt.sign({ sub: request.userId, email: request.user!.email, role: request.user!.role });
+    reply.setCookie('auth_token', fresh, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+    return reply.send({ success: true, data: { token: fresh } });
   });
 
   // Forgot password
