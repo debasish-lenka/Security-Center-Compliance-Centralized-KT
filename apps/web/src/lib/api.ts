@@ -823,6 +823,7 @@ const mockDocumentsApi = {
   },
   unshare: async (_documentId: string, _shareId: string) => createMockResponse({ data: { success: true } }),
   updateSharePermission: async (_documentId: string, _shareId: string, permission: 'VIEW' | 'EDIT' | 'DOWNLOAD' | 'COMMENT' | 'FULL') => createMockResponse({ data: { success: true, shareId: _shareId, permission } }),
+  getDocumentActivity: async (_documentId: string) => createMockResponse({ data: { totalAccesses: 0, uniqueUsers: 0, actionCounts: {}, recentEvents: [] } }),
   // Access analytics endpoints
   getAccessAnalytics: async (params: Record<string, string>) => {
     const mockEvents = [
@@ -1263,6 +1264,8 @@ export const documentsApi = MOCK_MODE ? mockDocumentsApi : {
   share: (documentId: string, data: { userId: string; permission: 'VIEW' | 'EDIT' | 'DOWNLOAD' | 'COMMENT' | 'FULL' }) => api.post(`/v1/documents/${documentId}/shares`, data),
   unshare: (documentId: string, shareId: string) => api.delete(`/v1/documents/${documentId}/shares/${shareId}`),
   updateSharePermission: (documentId: string, shareId: string, permission: 'VIEW' | 'EDIT' | 'DOWNLOAD' | 'COMMENT' | 'FULL') => api.patch(`/v1/documents/${documentId}/shares/${shareId}`, { permission }),
+  // Who opened, downloaded or changed one document (owner, lead, reviewer and super admin only)
+  getDocumentActivity: (documentId: string) => api.get(`/v1/projects/${projectOfDoc(documentId)}/documents/${documentId}/access-analytics`),
   // Access analytics
   getAccessAnalytics: (params: Record<string, string>) => api.get('/v1/documents/access-analytics', { params }),
   exportAccessLog: (params: { documentId?: string; projectId?: string; timeRange?: string; format: string }) => api.get('/v1/documents/access-log/export', { params, responseType: 'blob' }),

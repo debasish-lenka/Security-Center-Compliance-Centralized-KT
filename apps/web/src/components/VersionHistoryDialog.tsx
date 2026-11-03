@@ -37,7 +37,7 @@ interface DocumentVersion {
 }
 
 export function VersionHistoryDialog({ documentId, documentName, open, onOpenChange }: VersionHistoryDialogProps) {
-  const [selectedVersion, setSelectedVersion] = useState<DocumentVersion | null>(null);
+  const [selectedVersion] = useState<DocumentVersion | null>(null);
   const [showDiff, setShowDiff] = useState(false);
 
   const { data } = useQuery({
@@ -62,11 +62,6 @@ export function VersionHistoryDialog({ documentId, documentName, open, onOpenCha
       console.error('Rollback failed:', error);
       alert('Failed to rollback. Please try again.');
     }
-  };
-
-  const handleViewDiff = async (version: DocumentVersion) => {
-    setSelectedVersion(version);
-    setShowDiff(true);
   };
 
   const getVersionStatus = (_version: DocumentVersion, index: number) => {
@@ -141,15 +136,6 @@ export function VersionHistoryDialog({ documentId, documentName, open, onOpenCha
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleViewDiff(version)}
-                                  disabled={index === 0}
-                                  title="View changes"
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
                                 {index !== 0 && (
                                   <Button
                                     variant="ghost"

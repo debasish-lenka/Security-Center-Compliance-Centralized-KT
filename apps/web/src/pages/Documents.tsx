@@ -24,7 +24,7 @@ import { formatDate, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { VersionHistoryDialog } from '@/components/VersionHistoryDialog';
 import { ReviewDialog } from '@/components/ReviewDialog';
-import { WatermarkSettings } from '@/components/WatermarkSettings';
+import { DocumentActivity } from '@/components/DocumentActivity';
 
 const statusOptions = ['ALL', 'DRAFT', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'PUBLISHED', 'ARCHIVED'];
 const typeOptions = ['ALL', 'PDF', 'DOC', 'DOCX', 'XLS', 'XLSX', 'PPT', 'PPTX', 'TXT', 'MD', 'CSV', 'JSON', 'XML', 'ZIP', 'IMAGE', 'VIDEO', 'OTHER'];
@@ -358,12 +358,7 @@ export function Documents() {
                   <p className="text-sm text-dbi-textPrimary mt-1">{selectedDoc.description}</p>
                 </div>
               )}
-              <WatermarkSettings
-                documentId={selectedDoc.id}
-                documentName={selectedDoc.name}
-                userName={selectedDoc.uploadedBy?.fullName || 'Unknown'}
-                userEmail={selectedDoc.uploadedBy?.email || 'unknown@example.com'}
-              />
+              <DocumentActivity documentId={selectedDoc.id} />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setSelectedDoc(null)}>
                   <X className="mr-2 h-4 w-4" />
