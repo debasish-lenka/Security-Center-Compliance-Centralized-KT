@@ -11,6 +11,7 @@ interface FileTokenPayload {
   k: string; // storage key
   m: FileTokenMode;
   n?: string; // download file name
+  w?: string; // watermark text stamped on PDFs when the link is opened
   e: number; // expiry (epoch ms)
 }
 
@@ -36,8 +37,8 @@ export class StorageService {
     return createHmac('sha256', env.SESSION_SECRET).update(data).digest('base64url');
   }
 
-  private makeUrl(key: string, mode: FileTokenMode, expiresIn: number, name?: string): string {
-    const payload: FileTokenPayload = { k: key, m: mode, n: name, e: Date.now() + expiresIn * 1000 };
+  private makeUrl(key: string, mode: FileTokenMode, expiresIn: number, name?: string, watermark?: string): string {
+    const payload: FileTokenPayload = { k: key, m: mode, n: name, w: watermark, e: Date.now() + expiresIn * 1000 };
     const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
     return `/api/v1/files/${body}.${this.sign(body)}`;
   }
@@ -69,12 +70,12 @@ export class StorageService {
     await writeFile(path, body as Buffer);
   }
 
-  getDownloadUrl(key: string, fileName: string, expiresIn = 300): Promise<string> {
-    return Promise.resolve(this.makeUrl(key, 'download', expiresIn, fileName));
+  getDownloadUrl(key: string, fileName: string, expiresIn = 300, watermark?: string): Promise<string> {
+    return Promise.resolve(this.makeUrl(key, 'download', expiresIn, fileName, watermark));
   }
 
-  getPreviewUrl(key: string, expiresIn = 300): Promise<string> {
-    return Promise.resolve(this.makeUrl(key, 'inline', expiresIn));
+  getPreviewUrl(key: string, expiresIn = 300, watermark?: string): Promise<string> {
+    return Promise.resolve(this.makeUrl(key, 'inline', expiresIn, undefined, watermark));
   }
 
   getUploadUrl(key: string, expiresIn = 3600): Promise<string> {

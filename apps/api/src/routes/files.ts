@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { extname } from 'path';
 import { getStorageService } from '../services/storage.js';
+import { watermarkPdf } from '../services/watermark.js';
 
 const MAX_UPLOAD = 50 * 1024 * 1024;
 
@@ -38,6 +39,22 @@ export async function fileRoutes(app: FastifyInstance) {
     reply.header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(name)}`);
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Cache-Control', 'private, no-store');
+
+    // A link made for a person carries their stamp; PDFs are marked before they leave the server
+    if (payload.w && extname(payload.k).toLowerCase() === '.pdf') {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const c of storage.openRead(payload.k)) chunks.push(c as Buffer);
+        const marked = await watermarkPdf(Buffer.concat(chunks), payload.w);
+        reply.header('Content-Length', marked.length);
+        return reply.send(marked);
+      } catch {
+        // never fall back to the unmarked original
+        reply.removeHeader('Content-Disposition');
+        reply.type('application/json; charset=utf-8');
+        return reply.code(422).send({ success: false, error: { code: 'WATERMARK_FAILED', message: 'This PDF could not be watermarked, so it was not served' } });
+      }
+    }
     return reply.send(storage.openRead(payload.k));
   });
 

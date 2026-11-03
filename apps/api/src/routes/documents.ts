@@ -93,6 +93,13 @@ async function checkProjectAccess(app: FastifyInstance, userId: string, userRole
   return !!membership;
 }
 
+// Text stamped on a PDF for whoever opens it: who, when, and which document
+async function stampFor(app: FastifyInstance, userId: string, docName: string): Promise<string> {
+  const u = await app.prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true, email: true } });
+  const when = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  return `CONFIDENTIAL - ${u?.fullName ?? 'User'} (${u?.email ?? userId}) - ${when} - ${docName}`.slice(0, 220);
+}
+
 async function checkDocumentAccess(app: FastifyInstance, userId: string, userRole: string, documentId: string) {
   if (userRole === 'SUPER_ADMIN') return true;
 
@@ -555,7 +562,7 @@ export async function documentRoutes(app: FastifyInstance) {
     });
     await auditLogger.logResource('DOWNLOAD', userId, 'document', documentId, { name: document.name }, request.ip, request.headers['user-agent']);
 
-    return reply.redirect(await storage.getDownloadUrl(document.storageKey, document.originalName, 60));
+    return reply.redirect(await storage.getDownloadUrl(document.storageKey, document.originalName, 60, await stampFor(app, userId, document.name)));
   });
 
   // Get download URL
@@ -574,7 +581,7 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
     }
 
-    const downloadUrl = await storage.getDownloadUrl(document.storageKey, document.originalName, 300); // 5 minutes
+    const downloadUrl = await storage.getDownloadUrl(document.storageKey, document.originalName, 300, await stampFor(app, userId, document.name)); // 5 minutes
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
@@ -602,7 +609,7 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
     }
 
-    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300); // 5 minutes
+    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300, await stampFor(app, userId, document.name)); // 5 minutes
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
@@ -843,7 +850,7 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Version not found' } });
     }
 
-    const downloadUrl = await storage.getDownloadUrl(version.storageKey, `v${version.version}-${documentId}`, 300);
+    const downloadUrl = await storage.getDownloadUrl(version.storageKey, `v${version.version}-${documentId}`, 300, await stampFor(app, userId, `${documentId} v${version.version}`));
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
@@ -1244,148 +1251,6 @@ export async function documentRoutes(app: FastifyInstance) {
     });
   });
 
-  // Generate watermarked version of document
-  app.post('/:projectId/documents/:documentId/watermark', {
-    schema: {
-      body: z.object({
-        watermarkConfig: z.object({
-          enabled: z.boolean().default(true),
-          text: z.string().optional(),
-          position: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center', 'diagonal']).default('diagonal'),
-          opacity: z.number().min(0).max(1).default(0.15),
-          fontSize: z.number().positive().default(24),
-          color: z.string().default('#000000'),
-          includeUser: z.boolean().default(true),
-          includeTimestamp: z.boolean().default(true),
-          includeDocumentInfo: z.boolean().default(true),
-          footer: z.object({
-            enabled: z.boolean().default(false),
-            text: z.string().optional(),
-            includePageNumbers: z.boolean().default(true),
-            includeClassification: z.boolean().default(true),
-            includeConfidentiality: z.boolean().default(true),
-          }).optional(),
-        }),
-        targetVersion: z.number().int().positive().optional(), // Apply to specific version, default to current
-      }),
-    },
-  }, async (request, reply) => {
-    const userId = request.userId!;
-    const userRole = request.user!.role;
-    const { projectId, documentId } = request.params as { projectId: string; documentId: string };
-    const { watermarkConfig, targetVersion } = request.body as any;
-
-    const hasAccess = await checkDocumentAccess(app, userId, userRole, documentId);
-    if (!hasAccess) {
-      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
-    }
-
-    const document = await app.prisma.projectDocument.findFirst({ where: { id: documentId, projectId } });
-    if (!document) {
-      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
-    }
-
-    // Check if user can manage document
-    const canManage = await checkDocumentOwnerOrLead(app, userId, userRole, documentId);
-    if (!canManage) {
-      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only document owner or project lead can generate watermarked version' } });
-    }
-
-    // Get the version to watermark
-    let versionToWatermark = document;
-    if (targetVersion) {
-      const version = await app.prisma.documentVersion.findFirst({
-        where: { documentId, version: targetVersion },
-      });
-      if (!version) {
-        return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Version not found' } });
-      }
-      versionToWatermark = { ...document, storageKey: version.storageKey, size: version.size, version: version.version };
-    }
-
-    // Generate watermarked PDF
-    const watermarkedStorageKey = storage.generateKey(`watermarked-${document.name}-v${versionToWatermark.version}-${Date.now()}.pdf`, projectId);
-
-    // In a real implementation, you would:
-    // 1. Download the original document from storage
-    // 2. Apply watermark using a PDF library (pdf-lib, puppeteer, etc.)
-    // 3. Upload the watermarked version
-    // For now, we'll create a placeholder
-
-    const watermarkText = watermarkConfig.text || `CONFIDENTIAL - ${document.name} - ${new Date().toISOString().split('T')[0]}`;
-    const userProfile = await app.prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true, email: true } });
-
-    // Create watermarked version record
-    const watermarkedVersion = await app.prisma.documentVersion.create({
-      data: {
-        documentId,
-        version: document.version + 1, // New version
-        storageKey: watermarkedStorageKey,
-        size: document.size, // Would be actual size after watermarking
-        mimeType: versionToWatermark.mimeType,
-        originalName: versionToWatermark.originalName,
-        uploadedById: userId,
-        changelog: `Watermarked version created from v${document.version} by ${userProfile?.fullName} at ${new Date().toISOString()}`,
-      },
-    });
-
-    // Update document to point to watermarked version
-    await app.prisma.projectDocument.update({
-      where: { id: documentId },
-      data: {
-        version: document.version + 1,
-        storageKey: watermarkedStorageKey,
-        watermarkConfig,
-      },
-    });
-
-    await auditLogger.logResource('UPDATE', userId, 'document', documentId, {
-      action: 'watermark',
-      version: document.version + 1,
-      watermarkConfig
-    }, request.ip, request.headers['user-agent']);
-
-    // Log activity
-    await app.prisma.activityFeed.create({
-      data: {
-        actorId: userId,
-        action: 'WATERMARK',
-        resourceType: 'document',
-        resourceId: documentId,
-        projectId,
-        details: {
-          documentName: document.name,
-          version: document.version + 1,
-          watermarkText: watermarkText.substring(0, 100),
-        },
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      },
-    });
-
-    // Notify co-authors and owner
-    const notificationService = createNotificationService(app);
-    const notifyUsers = [...new Set([document.ownerId, ...document.coAuthorIds].filter(Boolean))].filter(id => id !== userId);
-    for (const notifyUserId of notifyUsers) {
-      await notificationService.create({
-        userId: notifyUserId,
-        type: 'NEW_DOCUMENT',
-        title: 'Document Watermarked',
-        message: `Document "${document.name}" has been watermarked (version ${document.version + 1})`,
-        resourceType: 'document',
-        resourceId: documentId,
-      });
-    }
-
-    return reply.code(201).send({
-      success: true,
-      data: {
-        version: watermarkedVersion,
-        message: 'Watermarked version generated successfully'
-      }
-    });
-  });
-
   // Get document with watermark preview
   app.get('/:projectId/documents/:documentId/watermark-preview', async (request, reply) => {
     const userId = request.userId!;
@@ -1403,7 +1268,7 @@ export async function documentRoutes(app: FastifyInstance) {
     }
 
     // Generate preview URL with watermark
-    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300);
+    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300, await stampFor(app, userId, document.name));
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
