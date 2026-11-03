@@ -1,11 +1,16 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { complianceApi } from '@/lib/api';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { complianceApi, usersApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatDate, getStatusColor } from '@/lib/utils';
-import { ArrowLeft, Edit, Trash2, Shield, Calendar, User, Clock, AlertTriangle, CheckCircle, FileText, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Shield, Calendar, User, Clock, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const statusBadges: Record<string, string> = {
@@ -39,6 +44,45 @@ const getStatusIcon = (status: string) => {
 export function ComplianceDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [evOpen, setEvOpen] = useState(false);
+  const [task, setTask] = useState({ title: '', description: '', assigneeId: '', dueDate: '' });
+  const [evNote, setEvNote] = useState('');
+  const canManage = ['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER'].includes(user?.role ?? '');
+  const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['compliance-control', id] });
+
+  const { data: people = [] } = useQuery({
+    queryKey: ['compliance-assignees'],
+    enabled: taskOpen && canManage,
+    retry: false,
+    queryFn: async () => {
+      const r: any = await usersApi.list({ limit: '100' });
+      return (r.data?.items ?? r.data?.data?.items ?? []) as { id: string; fullName: string }[];
+    },
+  });
+
+  const addTask = useMutation({
+    mutationFn: () => complianceApi.createRemediationTask(id!, { title: task.title.trim(), description: task.description.trim() || null, assigneeId: task.assigneeId || user?.id, dueDate: task.dueDate }),
+    onSuccess: () => { refresh(); setTaskOpen(false); setTask({ title: '', description: '', assigneeId: '', dueDate: '' }); toast({ title: 'Remediation task added' }); },
+    onError: (e) => toast({ title: 'Could not add the task', description: errMsg(e), variant: 'destructive' }),
+  });
+  const setTaskStatus = useMutation({
+    mutationFn: ({ taskId, status }: { taskId: string; status: string }) => complianceApi.updateRemediationTask(taskId, { status }),
+    onSuccess: refresh,
+    onError: (e) => toast({ title: 'Could not update the task', description: errMsg(e), variant: 'destructive' }),
+  });
+  const addEvidence = useMutation({
+    mutationFn: () => {
+      const stamp = new Date().toISOString().slice(0, 10);
+      const prev = (data?.data?.evidenceText as string) || '';
+      return complianceApi.updateControl(id!, { evidence: `${prev}${prev ? '\n' : ''}[${stamp} ${user?.fullName ?? ''}] ${evNote.trim()}` });
+    },
+    onSuccess: () => { refresh(); setEvOpen(false); setEvNote(''); toast({ title: 'Evidence note added' }); },
+    onError: (e) => toast({ title: 'Could not add evidence', description: errMsg(e), variant: 'destructive' }),
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['compliance-control', id],
@@ -183,63 +227,50 @@ export function ComplianceDetail() {
             </CardContent>
           </Card>
 
-          {control.evidence && control.evidence.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Evidence & Attachments
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {control.evidence.map((ev: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-dbi-elevated rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-dbi-cyan" />
-                        <div>
-                          <p className="font-medium text-dbi-textPrimary">{ev.name || ev.title || `Evidence ${idx + 1}`}</p>
-                          <p className="text-sm text-dbi-textSecondary">{ev.description || ''}</p>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" asChild>
-                        <a href={ev.url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Evidence notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {control.evidenceText ? (
+                <div className="space-y-2">
+                  {String(control.evidenceText).split('\n').filter(Boolean).map((line: string, idx: number) => (
+                    <div key={idx} className="rounded-lg bg-dbi-elevated p-3 text-sm text-dbi-textPrimary">{line}</div>
                   ))}
                 </div>
-              </CardContent>
+              ) : <p className="text-sm text-dbi-textSecondary">No evidence recorded yet.</p>}
+              <p className="mt-3 text-xs text-dbi-textSecondary">Supporting files go in the Document Vault of the project.</p>
+            </CardContent>
           </Card>
-          )}
 
-          {control.remediationTasks && control.remediationTasks.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-dbi-warning" />
-                  Remediation Tasks
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {control.remediationTasks.map((task: any) => (
-                    <div key={task.id} className="flex items-center justify-between p-3 bg-dbi-elevated rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="h-2 w-2 rounded-full bg-dbi-warning" />
-                        <div>
-                          <p className="font-medium text-dbi-textPrimary">{task.title}</p>
-                          <p className="text-sm text-dbi-textSecondary">{task.description}</p>
-                        </div>
-                      </div>
-                      <Badge variant="secondary">{task.status?.replace('_', ' ') || 'Pending'}</Badge>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-dbi-warning" />
+                Remediation Tasks
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(control.remediationTasks ?? []).length === 0 && <p className="text-sm text-dbi-textSecondary">No remediation tasks.</p>}
+              <div className="space-y-3">
+                {(control.remediationTasks ?? []).map((t: any) => (
+                  <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 p-3 bg-dbi-elevated rounded-lg">
+                    <div>
+                      <p className="font-medium text-dbi-textPrimary">{t.title}</p>
+                      <p className="text-sm text-dbi-textSecondary">{t.description}</p>
+                      <p className="text-xs text-dbi-textSecondary">{t.assignee?.fullName ? `${t.assignee.fullName} · ` : ''}due {formatDate(t.dueDate)}</p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
+                    {(canManage || t.assigneeId === user?.id) ? (
+                      <select aria-label={`Status of ${t.title}`} value={t.status} onChange={(e) => setTaskStatus.mutate({ taskId: t.id, status: e.target.value })} className="h-9 rounded-md border border-dbi-border bg-dbi-elevated px-2 text-sm text-dbi-textPrimary">
+                        {['PENDING', 'IN_PROGRESS', 'COMPLETED'].map((st) => <option key={st} value={st}>{st.replace('_', ' ')}</option>)}
+                        {t.status === 'OVERDUE' && <option value="OVERDUE">OVERDUE</option>}
+                      </select>
+                    ) : <Badge variant="secondary">{t.status?.replace('_', ' ')}</Badge>}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
           </Card>
-          )}
         </div>
 
         <div className="space-y-6">
@@ -305,18 +336,8 @@ export function ComplianceDetail() {
                   Edit Control
                 </Link>
               </Button>
-              <Button variant="outline" className="w-full justify-start" asChild>
-                <Link to={`/compliance/${id}/remediation/new`}>
-                  <AlertTriangle className="mr-2 h-4 w-4" />
-                  Add Remediation Task
-                </Link>
-              </Button>
-              <Button variant="outline" className="w-full justify-start" asChild>
-                <Link to={`/compliance/${id}/evidence/new`}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Add Evidence
-                </Link>
-              </Button>
+              {canManage && <Button variant="outline" className="w-full justify-start" onClick={() => setTaskOpen(true)}><AlertTriangle className="mr-2 h-4 w-4" />Add Remediation Task</Button>}
+              {canManage && <Button variant="outline" className="w-full justify-start" onClick={() => setEvOpen(true)}><FileText className="mr-2 h-4 w-4" />Add Evidence</Button>}
               <Button variant="ghost" className="w-full justify-start text-dbi-critical hover:text-dbi-critical" onClick={deleteMutation}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Control
@@ -325,6 +346,35 @@ export function ComplianceDetail() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add remediation task</DialogTitle><DialogDescription>What must be fixed, who does it, and by when.</DialogDescription></DialogHeader>
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (task.title.trim() && task.dueDate) addTask.mutate(); }}>
+            <div className="space-y-2"><Label htmlFor="rt-title">Title *</Label><Input id="rt-title" value={task.title} maxLength={255} onChange={(e) => setTask({ ...task, title: e.target.value })} /></div>
+            <div className="space-y-2"><Label htmlFor="rt-desc">Description</Label><Input id="rt-desc" value={task.description} onChange={(e) => setTask({ ...task, description: e.target.value })} /></div>
+            <div className="space-y-2">
+              <Label htmlFor="rt-assignee">Assign to</Label>
+              <select id="rt-assignee" value={task.assigneeId} onChange={(e) => setTask({ ...task, assigneeId: e.target.value })} className="h-10 w-full rounded-md border border-dbi-border bg-dbi-elevated px-3 text-sm text-dbi-textPrimary">
+                <option value="">Me</option>
+                {people.filter((p) => p.id !== user?.id).map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2"><Label htmlFor="rt-due">Due date *</Label><Input id="rt-due" type="date" value={task.dueDate} onChange={(e) => setTask({ ...task, dueDate: e.target.value })} /></div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setTaskOpen(false)}>Cancel</Button><Button type="submit" disabled={!task.title.trim() || !task.dueDate || addTask.isPending}>Add task</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={evOpen} onOpenChange={setEvOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add evidence note</DialogTitle><DialogDescription>Describe the evidence: document name, location or finding. It is stamped with today's date and your name.</DialogDescription></DialogHeader>
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (evNote.trim()) addEvidence.mutate(); }}>
+            <div className="space-y-2"><Label htmlFor="ev-note">Note *</Label><Input id="ev-note" value={evNote} onChange={(e) => setEvNote(e.target.value)} /></div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setEvOpen(false)}>Cancel</Button><Button type="submit" disabled={!evNote.trim() || addEvidence.isPending}>Add evidence</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

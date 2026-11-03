@@ -1117,6 +1117,7 @@ const mapControl = (c: any) => c && ({
   nextReviewDate: c.dueDate,
   lastAssessed: c.lastReviewedAt,
   evidence: c.evidence ? [{ name: 'Evidence notes', description: c.evidence }] : [],
+  evidenceText: c.evidence ?? '',
 });
 
 const toControlPayload = (d: any) => {
@@ -1127,6 +1128,7 @@ const toControlPayload = (d: any) => {
   if (d.status !== undefined) out.status = d.status;
   if (d.description !== undefined) out.description = d.description || null;
   if (d.ownerId) out.ownerId = d.ownerId;
+  if (d.evidence !== undefined) out.evidence = d.evidence || null;
   if (d.nextReviewDate !== undefined) out.dueDate = d.nextReviewDate || null;
   return out;
 };
