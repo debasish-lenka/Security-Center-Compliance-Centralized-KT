@@ -815,6 +815,7 @@ model Notification {
 }
 
 enum NotificationType {
+  DOCUMENT_CHANGED
   PROJECT_ASSIGNED
   DEADLINE_APPROACHING
   OVERDUE_TASK

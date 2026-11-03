@@ -770,7 +770,7 @@ const mockDocumentsApi = {
       changes
     });
   },
-  rollback: async (_documentId: string, version: number) => {
+  rollback: async (_documentId: string, version: number, _reason?: string) => {
     return createMockResponse({ data: { success: true, message: `Rolled back to version ${version}` } });
   },
   submitReview: async (documentId: string, reviewerId: string) => {
@@ -1229,12 +1229,12 @@ const projectOfDoc = (id: string) => {
   return projectId;
 };
 
-const realDocumentsRollback = async (id: string, version: number) => {
+const realDocumentsRollback = async (id: string, version: number, reason?: string) => {
   const projectId = projectOfDoc(id);
   const list = await api.get(`/v1/projects/${projectId}/documents/${id}/versions`);
   const target = (list.data?.items ?? []).find((v: any) => v.version === version);
   if (!target) throw new Error('Version not found');
-  return api.post(`/v1/projects/${projectId}/documents/${id}/versions/${target.id}/rollback`);
+  return api.post(`/v1/projects/${projectId}/documents/${id}/versions/${target.id}/rollback`, reason ? { reason } : undefined);
 };
 
 const realDocumentsDelete = (id: string) => {

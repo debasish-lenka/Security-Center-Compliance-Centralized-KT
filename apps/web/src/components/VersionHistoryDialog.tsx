@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { documentsApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, RotateCcw, FileText, User, AlertTriangle } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -48,13 +49,20 @@ export function VersionHistoryDialog({ documentId, documentName, open, onOpenCha
 
   const versions = data?.data?.items || [];
 
+  const { user } = useAuth();
   const handleRollback = async (version: DocumentVersion) => {
+    // an admin may change any document but must say why; the super admins are told
+    let reason: string | undefined;
+    if (user?.role === 'ADMIN') {
+      reason = (window.prompt('Reason for this change (required, at least 5 characters):') ?? '').trim();
+      if (reason.length < 5) return;
+    }
     if (!confirm(`Are you sure you want to rollback to version ${version.version}? This will create a new version with the content from version ${version.version}.`)) {
       return;
     }
 
     try {
-      await documentsApi.rollback(documentId, version.version);
+      await documentsApi.rollback(documentId, version.version, reason);
       onOpenChange(false);
       // The parent component will refetch
       window.dispatchEvent(new CustomEvent('document-updated'));

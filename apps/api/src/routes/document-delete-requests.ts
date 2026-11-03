@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { createNotificationService } from '../services/notifications.js';
+import { tellSuperAdmins } from '../services/document-oversight.js';
 import { RECYCLE_DAYS, recycleDocument } from '../services/recycle-bin.js';
 
 // Deleting a document needs approval:
@@ -29,7 +30,7 @@ export async function documentDeleteRequestRoutes(app: FastifyInstance) {
   // Active people holding the Owner / Lead role on a project
   async function managersOf(projectId: string) {
     const members = await app.prisma.projectMember.findMany({
-      where: { projectId, role: { in: [...MANAGER_ROLES] }, user: { status: 'ACTIVE' } },
+      where: { projectId, role: { in: [...MANAGER_ROLES] }, user: { status: 'ACTIVE', role: { not: 'ADMIN' } } },
       select: { userId: true, user: { select: { fullName: true } } },
     });
     return members.map((m) => ({ id: m.userId, name: m.user.fullName }));
@@ -42,7 +43,7 @@ export async function documentDeleteRequestRoutes(app: FastifyInstance) {
   async function canDecide(userId: string, role: string, req: { requestedById: string; projectId: string; escalated: boolean }) {
     if (req.requestedById === userId) return false;
     if (role === 'SUPER_ADMIN') return true;
-    if (req.escalated) return false;
+    if (role === 'ADMIN' || req.escalated) return false;
     return (await managersOf(req.projectId)).some((m) => m.id === userId);
   }
 
@@ -85,6 +86,7 @@ export async function documentDeleteRequestRoutes(app: FastifyInstance) {
         },
       });
       await recycleDocument(app, documentId, userId, record.id);
+      await tellSuperAdmins(app, { actorId: userId, kind: 'DELETED', docId: documentId, docName: document.name, projectId, reason });
       await auditLogger.logResource('DELETE', userId, 'document', documentId, { name: document.name, reason, requestId: record.id, direct: true }, request.ip, request.headers['user-agent']);
       return reply.send({ success: true, data: { id: record.id, status: 'APPROVED', deleted: true } });
     }
@@ -197,6 +199,7 @@ export async function documentDeleteRequestRoutes(app: FastifyInstance) {
       data: { status: 'APPROVED', decidedById: userId, decidedAt: new Date(), decisionNote: note || null },
     });
     if (req.documentId) await recycleDocument(app, req.documentId, userId, id);
+    await tellSuperAdmins(app, { actorId: userId, kind: 'DELETED', docId: req.documentId ?? id, docName: req.documentName, projectId: req.projectId, reason: req.reason });
 
     await notifications.create({
       userId: req.requestedById,

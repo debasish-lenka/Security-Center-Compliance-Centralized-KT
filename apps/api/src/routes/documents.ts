@@ -4,6 +4,7 @@ import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 import { recycleDocument } from '../services/recycle-bin.js';
 import { createNotificationService } from '../services/notifications.js';
+import { adminReasonError, describeChanges, diffFields, tellSuperAdmins } from '../services/document-oversight.js';
 
 const UploadDocumentSchema = z.object({
   name: z.string().min(1).max(500),
@@ -41,6 +42,7 @@ const UploadDocumentSchema = z.object({
 });
 
 const UpdateDocumentSchema = z.object({
+  reason: z.string().trim().max(500).optional(), // required when an ADMIN edits
   name: z.string().min(1).max(500).optional(),
   category: z.enum(['KT_REPORT', 'TECHNICAL', 'COMPLIANCE', 'MEETING_NOTES', 'DESIGN', 'OTHER']).optional(),
   ownerId: z.string().uuid().optional(),
@@ -101,7 +103,7 @@ async function stampFor(app: FastifyInstance, userId: string, docName: string): 
 }
 
 async function checkDocumentAccess(app: FastifyInstance, userId: string, userRole: string, documentId: string) {
-  if (userRole === 'SUPER_ADMIN') return true;
+  if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
 
   const document = await app.prisma.projectDocument.findUnique({
     where: { id: documentId },
@@ -183,7 +185,7 @@ async function checkDocumentAccess(app: FastifyInstance, userId: string, userRol
 }
 
 async function checkDocumentOwnerOrLead(app: FastifyInstance, userId: string, userRole: string, documentId: string) {
-  if (userRole === 'SUPER_ADMIN') return true;
+  if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
   const document = await app.prisma.projectDocument.findUnique({
     where: { id: documentId },
     select: { projectId: true, ownerId: true },
@@ -516,6 +518,8 @@ export async function documentRoutes(app: FastifyInstance) {
 
     await auditLogger.logResource('UPLOAD', userId, 'document', document.id, { name, size, category, ownerId: finalOwnerId, coAuthorIds, tags }, request.ip, request.headers['user-agent']);
 
+    await tellSuperAdmins(app, { actorId: userId, kind: 'CREATED', docId: document.id, docName: name, projectId });
+
     // Notify project members
     const notificationService = createNotificationService(app);
     const members = await app.prisma.projectMember.findMany({
@@ -646,6 +650,7 @@ export async function documentRoutes(app: FastifyInstance) {
     await recycleDocument(app, documentId, userId);
 
     await auditLogger.logResource('DELETE', userId, 'document', documentId, { name: document.name }, request.ip, request.headers['user-agent']);
+    await tellSuperAdmins(app, { actorId: userId, kind: 'DELETED', docId: documentId, docName: document.name, projectId });
 
     return reply.send({ success: true, data: null });
   });
@@ -664,6 +669,11 @@ export async function documentRoutes(app: FastifyInstance) {
     const document = await app.prisma.projectDocument.findFirst({ where: { id: documentId, projectId } });
     if (!document) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
+    }
+
+    const reasonError = adminReasonError(userRole, (request.body as any)?.reason);
+    if (reasonError) {
+      return reply.code(400).send({ success: false, error: { code: 'REASON_REQUIRED', message: reasonError } });
     }
 
     // Get next version number
@@ -697,7 +707,9 @@ export async function documentRoutes(app: FastifyInstance) {
       data: { version: nextVersion },
     });
 
-    await auditLogger.logResource('UPLOAD', userId, 'document_version', version.id, { version: nextVersion }, request.ip, request.headers['user-agent']);
+    const versionReason = ((request.body as any)?.reason as string | undefined)?.trim() || null;
+    await auditLogger.logResource('UPLOAD', userId, 'document_version', version.id, { version: nextVersion, reason: versionReason }, request.ip, request.headers['user-agent']);
+    await tellSuperAdmins(app, { actorId: userId, kind: 'EDITED', docId: documentId, docName: document.name, projectId, detail: `new version v${nextVersion}`, reason: versionReason });
 
     return reply.code(201).send({ success: true, data: version });
   });
@@ -752,6 +764,11 @@ export async function documentRoutes(app: FastifyInstance) {
     if (!canManage) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only document owner or project lead can rollback versions' } });
     }
+    const reasonError = adminReasonError(userRole, (request.body as any)?.reason);
+    if (reasonError) {
+      return reply.code(400).send({ success: false, error: { code: 'REASON_REQUIRED', message: reasonError } });
+    }
+    const rollbackReason = ((request.body as any)?.reason as string | undefined)?.trim() || null;
 
     const version = await app.prisma.documentVersion.findUnique({ where: { id: versionId } });
     if (!version || version.documentId !== documentId) {
@@ -795,8 +812,10 @@ export async function documentRoutes(app: FastifyInstance) {
       fromVersion: document.version,
       toVersion: nextVersion,
       rolledBackFromVersion: version.version,
-      rolledBackFromId: versionId
+      rolledBackFromId: versionId,
+      reason: rollbackReason,
     }, request.ip, request.headers['user-agent']);
+    await tellSuperAdmins(app, { actorId: userId, kind: 'EDITED', docId: documentId, docName: document.name, projectId, detail: `rolled back from v${document.version} to the content of v${version.version}`, reason: rollbackReason });
 
     // Log activity
     await app.prisma.activityFeed.create({
@@ -885,6 +904,11 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only document owner or project lead can update these fields' } });
     }
 
+    const reasonError = adminReasonError(userRole, updates.reason);
+    if (reasonError) {
+      return reply.code(400).send({ success: false, error: { code: 'REASON_REQUIRED', message: reasonError } });
+    }
+
     // Build update data explicitly to match Prisma types
     const updateData: any = {};
     if (updates.name !== undefined) updateData.name = updates.name;
@@ -942,19 +966,25 @@ export async function documentRoutes(app: FastifyInstance) {
       },
     });
 
-    await auditLogger.logResource('UPDATE', userId, 'document', documentId, updates, request.ip, request.headers['user-agent']);
+    // Before/after of every field that really changed, plus the reason, for the audit log and the super admins
+    const changes = diffFields(document as Record<string, any>, updateData);
+    const editReason = updates.reason?.trim() || null;
+    await auditLogger.logResource('UPDATE', userId, 'document', documentId, { changes, reason: editReason }, request.ip, request.headers['user-agent']);
+    if (Object.keys(changes).length > 0) {
+      await tellSuperAdmins(app, { actorId: userId, kind: 'EDITED', docId: documentId, docName: document.name, projectId, detail: describeChanges(changes), reason: editReason });
+    }
 
     return reply.send({ success: true, data: updatedDocument });
   });
 
   // Transfer document ownership
   app.post('/:projectId/documents/:documentId/transfer-ownership', {
-    schema: { body: z.object({ newOwnerId: z.string().uuid() }) },
+    schema: { body: z.object({ newOwnerId: z.string().uuid(), reason: z.string().trim().max(500).optional() }) },
   }, async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;
     const { projectId, documentId } = request.params as { projectId: string; documentId: string };
-    const { newOwnerId } = request.body as { newOwnerId: string };
+    const { newOwnerId, reason: transferReason } = request.body as { newOwnerId: string; reason?: string };
 
     const hasAccess = await checkDocumentAccess(app, userId, userRole, documentId);
     if (!hasAccess) {
@@ -970,6 +1000,10 @@ export async function documentRoutes(app: FastifyInstance) {
     const canManage = await checkDocumentOwnerOrLead(app, userId, userRole, documentId);
     if (!canManage) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only document owner or project lead can transfer ownership' } });
+    }
+    const reasonError = adminReasonError(userRole, transferReason);
+    if (reasonError) {
+      return reply.code(400).send({ success: false, error: { code: 'REASON_REQUIRED', message: reasonError } });
     }
 
     // Verify new owner is a project member
@@ -991,7 +1025,8 @@ export async function documentRoutes(app: FastifyInstance) {
       },
     });
 
-    await auditLogger.logResource('UPDATE', userId, 'document', documentId, { ownerId: newOwnerId, action: 'transfer_ownership' }, request.ip, request.headers['user-agent']);
+    await auditLogger.logResource('UPDATE', userId, 'document', documentId, { ownerId: newOwnerId, previousOwnerId: document.ownerId, action: 'transfer_ownership', reason: transferReason ?? null }, request.ip, request.headers['user-agent']);
+    await tellSuperAdmins(app, { actorId: userId, kind: 'EDITED', docId: documentId, docName: document.name, projectId, detail: 'ownership transferred', reason: transferReason ?? null });
 
     // Notify new owner
     const notificationService = createNotificationService(app);
