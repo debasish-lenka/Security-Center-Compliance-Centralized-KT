@@ -118,8 +118,21 @@ export async function projectRoutes(app: FastifyInstance) {
       app.prisma.project.count({ where }),
     ]);
 
+    // Projects with a delete request waiting: who it is waiting for
+    const waiting = await app.prisma.projectDeleteRequest.findMany({
+      where: { projectId: { in: projects.map((p) => p.id) }, status: 'PENDING' },
+      select: { id: true, projectId: true, requestedById: true, reason: true, createdAt: true },
+    });
+    const approvers = waiting.length
+      ? (await app.prisma.profile.findMany({ where: { role: 'SUPER_ADMIN', status: 'ACTIVE' }, select: { fullName: true } })).map((a) => a.fullName)
+      : [];
+
     const projectsWithMembers = projects.map(p => ({
       ...p,
+      deleteRequest: (() => {
+        const w = waiting.find((x) => x.projectId === p.id);
+        return w ? { id: w.id, reason: w.reason, createdAt: w.createdAt, requestedById: w.requestedById, pendingWith: approvers } : null;
+      })(),
       assignedMembers: p.members.map(m => ({
         userId: m.userId,
         role: m.role,

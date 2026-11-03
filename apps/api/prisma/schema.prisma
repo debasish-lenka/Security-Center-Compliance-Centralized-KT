@@ -815,6 +815,8 @@ model Notification {
 }
 
 enum NotificationType {
+  PROJECT_DELETE_REQUESTED
+  PROJECT_DELETE_DECIDED
   DOCUMENT_CHANGED
   PROJECT_ASSIGNED
   DEADLINE_APPROACHING
@@ -1080,4 +1082,22 @@ model BackupSettings {
   updatedAt        DateTime  @updatedAt
 
   @@map("backup_settings")
+}
+
+// A request to delete a whole project: a super admin decides (see routes/project-delete-requests.ts)
+model ProjectDeleteRequest {
+  id            String    @id @default(uuid())
+  projectId     String
+  projectName   String
+  reason        String
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  requestedById String
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  createdAt     DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([status])
+  @@map("project_delete_requests")
 }

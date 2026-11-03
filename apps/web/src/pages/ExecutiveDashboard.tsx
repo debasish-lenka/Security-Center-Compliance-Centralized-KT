@@ -6,6 +6,7 @@ import { MetricCard } from '@/components/charts/MetricCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DeleteApprovalsPanel } from '@/components/DeleteApprovalsPanel';
+import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
 import { Progress } from '@/components/ui/progress';
 import { formatDate, getPriorityColor } from '@/lib/utils';
 import {
@@ -104,6 +105,7 @@ export function ExecutiveDashboard() {
       </div>
 
       <DeleteApprovalsPanel />
+      <ProjectDeleteApprovals />
 
       {/* KPI Row - Executive Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

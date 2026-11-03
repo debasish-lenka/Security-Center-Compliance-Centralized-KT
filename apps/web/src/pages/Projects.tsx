@@ -11,8 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination } from '@/components/ui/pagination';
 import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
+import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
 
 const statusOptions = ['ALL', 'NOT_STARTED', 'ONGOING', 'COMPLETED', 'ON_HOLD', 'OVERDUE', 'AT_RISK'];
 const priorityOptions = ['ALL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -65,16 +66,12 @@ export function Projects() {
     }));
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) return;
-    try {
-      await projectsApi.delete(id);
-      toast({ title: 'Project deleted', description: 'The project has been deleted successfully' });
-      refetch();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete project', variant: 'destructive' });
-    }
-  };
+  // Deleting asks for a reason and goes to a super admin (see ProjectDeleteDialog)
+  const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
+  // who may ask: admins, and the owner or lead of that project
+  const canAskDelete = (project: any) =>
+    user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' ||
+    (project.assignedMembers ?? []).some((m: any) => m.userId === user?.id && ['OWNER', 'LEAD'].includes(m.role));
 
   const statusBadges: Record<string, string> = {
     NOT_STARTED: 'bg-slate-500/20 text-slate-300',
@@ -99,6 +96,8 @@ export function Projects() {
           </Button>
         )}
       </div>
+
+      <ProjectDeleteApprovals />
 
       <Card>
         <CardHeader>
@@ -199,6 +198,9 @@ export function Projects() {
                             {project.name}
                           </Link>
                           <p className="text-sm text-dbi-textSecondary line-clamp-1 mt-1">{project.description}</p>
+                          {project.deleteRequest && (
+                            <Badge className="mt-1 bg-dbi-amber/15 text-dbi-amber">Delete pending at {(project.deleteRequest.pendingWith ?? []).join(', ') || 'a super admin'}</Badge>
+                          )}
                           <div className="flex flex-wrap gap-1 mt-1">
                             {project.tags?.slice(0, 3).map((tag: string) => (
                               <Badge key={tag} variant="secondary" className="text-xs h-4 px-2">{tag}</Badge>
@@ -258,9 +260,19 @@ export function Projects() {
                                 <Edit className="h-4 w-4" />
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(project.id)} className="text-dbi-critical hover:text-dbi-critical">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {canAskDelete(project) && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={!!project.deleteRequest}
+                                title={project.deleteRequest ? `Delete pending at ${(project.deleteRequest.pendingWith ?? []).join(', ')}` : 'Delete'}
+                                aria-label={`Delete ${project.name}`}
+                                onClick={() => setDeleting({ id: project.id, name: project.name })}
+                                className="text-dbi-critical hover:text-dbi-critical"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -285,6 +297,13 @@ export function Projects() {
           )}
         </CardContent>
       </Card>
+
+      <ProjectDeleteDialog
+        project={deleting}
+        open={!!deleting}
+        onOpenChange={(o) => { if (!o) setDeleting(null); }}
+        onDone={() => { setDeleting(null); refetch(); }}
+      />
     </div>
   );
 }

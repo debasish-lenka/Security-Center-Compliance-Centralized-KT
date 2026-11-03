@@ -1663,3 +1663,12 @@ export const backupsApi = {
     URL.revokeObjectURL(url);
   },
 };
+
+// Delete requests for whole projects (a super admin decides)
+export const projectDeleteApi = {
+  request: (projectId: string, reason: string) => api.post(`/v1/projects/${projectId}/delete-request`, { reason }),
+  list: (scope: 'approver' | 'mine', status = 'PENDING') => api.get('/v1/project-delete-requests', { params: { scope, status } }),
+  approve: (id: string, note?: string) => api.post(`/v1/project-delete-requests/${id}/approve`, { note }),
+  reject: (id: string, note: string) => api.post(`/v1/project-delete-requests/${id}/reject`, { note }),
+  cancel: (id: string) => api.post(`/v1/project-delete-requests/${id}/cancel`),
+};

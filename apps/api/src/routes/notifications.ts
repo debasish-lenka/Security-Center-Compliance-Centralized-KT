@@ -4,7 +4,7 @@ import { createAuditLogger } from '../services/audit-logger.js';
 
 // Where a notification should take the user when clicked
 function linkFor(n: { type: string; resourceType: string | null; resourceId: string | null }): string | null {
-  if (n.type === 'DOCUMENT_DELETE_REQUESTED') return '/assignments'; // the approvals card sits there and on the dashboard
+  if (n.type === 'DOCUMENT_DELETE_REQUESTED' || n.type === 'PROJECT_DELETE_REQUESTED') return '/assignments'; // the approvals card sits there and on the dashboard
   if (n.resourceType === 'document_delete_request' || n.resourceType === 'document') return '/documents';
   if (n.resourceType === 'project' && n.resourceId) return `/projects/${n.resourceId}`;
   if (n.resourceType === 'kt_report' && n.resourceId) return `/kt-reports/${n.resourceId}`;
