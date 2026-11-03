@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Search, Eye, FileText, AlertTriangle, User, Download, Shield, Database, Loader2 } from 'lucide-react';
-import { formatDate, formatRelativeTime, getStatusColor } from '@/lib/utils';
+import { formatDateTimeIST, formatRelativeTime, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 const outcomeOptions = ['ALL', 'SUCCESS', 'FAILURE'];
@@ -263,7 +263,7 @@ export function AuditLogs() {
                       <TableRow key={log.id} className="hover:bg-dbi-elevated/50">
                         <TableCell className="text-sm text-dbi-textSecondary whitespace-nowrap">
                           <div>{formatRelativeTime(log.createdAt)}</div>
-                          <div className="text-xs">{formatDate(log.createdAt)}</div>
+                          <div className="text-xs">{formatDateTimeIST(log.createdAt)}</div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -349,7 +349,7 @@ export function AuditLogs() {
               </div>
               <div>
                 <p className="text-dbi-textSecondary">Timestamp</p>
-                <p className="font-mono text-dbi-textPrimary">{formatDate(viewingLog?.createdAt)}</p>
+                <p className="font-mono text-dbi-textPrimary">{formatDateTimeIST(viewingLog?.createdAt)}</p>
               </div>
               <div>
                 <p className="text-dbi-textSecondary">Action</p>

@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { backupsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 interface Settings {
   enabled: boolean;
@@ -26,19 +26,14 @@ interface Item { name: string; createdAt: string; dbSize: number | null; documen
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 const size = (b: number | null) => (b == null ? '-' : b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
-const when = (iso: string) => new Date(iso).toLocaleString();
+const when = (iso: string) => formatDateTimeIST(iso);
 
-// The server stores the time in UTC; people think in their own clock
-const utcToLocal = (hhmm: string) => {
-  const [h, m] = hhmm.split(':').map(Number);
-  const d = new Date(); d.setUTCHours(h, m, 0, 0);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-const localToUtc = (hhmm: string) => {
-  const [h, m] = hhmm.split(':').map(Number);
-  const d = new Date(); d.setHours(h, m, 0, 0);
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-};
+// The server keeps the time in UTC; people set it in Indian Standard Time (UTC + 5:30)
+const OFFSET = 330;
+const hm = (mins: number) => { const t = ((mins % 1440) + 1440) % 1440; return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+const toMinutes = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+const utcToLocal = (hhmm: string) => hm(toMinutes(hhmm) + OFFSET);
+const localToUtc = (hhmm: string) => hm(toMinutes(hhmm) - OFFSET);
 
 const field = 'h-10 rounded-md border border-dbi-border bg-dbi-elevated px-3 text-sm text-dbi-textPrimary';
 
@@ -140,7 +135,7 @@ export function Backups() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="bk-time">Time (your clock)</Label>
+                <Label htmlFor="bk-time">Time (IST)</Label>
                 <input id="bk-time" type="time" className={`${field} w-full`} value={form.localTime} onChange={(e) => setForm({ ...form, localTime: e.target.value })} required />
                 <p className="text-xs text-dbi-textSecondary">Server time (UTC): {form.localTime ? localToUtc(form.localTime) : '-'}</p>
               </div>
@@ -173,7 +168,7 @@ export function Backups() {
               {data.items.map((b) => (
                 <div key={b.name} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-dbi-elevated/60 p-3">
                   <div>
-                    <p className="font-medium text-dbi-textPrimary">{formatDate(b.createdAt)} <span className="text-xs font-normal text-dbi-textSecondary">{new Date(b.createdAt).toLocaleTimeString()}</span></p>
+                    <p className="font-medium text-dbi-textPrimary">{formatDateTimeIST(b.createdAt)}</p>
                     <p className="text-xs text-dbi-textSecondary">Database {size(b.dbSize)} · Documents {size(b.documentsSize)} · <span className="font-mono">{b.name}</span></p>
                   </div>
                   <div className="flex gap-2">

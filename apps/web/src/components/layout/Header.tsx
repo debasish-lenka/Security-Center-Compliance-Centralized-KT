@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { NotificationBell } from '@/components/NotificationBell';
-import { Menu, Search, Settings, LogOut, User, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
+import { Menu, Search, Settings, LogOut, User, Sun, Moon, Monitor } from 'lucide-react';
 
 export function Header({ onMenu }: { onMenu?: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,8 +77,10 @@ export function Header({ onMenu }: { onMenu?: () => void }) {
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg text-dbi-textSecondary hover:text-dbi-textPrimary hover:bg-dbi-elevated">
-                <Settings className="h-5 w-5" />
+              <Button variant="ghost" size="icon" asChild className="h-9 w-9 rounded-lg text-dbi-textSecondary hover:text-dbi-textPrimary hover:bg-dbi-elevated">
+                <Link to="/settings" aria-label="Settings">
+                  <Settings className="h-5 w-5" />
+                </Link>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="end">
@@ -105,13 +107,12 @@ export function Header({ onMenu }: { onMenu?: () => void }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+              <Button variant="ghost" className="h-9 w-9 rounded-full p-0" aria-label="Account menu" title={user?.fullName}>
                 <Avatar className="h-9 w-9">
-                  <AvatarFallback className="bg-dbi-cyan/20 text-dbi-cyan text-sm font-medium">
-                    {user?.fullName?.charAt(0).toUpperCase() || 'U'}
+                  <AvatarFallback className="bg-dbi-cyan/20 text-dbi-cyan text-sm font-semibold">
+                    {Array.from(user?.fullName?.trim() ?? '')[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
-                <ChevronDown className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-dbi-textSecondary" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -124,7 +125,7 @@ export function Header({ onMenu }: { onMenu?: () => void }) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link to="/profile" onClick={() => {}} className="flex w-full">
+                <Link to="/settings" className="flex w-full">
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </Link>

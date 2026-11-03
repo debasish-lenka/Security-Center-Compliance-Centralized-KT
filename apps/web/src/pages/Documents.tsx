@@ -22,7 +22,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Search, Trash2, Download, ExternalLink, FileText, Upload, X, Clock, MessageSquare } from 'lucide-react';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { formatDateTimeIST, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { VersionHistoryDialog } from '@/components/VersionHistoryDialog';
 import { ReviewDialog } from '@/components/ReviewDialog';
@@ -266,7 +266,7 @@ export function Documents() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">{doc.uploadedBy?.fullName || 'Unknown'}</TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">{doc.createdAt ? formatDate(doc.createdAt) : 'N/A'}</TableCell>
+                        <TableCell className="text-sm text-dbi-textSecondary">{doc.createdAt ? formatDateTimeIST(doc.createdAt) : 'N/A'}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             {doc.url && (
@@ -368,7 +368,7 @@ export function Documents() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-dbi-textSecondary">Date</label>
-                  <p className="text-sm text-dbi-textPrimary">{selectedDoc.createdAt ? formatDate(selectedDoc.createdAt) : 'N/A'}</p>
+                  <p className="text-sm text-dbi-textPrimary">{selectedDoc.createdAt ? formatDateTimeIST(selectedDoc.createdAt) : 'N/A'}</p>
                 </div>
               </div>
               {selectedDoc.description && (

@@ -5,13 +5,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Everything the app shows is in Indian Standard Time, whatever the time zone of the computer is
+export const IST = 'Asia/Kolkata';
+
+// "03 Nov 2026 05:12 pm IST"
+export function formatDateTimeIST(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', { timeZone: IST, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).format(d).replace(',', '') + ' IST';
+}
+
 export function formatDate(date: string | Date, format: 'short' | 'long' | 'relative' = 'short'): string {
   const d = new Date(date);
   if (format === 'short') {
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: IST });
   }
   if (format === 'long') {
-    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: IST });
   }
   // relative
   const now = new Date();

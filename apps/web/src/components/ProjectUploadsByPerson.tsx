@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, FileText, Image as ImageIcon, Loader2 } from
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { documentsApi } from '@/lib/api';
+import { formatDateTimeIST } from '@/lib/utils';
 import { CreateKtDialog } from '@/components/CreateKtDialog';
 
 interface Item {
@@ -12,7 +13,7 @@ interface Item {
   uploader: { id: string; fullName: string } | null;
 }
 const ROLE: Record<string, string> = { OWNER: 'Owner (lead)', LEAD: 'Manager', CONTRIBUTOR: 'Team member', REVIEWER: 'Reviewer', VIEWER: 'Viewer' };
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) => formatDateTimeIST(iso);
 const kb = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 // The project's uploads grouped by the person who made them: how many images and documents each one added,

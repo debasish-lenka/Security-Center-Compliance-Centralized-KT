@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
+import { formatWhen } from '../services/watermark.js';
 
 const csvCell = (v: unknown) => {
   let t = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
@@ -123,10 +124,10 @@ export async function auditLogRoutes(app: FastifyInstance) {
       include: { actor: { select: { fullName: true, email: true } } },
     });
 
-    const header = ['Time (UTC)', 'Actor', 'Email', 'Action', 'Resource type', 'Resource id', 'Outcome', 'IP address', 'Details', 'Error'];
+    const header = ['Time (IST)', 'Actor', 'Email', 'Action', 'Resource type', 'Resource id', 'Outcome', 'IP address', 'Details', 'Error'];
     const lines = [header.map(csvCell).join(',')];
     for (const l of logs) {
-      lines.push([l.createdAt.toISOString(), l.actor?.fullName ?? 'System', l.actor?.email ?? '', l.action, l.resourceType, l.resourceId ?? '', l.outcome, l.ipAddress ?? '', l.details ?? '', l.errorMessage ?? ''].map(csvCell).join(','));
+      lines.push([formatWhen(l.createdAt), l.actor?.fullName ?? 'System', l.actor?.email ?? '', l.action, l.resourceType, l.resourceId ?? '', l.outcome, l.ipAddress ?? '', l.details ?? '', l.errorMessage ?? ''].map(csvCell).join(','));
     }
 
     await auditLogger.logResource('EXPORT', request.userId!, 'audit_log', 'export', { rows: logs.length, filters: q }, request.ip, request.headers['user-agent']);

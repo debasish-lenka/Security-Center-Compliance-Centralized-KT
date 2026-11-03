@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { documentsApi } from '@/lib/api';
+import { formatDateTimeIST } from '@/lib/utils';
 
 interface Item {
   id: string;
@@ -21,7 +22,7 @@ interface Item {
   uploader: { id: string; fullName: string } | null;
 }
 
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) => formatDateTimeIST(iso);
 const size = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 // Everything uploaded to one project, one below the other. Images are shown in full; under every file

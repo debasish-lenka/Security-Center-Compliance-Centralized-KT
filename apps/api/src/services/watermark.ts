@@ -4,14 +4,17 @@ import { env } from '../utils/env.js';
 // The standard PDF fonts only cover Latin-1; anything else would throw
 export const latin = (s: string) => s.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
 
-// "03/11/2026 15:09 GMT+5:30" in the configured time zone
+// "03/11/2026 17:12 IST": date and time in the configured time zone (Indian Standard Time by default)
 export function formatWhen(d: Date): string {
   const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' };
+  let tz = env.APP_TIMEZONE;
   try {
-    return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: env.APP_TIMEZONE }).format(d).replace(',', '');
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz });
   } catch {
-    return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(d).replace(',', '');
+    tz = 'Asia/Kolkata';
   }
+  const text = new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: tz }).format(d).replace(',', '');
+  return /^Asia\/(Kolkata|Calcutta)$/.test(tz) ? text.replace('GMT+5:30', 'IST') : text;
 }
 
 /**

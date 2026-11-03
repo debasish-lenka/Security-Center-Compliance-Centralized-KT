@@ -618,7 +618,7 @@ export function KnowledgeBooks() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm text-dbi-textPrimary truncate">{doc.name}</p>
-                          <p className="text-xs text-dbi-textSecondary">{doc.type.toUpperCase()} • {new Date(doc.createdAt).toLocaleDateString()}</p>
+                          <p className="text-xs text-dbi-textSecondary">{doc.type.toUpperCase()} • {formatDate(doc.createdAt)}</p>
                         </div>
                         <Badge variant="secondary" className="text-xs">{doc.projectName}</Badge>
                       </label>

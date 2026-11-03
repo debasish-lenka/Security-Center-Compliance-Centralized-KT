@@ -1,3 +1,4 @@
+import { formatDateTimeIST } from '@/lib/utils';
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -432,7 +433,7 @@ export function AdminControlCenter() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="text-sm text-dbi-textSecondary">
-                    Last sync: {integration.lastSync ? new Date(integration.lastSync).toLocaleString() : 'Never'}
+                    Last sync: {integration.lastSync ? formatDateTimeIST(integration.lastSync) : 'Never'}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => openIntegrationDialog(integration)} className="flex-1">
