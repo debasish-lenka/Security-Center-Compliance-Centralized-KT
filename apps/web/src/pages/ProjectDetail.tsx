@@ -12,8 +12,10 @@ import { ProjectTeam } from '@/components/ProjectTeam';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
-import { Plus, Edit, Trash2, Eye, Download, ExternalLink, ArrowLeft, Users, Flag, Calendar, DollarSign, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Download, ExternalLink, ArrowLeft, Users, Flag, Calendar, Image as ImageIcon, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
+import { ProjectProgress } from '@/components/ProjectProgress';
+import { progressTone } from '@/lib/progress-style';
 import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 
 export function ProjectDetail() {
@@ -113,7 +115,7 @@ export function ProjectDetail() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -123,7 +125,7 @@ export function ProjectDetail() {
               <div>
                 <p className="text-sm text-dbi-textSecondary">Team Members</p>
                 <p className="text-2xl font-bold text-dbi-textPrimary">
-                  {(project.reviewers?.length || 0) + (project.contributors?.length || 0) + 1}
+                  {project.members?.length ?? 0}
                 </p>
               </div>
             </div>
@@ -137,7 +139,7 @@ export function ProjectDetail() {
               </div>
               <div>
                 <p className="text-sm text-dbi-textSecondary">Progress</p>
-                <p className="text-2xl font-bold text-dbi-textPrimary">{project.progress}%</p>
+                <p className={`text-2xl font-bold ${progressTone(project.progress ?? 0).text}`}>{project.progress ?? 0}%</p>
               </div>
             </div>
           </CardContent>
@@ -157,17 +159,28 @@ export function ProjectDetail() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer transition-colors hover:bg-dbi-elevated/50" onClick={() => navigate(`/documents?projectId=${project.id}`)}>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-lg bg-dbi-warning/20 flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-dbi-warning" />
+                <FileText className="h-6 w-6 text-dbi-warning" />
               </div>
               <div>
-                <p className="text-sm text-dbi-textSecondary">Budget</p>
-                <p className="text-2xl font-bold text-dbi-textPrimary">
-                  {project.budget ? `$${project.budget.toLocaleString()}` : 'N/A'}
-                </p>
+                <p className="text-sm text-dbi-textSecondary">Documents uploaded</p>
+                <p className="text-2xl font-bold text-dbi-textPrimary">{project.documentCount ?? project._count?.documents ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer transition-colors hover:bg-dbi-elevated/50" onClick={() => navigate(`/documents?projectId=${project.id}`)}>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-lg bg-dbi-cyan/20 flex items-center justify-center">
+                <ImageIcon className="h-6 w-6 text-dbi-cyan" />
+              </div>
+              <div>
+                <p className="text-sm text-dbi-textSecondary">Images uploaded</p>
+                <p className="text-2xl font-bold text-dbi-textPrimary">{project.imageCount ?? 0}</p>
               </div>
             </div>
           </CardContent>
@@ -214,14 +227,6 @@ export function ProjectDetail() {
                 ))}
               </div>
             </div>
-            <div className="space-y-1 md:col-span-4">
-              <p className="text-sm text-dbi-textSecondary">Budget Spent</p>
-              <p className="text-sm text-dbi-textPrimary">
-                {project.spent !== undefined && project.budget
-                  ? `$${project.spent.toLocaleString()} (${((project.spent / project.budget) * 100).toFixed(1)}%)`
-                  : 'N/A'}
-              </p>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -253,13 +258,7 @@ export function ProjectDetail() {
               <CardTitle>Progress</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-dbi-textSecondary">Overall Progress</span>
-                  <span className="font-medium text-dbi-textPrimary">{project.progress}%</span>
-                </div>
-                <Progress value={project.progress} className="h-3" />
-              </div>
+              <ProjectProgress data={project.progressBreakdown} />
               {project.milestones && project.milestones.length > 0 && (
                 <div className="space-y-3">
                   {project.milestones.map((milestone: any, index: number) => (

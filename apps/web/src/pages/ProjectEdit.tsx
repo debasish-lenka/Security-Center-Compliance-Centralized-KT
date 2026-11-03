@@ -43,8 +43,6 @@ export function ProjectEdit() {
     status: 'NOT_STARTED',
     progress: '0',
     tags: '',
-    budget: '',
-    spent: '',
   });
 
   const { data: projectData, isLoading: projectLoading } = useQuery({
@@ -76,8 +74,6 @@ export function ProjectEdit() {
         status: p.status || 'NOT_STARTED',
         progress: (p.progress || 0).toString(),
         tags: p.tags?.join(', ') || '',
-        budget: p.budget?.toString() || '',
-        spent: p.spent?.toString() || '',
       });
     }
   }, [projectData]);
@@ -126,8 +122,6 @@ export function ProjectEdit() {
       startDate: formData.startDate || null,
       expectedCompletionDate: formData.expectedCompletionDate || null,
       actualCompletionDate: formData.actualCompletionDate || null,
-      budget: formData.budget ? parseFloat(formData.budget) : null,
-      spent: formData.spent ? parseFloat(formData.spent) : null,
       progress: parseInt(formData.progress.toString(), 10) || 0,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
     };
@@ -296,31 +290,6 @@ export function ProjectEdit() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="budget">Budget ($)</Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  step="0.01"
-                  value={formData.budget}
-                  onChange={e => setFormData(prev => ({ ...prev, budget: e.target.value }))}
-                  placeholder="0.00"
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="spent">Spent ($)</Label>
-                <Input
-                  id="spent"
-                  type="number"
-                  step="0.01"
-                  value={formData.spent}
-                  onChange={e => setFormData(prev => ({ ...prev, spent: e.target.value }))}
-                  placeholder="0.00"
-                  className="mt-1"
-                />
-              </div>
 
               <div className="md:col-span-2">
                 <Label htmlFor="tags">Tags (comma separated)</Label>

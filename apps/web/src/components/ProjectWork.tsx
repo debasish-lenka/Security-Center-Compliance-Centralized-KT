@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Check, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went 
 export function ProjectWork({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const [taskOpen, setTaskOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
   const [msName, setMsName] = useState('');
   const [msDue, setMsDue] = useState('');
 
@@ -110,6 +111,9 @@ export function ProjectWork({ projectId }: { projectId: string }) {
                   >
                     {STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                   </select>
+                  <Button variant="ghost" size="icon" aria-label={`Edit ${t.title}`} title="Edit" onClick={() => setEditing(t)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -171,6 +175,7 @@ export function ProjectWork({ projectId }: { projectId: string }) {
       </Card>
 
       <TaskDialog open={taskOpen} onOpenChange={setTaskOpen} fixedProjectId={projectId} onCreated={refreshTasks} />
+      <TaskDialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }} fixedProjectId={projectId} task={editing} onCreated={refreshTasks} />
     </div>
   );
 }

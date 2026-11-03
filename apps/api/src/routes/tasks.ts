@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
+import { diffFields } from '../services/document-oversight.js';
 import { createNotificationService } from '../services/notifications.js';
 
 const CreateTaskSchema = z.object({
@@ -222,7 +223,9 @@ export async function taskRoutes(app: FastifyInstance) {
       data: updateData,
     });
 
-    await auditLogger.logResource('UPDATE', userId, 'task', taskId, data, request.ip, request.headers['user-agent']);
+    // what changed, from -> to, so the log tells the whole story
+    const { completedAt: _c, ...fields } = updateData;
+    await auditLogger.logResource('UPDATE', userId, 'task', taskId, { title: existingTask.title, changes: diffFields(existingTask as Record<string, any>, fields) }, request.ip, request.headers['user-agent']);
 
     return reply.send({ success: true, data: task });
   });

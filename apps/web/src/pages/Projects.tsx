@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
+import { progressTone } from '@/lib/progress-style';
 
 const statusOptions = ['ALL', 'NOT_STARTED', 'ONGOING', 'COMPLETED', 'ON_HOLD', 'OVERDUE', 'AT_RISK'];
 const priorityOptions = ['ALL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -169,7 +170,6 @@ export function Projects() {
                         { key: 'priority', label: 'Priority' },
                         { key: 'progress', label: 'Progress' },
                         { key: 'expectedCompletionDate', label: 'Deadline' },
-                        { key: 'budget', label: 'Budget' },
                         { key: 'actions', label: 'Actions', sortable: false },
                       ].map(col => (
                         <TableHead key={col.key} className={col.sortable === false ? '' : 'cursor-pointer hover:bg-dbi-elevated'}>
@@ -233,7 +233,7 @@ export function Projects() {
                           <div className="w-32">
                             <div className="h-2 bg-dbi-border rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-dbi-cyan transition-all"
+                                className={`h-full transition-all ${progressTone(project.progress ?? 0).bar}`}
                                 style={{ width: `${project.progress}%` }}
                               />
                             </div>
@@ -245,12 +245,6 @@ export function Projects() {
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">
                           {project.expectedCompletionDate ? formatDate(project.expectedCompletionDate) : 'Not set'}
-                        </TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">
-                          {project.budget ? `$${project.budget.toLocaleString()}` : 'N/A'}
-                          {project.spent !== undefined && project.budget && (
-                            <span className="text-dbi-cyan ml-1">({((project.spent / project.budget) * 100).toFixed(0)}%)</span>
-                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

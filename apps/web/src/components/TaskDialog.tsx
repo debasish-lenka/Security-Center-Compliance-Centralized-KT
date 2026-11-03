@@ -19,6 +19,7 @@ export function TaskDialog({
   fixedProjectId,
   defaultAssigneeId,
   onCreated,
+  task,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,6 +27,7 @@ export function TaskDialog({
   fixedProjectId?: string;
   defaultAssigneeId?: string;
   onCreated: () => void;
+  task?: any | null; // set to edit that task instead of creating a new one
 }) {
   const [projectId, setProjectId] = useState(fixedProjectId ?? '');
   const [title, setTitle] = useState('');
@@ -33,6 +35,7 @@ export function TaskDialog({
   const [priority, setPriority] = useState('MEDIUM');
   const [dueDate, setDueDate] = useState('');
   const [assigneeId, setAssigneeId] = useState(defaultAssigneeId ?? '');
+  const [status, setStatus] = useState('TODO');
   const [saving, setSaving] = useState(false);
 
   // Reset every time the dialog opens
@@ -44,7 +47,16 @@ export function TaskDialog({
     setPriority('MEDIUM');
     setDueDate('');
     setAssigneeId(defaultAssigneeId ?? '');
-  }, [open, fixedProjectId, defaultAssigneeId]);
+    setStatus('TODO');
+    if (task) {
+      setTitle(task.title ?? '');
+      setDescription(task.description ?? '');
+      setPriority(task.priority ?? 'MEDIUM');
+      setDueDate(task.dueDate ? String(task.dueDate).slice(0, 10) : '');
+      setAssigneeId(task.assigneeId ?? task.assignee?.id ?? '');
+      setStatus(task.status ?? 'TODO');
+    }
+  }, [open, fixedProjectId, defaultAssigneeId, task]);
 
   // Only members of the project can be assigned
   const { data: members = [] } = useQuery({
@@ -57,18 +69,20 @@ export function TaskDialog({
     e.preventDefault();
     setSaving(true);
     try {
-      await projectsApi.createTask(projectId, {
+      const body = {
         title: title.trim(),
         description: description.trim() || null,
         priority,
         assigneeId: assigneeId || null,
         dueDate: dueDate || null,
-      });
-      toast({ title: 'Task created' });
+      };
+      if (task) await projectsApi.updateTask(projectId, task.id, { ...body, status });
+      else await projectsApi.createTask(projectId, body);
+      toast({ title: task ? 'Task updated' : 'Task created' });
       onOpenChange(false);
       onCreated();
     } catch (err: any) {
-      toast({ title: 'Could not create task', description: err?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
+      toast({ title: task ? 'Could not update the task' : 'Could not create task', description: err?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -78,8 +92,8 @@ export function TaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>New task</DialogTitle>
-          <DialogDescription>Tasks belong to a project and can be assigned to a project member.</DialogDescription>
+          <DialogTitle>{task ? 'Edit task' : 'New task'}</DialogTitle>
+          <DialogDescription>{task ? 'Change anything; every change is written to the audit log.' : 'Tasks belong to a project and can be assigned to a project member.'}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           {!fixedProjectId && (
@@ -130,11 +144,19 @@ export function TaskDialog({
               </select>
             </div>
           </div>
+          {task && (
+            <div className="space-y-2">
+              <Label htmlFor="task-status">Status</Label>
+              <select id="task-status" className={selectClass} value={status} onChange={(e) => setStatus(e.target.value)}>
+                {[['TODO', 'To do'], ['IN_PROGRESS', 'In progress'], ['REVIEW', 'In review'], ['BLOCKED', 'Blocked'], ['DONE', 'Done']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving || !projectId || !title.trim()}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create task
+              {task ? 'Save changes' : 'Create task'}
             </Button>
           </DialogFooter>
         </form>

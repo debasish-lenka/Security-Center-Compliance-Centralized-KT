@@ -153,10 +153,10 @@ export function ExecutiveDashboard() {
           accentColor="amber"
         />
         <MetricCard
-          title="Budget Utilization"
-          value={`${m?.budgetUtilization || 0}%`}
-          icon={metricIcons.budgetUtilization}
-          accentColor="violet"
+          title="Overdue Projects"
+          value={m?.overdueProjects || 0}
+          icon={metricIcons.openRisks}
+          accentColor="red"
         />
         <MetricCard
           title="Avg Project Health"
@@ -309,36 +309,8 @@ export function ExecutiveDashboard() {
         </Card>
       </div>
 
-      {/* Budget Tracking & Executive Alerts */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-dbi-violet" />
-              Budget Tracking
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {charts?.budgetTracking?.map((budget: any) => (
-                <div key={budget.project} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-dbi-textPrimary truncate pr-2">{budget.project}</span>
-                    <span className="text-dbi-textSecondary">${budget.spent.toLocaleString()} / ${budget.budget.toLocaleString()}</span>
-                  </div>
-                  <Progress value={(budget.spent / (budget.budget || 1)) * 100} className="h-2" />
-                  <div className="flex justify-between text-xs text-dbi-textSecondary">
-                    <span>Forecast: ${budget.forecast.toLocaleString()}</span>
-                    <span className={budget.forecast > budget.budget ? 'text-dbi-critical' : 'text-dbi-emerald'}>
-                      {budget.forecast > budget.budget ? 'Over budget risk' : 'On track'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
+      {/* Executive Alerts */}
+      <div className="grid gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">

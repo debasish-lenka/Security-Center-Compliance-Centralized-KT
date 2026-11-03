@@ -27,7 +27,6 @@ export function ProjectCreate() {
     expectedCompletionDate: '',
     priority: 'MEDIUM',
     tags: '',
-    budget: '',
   });
 
   const { data: usersData } = useQuery({
@@ -61,7 +60,6 @@ export function ProjectCreate() {
       ...formData,
       startDate: formData.startDate || null,
       expectedCompletionDate: formData.expectedCompletionDate || null,
-      budget: formData.budget ? parseFloat(formData.budget) : null,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
       managerId: formData.managerId !== 'none' ? formData.managerId : null,
       memberIds: memberIds.filter((id) => id !== formData.ownerId && id !== formData.managerId),
@@ -199,19 +197,6 @@ export function ProjectCreate() {
                   type="date"
                   value={formData.expectedCompletionDate}
                   onChange={e => setFormData(prev => ({ ...prev, expectedCompletionDate: e.target.value }))}
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="budget">Budget ($)</Label>
-                <Input
-                  id="budget"
-                  type="number"
-                  step="0.01"
-                  value={formData.budget}
-                  onChange={e => setFormData(prev => ({ ...prev, budget: e.target.value }))}
-                  placeholder="0.00"
                   className="mt-1"
                 />
               </div>

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { TEAM_ROLES, latestUpdates, startInfo } from '../services/project-progress.js';
+import { TEAM_ROLES, buildProgress, latestUpdates, startInfo } from '../services/project-progress.js';
+import { diffFields } from '../services/document-oversight.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 
@@ -129,10 +130,21 @@ export async function projectRoutes(app: FastifyInstance) {
       : [];
 
     const ids = projects.map((p) => p.id);
-    const [starts, updates] = await Promise.all([startInfo(app, ids, userId), latestUpdates(app, ids)]);
+    const [starts, updates, taskCounts] = await Promise.all([
+      startInfo(app, ids, userId),
+      latestUpdates(app, ids),
+      app.prisma.task.groupBy({ by: ['projectId', 'status'], where: { projectId: { in: ids } }, _count: { _all: true } }),
+    ]);
+    const taskProgress = (projectId: string, stored: number) => {
+      const rows = taskCounts.filter((r) => r.projectId === projectId);
+      const total = rows.reduce((n, r) => n + r._count._all, 0);
+      const done = rows.find((r) => r.status === 'DONE')?._count._all ?? 0;
+      return total > 0 ? Math.round((done / total) * 100) : stored;
+    };
 
     const projectsWithMembers = projects.map(p => ({
       ...p,
+      progress: taskProgress(p.id, p.progress),
       startInfo: starts.get(p.id) ?? null,
       lastUpdate: updates.get(p.id) ?? null,
       deleteRequest: (() => {
@@ -213,8 +225,25 @@ export async function projectRoutes(app: FastifyInstance) {
       });
     }
 
-    const [starts, updates] = await Promise.all([startInfo(app, [projectId], userId), latestUpdates(app, [projectId])]);
-    return reply.send({ success: true, data: { ...project, startInfo: starts.get(projectId) ?? null, lastUpdate: updates.get(projectId) ?? null } });
+    const [starts, updates, taskRows, imageCount] = await Promise.all([
+      startInfo(app, [projectId], userId),
+      latestUpdates(app, [projectId]),
+      app.prisma.task.findMany({ where: { projectId }, select: { assigneeId: true, status: true } }),
+      app.prisma.projectDocument.count({ where: { projectId, mimeType: { startsWith: 'image/' } } }),
+    ]);
+    const progressBreakdown = buildProgress(project.members, taskRows, project.progress);
+    return reply.send({
+      success: true,
+      data: {
+        ...project,
+        progress: progressBreakdown.overall,
+        progressBreakdown,
+        imageCount,
+        documentCount: project._count.documents,
+        startInfo: starts.get(projectId) ?? null,
+        lastUpdate: updates.get(projectId) ?? null,
+      },
+    });
   });
 
   // A person on the project presses "Start project". The first one moves the project to Ongoing.
@@ -237,6 +266,7 @@ export async function projectRoutes(app: FastifyInstance) {
       if (project.status === 'NOT_STARTED') {
         await app.prisma.project.update({ where: { id: projectId }, data: { status: 'ONGOING', startDate: project.startDate ?? new Date() } });
       }
+      await auditLogger.logResource('UPDATE', userId, 'project', projectId, { action: 'start', name: project.name }, request.ip, request.headers['user-agent']);
       await app.prisma.activityFeed.create({
         data: { actorId: userId, action: 'START', resourceType: 'project', projectId, details: { text: 'started the project' }, ipAddress: request.ip, userAgent: request.headers['user-agent'] },
       });
@@ -361,6 +391,8 @@ export async function projectRoutes(app: FastifyInstance) {
       });
     }
 
+    const before = await app.prisma.project.findUnique({ where: { id: projectId } });
+
     // Prisma wants Date objects, not "YYYY-MM-DD" strings
     const { startDate, expectedCompletionDate, actualCompletionDate, ...rest } = data;
     const toDate = (v: string | null | undefined) => (v === undefined ? undefined : v === null ? null : new Date(v));
@@ -374,7 +406,7 @@ export async function projectRoutes(app: FastifyInstance) {
       },
     });
 
-    await auditLogger.logResource('UPDATE', userId, 'project', projectId, data, request.ip, request.headers['user-agent']);
+    await auditLogger.logResource('UPDATE', userId, 'project', projectId, { name: project.name, changes: before ? diffFields(before as Record<string, any>, { ...rest, startDate: toDate(startDate), expectedCompletionDate: toDate(expectedCompletionDate), actualCompletionDate: toDate(actualCompletionDate) }) : data }, request.ip, request.headers['user-agent']);
 
     return reply.send({ success: true, data: project });
   });

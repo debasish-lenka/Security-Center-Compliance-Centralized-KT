@@ -92,7 +92,47 @@ export async function recordProjectActivity(app: FastifyInstance, request: Fasti
         userAgent: request.headers['user-agent'],
       },
     });
+    if (segment === 'tasks') await syncProjectProgress(app, projectId); // a task changed: the project's percentage follows
   } catch (e) {
     app.log.warn({ err: e }, 'could not record project activity');
   }
+}
+
+// ---- Progress: total and per person, worked out from the project's tasks ----
+export interface ProgressBreakdown {
+  overall: number;
+  tasks: { total: number; done: number; inProgress: number };
+  users: { userId: string; fullName: string; role: string; total: number; done: number; percent: number }[];
+}
+
+export function buildProgress(
+  members: { userId: string; role: string; user: { fullName: string } }[],
+  tasks: { assigneeId: string | null; status: string }[],
+  stored: number,
+): ProgressBreakdown {
+  const pct = (done: number, total: number) => (total > 0 ? Math.round((done / total) * 100) : 0);
+  const done = tasks.filter((t) => t.status === 'DONE').length;
+  const users = members
+    // the team picked for the work, plus anyone who has a task even if they are not in that team
+    .filter((m) => (TEAM_ROLES as readonly string[]).includes(m.role) || tasks.some((t) => t.assigneeId === m.userId))
+    .map((m) => {
+      const mine = tasks.filter((t) => t.assigneeId === m.userId);
+      const mineDone = mine.filter((t) => t.status === 'DONE').length;
+      return { userId: m.userId, fullName: m.user.fullName, role: m.role, total: mine.length, done: mineDone, percent: pct(mineDone, mine.length) };
+    })
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  return {
+    // no tasks yet: keep the figure that was typed in by hand
+    overall: tasks.length > 0 ? pct(done, tasks.length) : stored,
+    tasks: { total: tasks.length, done, inProgress: tasks.filter((t) => t.status === 'IN_PROGRESS').length },
+    users,
+  };
+}
+
+// Keeps the stored progress of a project equal to done / total tasks (used by the project list too)
+export async function syncProjectProgress(app: FastifyInstance, projectId: string) {
+  const tasks = await app.prisma.task.findMany({ where: { projectId }, select: { status: true } });
+  if (tasks.length === 0) return;
+  const progress = Math.round((tasks.filter((t) => t.status === 'DONE').length / tasks.length) * 100);
+  await app.prisma.project.updateMany({ where: { id: projectId, progress: { not: progress } }, data: { progress } });
 }
