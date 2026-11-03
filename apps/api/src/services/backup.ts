@@ -51,7 +51,8 @@ export async function listBackups() {
     const size = async (f: string) => (await stat(join(dir, f)).catch(() => null))?.size ?? null;
     items.push({ name, createdAt: ok.mtime, dbSize: await size(FILES.db), documentsSize: await size(FILES.documents) });
   }
-  return items;
+  // newest first by the real time, not the name, so older local-time names cannot jump the queue
+  return items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 async function prune(keep: number) {

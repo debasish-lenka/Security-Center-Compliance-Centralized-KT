@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 KEEP="${KEEP:-14}"
-stamp="$(date +%Y-%m-%d_%H%M%S)"
+stamp="$(date -u +%Y-%m-%d_%H%M%S)"   # UTC, same as the dashboard backups
 dest="backups/$stamp"
 umask 077
 mkdir -p "$dest"
