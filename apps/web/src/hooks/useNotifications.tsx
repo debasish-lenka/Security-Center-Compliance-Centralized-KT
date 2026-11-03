@@ -32,6 +32,9 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // latest list for the poll callback; reading state there would make startPolling change on every fetch and restart the effect in a loop
+  const notificationsRef = useRef<Notification[]>([]);
+  notificationsRef.current = notifications;
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async (params?: Record<string, string>) => {
@@ -238,30 +241,18 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     fetchUnreadCount();
 
     // Set up polling interval
-    pollIntervalRef.current = setInterval(() => {
-      fetchNotifications({ limit: '5' }).then(newNotifications => {
-        // Check for new notifications
-        if (newNotifications.length > 0 && notifications.length > 0) {
-          const latestExisting = notifications[0];
-          const latestNew = newNotifications[0];
-
-          if (latestNew.id !== latestExisting.id) {
-            // New notification(s) found
-            newNotifications.forEach((n: Notification) => {
-              if (!notifications.some(existing => existing.id === n.id)) {
-                handleNewNotification(n);
-              }
-            });
-          }
-        }
-        // Update notifications list
-        setNotifications(newNotifications);
-      });
+    pollIntervalRef.current = setInterval(async () => {
+      const before = notificationsRef.current;
+      const fresh = await fetchNotifications();
+      // announce notifications that were not in the list before
+      if (before.length > 0) {
+        fresh.filter((n: Notification) => !before.some((b) => b.id === n.id)).forEach((n: Notification) => handleNewNotification(n));
+      }
       fetchUnreadCount();
     }, pollInterval);
 
     setIsConnected(true); // Polling is "connected" in a sense
-  }, [fetchNotifications, fetchUnreadCount, handleNewNotification, notifications, pollInterval]);
+  }, [fetchNotifications, fetchUnreadCount, handleNewNotification, pollInterval]);
 
   // Stop polling
   const stopPolling = useCallback(() => {
