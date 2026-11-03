@@ -20,8 +20,8 @@ const RegisterSchema = z.object({
 });
 
 const ChangePasswordSchema = z.object({
-  currentPassword: z.string().min(8).max(128),
-  newPassword: z.string().min(8).max(128),
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(10).max(128).regex(/[A-Za-z]/, 'Needs a letter').regex(/\d/, 'Needs a digit'),
 });
 
 const MfaCodeSchema = z.object({
@@ -185,6 +185,13 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const { currentPassword, newPassword } = request.body as z.infer<typeof ChangePasswordSchema>;
+    const me = await app.prisma.profile.findUnique({ where: { id: request.userId }, select: { authProvider: true } });
+    if (me?.authProvider === 'MICROSOFT') {
+      return reply.code(400).send({ success: false, error: { code: 'NOT_LOCAL', message: 'This account signs in with Microsoft, so there is no password to change here' } });
+    }
+    if (currentPassword === newPassword) {
+      return reply.code(400).send({ success: false, error: { code: 'SAME_PASSWORD', message: 'Choose a password different from the current one' } });
+    }
     const success = await authService.changePassword(request.userId, currentPassword, newPassword);
 
     if (!success) {
@@ -194,6 +201,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
+    await auditLogger.logConfigChange(request.userId!, 'password_changed', null, { userId: request.userId }, request.ip, request.headers['user-agent']);
     return reply.send({ success: true, data: null });
   });
 

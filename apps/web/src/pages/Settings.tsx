@@ -1,3 +1,5 @@
+import { authApi } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -56,8 +58,10 @@ export function Settings() {
   const [language, setLanguage] = useState('en');
   const [timezone, setTimezone] = useState('America/New_York');
   const [notifications, setNotifications] = useState<Record<string, boolean>>({});
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [sessionTimeout, setSessionTimeout] = useState(30);
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => (await authApi.me()).data?.data as { authProvider?: string; totpEnabled?: boolean } | undefined,
+  });
 
   const [profileForm, setProfileForm] = useState({
     fullName: user?.fullName || '',
@@ -74,6 +78,35 @@ export function Settings() {
     confirmPassword: '',
   });
 
+  const saveProfile = async () => {
+    setIsSaving(true);
+    try {
+      await authApi.updateProfile({ fullName: profileForm.fullName.trim(), department: profileForm.department.trim() || null });
+      await refreshUser();
+      toast({ title: 'Profile saved', description: 'Your name and department were updated' });
+    } catch (e: any) {
+      toast({ title: 'Could not save', description: e?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const passwordOk = passwordForm.newPassword.length >= 10 && /[A-Za-z]/.test(passwordForm.newPassword) && /\d/.test(passwordForm.newPassword);
+  const passwordsMatch = passwordForm.newPassword === passwordForm.confirmPassword;
+
+  const changePassword = async () => {
+    setIsSaving(true);
+    try {
+      await authApi.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast({ title: 'Password changed', description: 'Use the new password next time you sign in' });
+    } catch (e: any) {
+      toast({ title: 'Could not change the password', description: e?.response?.data?.error?.message || 'Please try again', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleThemeChange = (value: string) => {
     const validThemes: ('dark' | 'light' | 'system')[] = ['dark', 'light', 'system'];
     if (validThemes.includes(value as 'dark' | 'light' | 'system')) {
@@ -84,22 +117,17 @@ export function Settings() {
 
   const handleSave = async (section: string) => {
     setIsSaving(true);
-    await new Promise(r => setTimeout(r, 1000));
 
-    if (section === 'profile') {
-      const updatedUser = { ...user, ...profileForm };
-      localStorage.setItem('dbi-user', JSON.stringify(updatedUser));
-      await refreshUser();
-      toast({ title: 'Profile saved', description: 'Your profile has been updated' });
-    } else if (section === 'security') {
-      toast({ title: 'Security settings saved', description: 'Your security preferences have been updated' });
-    } else if (section === 'application') {
+    if (section === 'application' || section === 'notifications' || section === 'theme') {
+      // saved on this device only
+    }
+    if (section === 'application') {
       localStorage.setItem('dbi-language', language);
       localStorage.setItem('dbi-timezone', timezone);
-      toast({ title: 'Preferences saved', description: 'Your application preferences have been updated' });
+      toast({ title: 'Preferences saved', description: 'Saved on this device' });
     } else if (section === 'notifications') {
       localStorage.setItem('dbi-notifications', JSON.stringify(notifications));
-      toast({ title: 'Notifications saved', description: 'Your notification preferences have been updated' });
+      toast({ title: 'Notifications saved', description: 'Saved on this device' });
     } else if (section === 'theme') {
       toast({ title: 'Theme saved', description: 'Your theme preference has been saved' });
     }
@@ -130,7 +158,7 @@ export function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal information and contact details</CardDescription>
+              <CardDescription>Your name and department</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
@@ -160,20 +188,8 @@ export function Settings() {
                   <Label htmlFor="department">Department</Label>
                   <Input id="department" value={profileForm.department} onChange={e => setProfileForm(prev => ({ ...prev, department: e.target.value }))} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" value={profileForm.phone} onChange={e => setProfileForm(prev => ({ ...prev, phone: e.target.value }))} />
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <Input id="location" placeholder="City, Country" value={profileForm.location} onChange={e => setProfileForm(prev => ({ ...prev, location: e.target.value }))} />
-                </div>
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Input id="bio" placeholder="Tell us about yourself..." value={profileForm.bio} onChange={e => setProfileForm(prev => ({ ...prev, bio: e.target.value }))} />
-                </div>
               </div>
-              <Button onClick={() => handleSave('profile')} disabled={isSaving}>
+              <Button onClick={saveProfile} disabled={isSaving || profileForm.fullName.trim().length < 2}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save Profile
               </Button>
             </CardContent>
@@ -199,7 +215,11 @@ export function Settings() {
                   <Input id="confirmPassword" type="password" value={passwordForm.confirmPassword} onChange={e => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))} />
                 </div>
               </div>
-              <Button variant="outline" onClick={() => handleSave('security')} disabled={isSaving}>
+              <p className={`text-xs ${passwordForm.newPassword && !passwordOk ? 'text-dbi-critical' : 'text-dbi-textSecondary'}`}>
+                New password: at least 10 characters, with a letter and a number.
+                {passwordForm.confirmPassword && !passwordsMatch && ' The two new passwords do not match.'}
+              </p>
+              <Button variant="outline" onClick={changePassword} disabled={isSaving || !passwordForm.currentPassword || !passwordOk || !passwordsMatch}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Update Password
               </Button>
             </CardContent>
@@ -348,74 +368,26 @@ export function Settings() {
         <TabsContent value="security" className="space-y-6 mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Two-Factor Authentication</CardTitle>
-              <CardDescription>Add an extra layer of security to your account</CardDescription>
+              <CardTitle>Two-step verification</CardTitle>
+              <CardDescription>Admin and super admin accounts must sign in with an authenticator app code</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-dbi-textPrimary">Enable 2FA</p>
-                  <p className="text-sm text-dbi-textSecondary">Require authenticator app code on login</p>
-                </div>
-                <Switch
-                  id="twoFactor"
-                  checked={twoFactorEnabled}
-                  onCheckedChange={setTwoFactorEnabled}
-                />
-              </div>
-              {twoFactorEnabled && (
-                <div className="space-y-4 p-4 bg-dbi-elevated rounded-lg border border-dbi-border">
-                  <p className="text-sm text-dbi-textSecondary">2FA is enabled. Use your authenticator app to generate codes on login.</p>
-                  <Button variant="outline" size="sm">View Backup Codes</Button>
-                </div>
-              )}
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-dbi-textPrimary">
+                Status:{' '}
+                <b>
+                  {me?.authProvider === 'MICROSOFT'
+                    ? 'Handled by your Microsoft account'
+                    : me?.totpEnabled
+                      ? 'Enabled'
+                      : ['SUPER_ADMIN', 'ADMIN'].includes(user?.role ?? '')
+                        ? 'You will set it up at your next sign-in'
+                        : 'Not required for your role'}
+                </b>
+              </p>
+              <p className="text-dbi-textSecondary">Lost your phone? A super admin can reset it so you can set up a new one.</p>
+              <p className="text-dbi-textSecondary">Your sign-in stays active for up to 7 days on this device. Signing out ends it right away.</p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Session Management</CardTitle>
-              <CardDescription>Control your active sessions and timeout settings</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sessionTimeout">Session Timeout (minutes)</Label>
-                <Select value={sessionTimeout.toString()} onValueChange={v => setSessionTimeout(parseInt(v))}>
-                  <SelectTrigger id="sessionTimeout">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[15, 30, 60, 120, 240, 480].map(m => (
-                      <SelectItem key={m} value={m.toString()}>{m} minutes</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="outline">View Active Sessions</Button>
-              <Button variant="destructive" className="w-full">Log Out All Sessions</Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>API Access</CardTitle>
-              <CardDescription>Manage API tokens for integrations</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-dbi-textPrimary">API Access</p>
-                  <p className="text-sm text-dbi-textSecondary">Enable API access for third-party integrations</p>
-                </div>
-                <Switch id="apiAccess" />
-              </div>
-              <Button variant="outline">Generate New Token</Button>
-            </CardContent>
-          </Card>
-
-          <Button onClick={() => handleSave('security')} disabled={isSaving} className="w-full">
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save Security Settings
-          </Button>
         </TabsContent>
 
         <TabsContent value="theme" className="space-y-6 mt-6">

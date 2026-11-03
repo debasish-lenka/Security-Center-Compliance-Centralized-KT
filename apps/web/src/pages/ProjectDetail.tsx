@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectWork } from '@/components/ProjectWork';
+import { ProjectTeam } from '@/components/ProjectTeam';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
@@ -284,75 +285,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="team" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Owner</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-full bg-dbi-cyan/20 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-dbi-cyan">
-                    {project.owner?.fullName?.charAt(0).toUpperCase() || 'U'}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-lg font-medium text-dbi-textPrimary">{project.owner?.fullName}</p>
-                  <p className="text-sm text-dbi-textSecondary">{project.owner?.email}</p>
-                  <p className="text-xs text-dbi-textSecondary">{project.owner?.department}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {project.reviewers && project.reviewers.length > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Reviewers ({project.reviewers.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {project.reviewers.map((reviewer: any) => (
-                    <div key={reviewer.id} className="flex items-center gap-3 p-3 bg-dbi-elevated/50 rounded-lg">
-                      <div className="h-10 w-10 rounded-full bg-dbi-indigo/20 flex items-center justify-center">
-                        <span className="text-sm font-medium text-dbi-indigo">
-                          {reviewer.fullName?.charAt(0).toUpperCase() || 'U'}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm text-dbi-textPrimary">{reviewer.fullName}</p>
-                        <p className="text-xs text-dbi-textSecondary">{reviewer.email}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {project.contributors && project.contributors.length > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Contributors ({project.contributors.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {project.contributors.map((contributor: any) => (
-                    <div key={contributor.id} className="flex items-center gap-3 p-3 bg-dbi-elevated/50 rounded-lg">
-                      <div className="h-10 w-10 rounded-full bg-dbi-success/20 flex items-center justify-center">
-                        <span className="text-sm font-medium text-dbi-success">
-                          {contributor.fullName?.charAt(0).toUpperCase() || 'U'}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm text-dbi-textPrimary">{contributor.fullName}</p>
-                        <p className="text-xs text-dbi-textSecondary">{contributor.email}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <ProjectTeam projectId={id!} />
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">

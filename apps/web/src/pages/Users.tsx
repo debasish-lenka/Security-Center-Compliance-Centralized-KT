@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Search, Edit, Trash2, Eye, UserPlus, Loader2, Mail, User, KeyRound, Send, ShieldOff } from 'lucide-react';
+import { Search, Edit, Eye, UserPlus, Loader2, Mail, User, KeyRound, Send, ShieldOff, UserX, UserCheck } from 'lucide-react';
 import { formatDate, getStatusColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
@@ -122,14 +122,16 @@ export function Users() {
     }));
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+  // Accounts are never deleted (their history must stay); they are deactivated and can be reactivated
+  const toggleActive = async (u: { id: string; fullName: string; status: string }) => {
+    const activating = u.status !== 'ACTIVE';
+    if (!activating && !confirm(`Deactivate ${u.fullName}? They are signed out at once and cannot log in until reactivated.`)) return;
     try {
-      await usersApi.delete(id);
-      toast({ title: 'User deleted', description: 'The user has been deleted successfully' });
+      await usersApi.update(u.id, { status: activating ? 'ACTIVE' : 'INACTIVE' });
+      toast({ title: activating ? 'Account reactivated' : 'Account deactivated' });
       refetch();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete user', variant: 'destructive' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.response?.data?.error?.message || 'Could not change the status', variant: 'destructive' });
     }
   };
 
@@ -493,9 +495,11 @@ export function Users() {
                                 <Edit className="h-4 w-4" />
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(user.id)} className="text-dbi-critical hover:text-dbi-critical">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {user.status !== 'PENDING' && user.id !== me?.id && (me?.role === 'SUPER_ADMIN' || !['SUPER_ADMIN', 'ADMIN'].includes(user.role)) && (
+                              <Button variant="ghost" size="icon" onClick={() => toggleActive(user)} title={user.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'} aria-label={user.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'} className={user.status === 'ACTIVE' ? 'text-dbi-critical hover:text-dbi-critical' : 'text-dbi-success hover:text-dbi-success'}>
+                                {user.status === 'ACTIVE' ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

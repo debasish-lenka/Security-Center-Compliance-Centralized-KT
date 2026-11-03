@@ -250,6 +250,8 @@ export class AuthService {
         department: { select: { name: true } },
         role: true,
         status: true,
+        authProvider: true,
+        totpEnabled: true,
         createdAt: true,
         updatedAt: true,
         lastActivityAt: true,

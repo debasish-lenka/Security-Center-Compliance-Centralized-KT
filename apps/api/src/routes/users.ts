@@ -28,7 +28,7 @@ const UpdateUserSchema = z.object({
   fullName: z.string().min(1).max(255).optional(),
   department: z.string().max(255).optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING', 'SUSPENDED']).optional(),
-  role: z.enum(['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER']).optional(),
+  role: z.enum(['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'SECURITY_ANALYST', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER', 'VIEWER']).optional(),
 });
 
 // Only a super admin may see the raw link, and only when the email could not be sent
@@ -245,7 +245,9 @@ export async function userRoutes(app: FastifyInstance) {
         id: true,
         email: true,
         fullName: true,
-        department: true,
+        department: { select: { name: true } },
+        authProvider: true,
+        totpEnabled: true,
         role: true,
         status: true,
         createdAt: true,
@@ -260,7 +262,7 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
     }
 
-    return reply.send({ success: true, data: user });
+    return reply.send({ success: true, data: { ...user, department: user.department?.name ?? null } });
   });
 
   // Update user (admin only)
@@ -273,8 +275,34 @@ export async function userRoutes(app: FastifyInstance) {
     const { userId: targetId } = request.params as { userId: string };
     const data = request.body as z.infer<typeof UpdateUserSchema>;
 
-    if (userRole !== 'SUPER_ADMIN' && userId === targetId) {
-      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Cannot modify own role/status' } });
+    const target = await app.prisma.profile.findUnique({ where: { id: targetId }, select: { id: true, role: true, status: true } });
+    if (!target) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    }
+
+    const PRIVILEGED = ['SUPER_ADMIN', 'ADMIN'];
+    if (userRole !== 'SUPER_ADMIN') {
+      if (userId === targetId && (data.role || data.status)) {
+        return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Cannot modify own role/status' } });
+      }
+      // an admin must not be able to touch, or create, accounts as powerful as their own
+      if (PRIVILEGED.includes(target.role)) {
+        return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only a super admin can change an admin account' } });
+      }
+      if (data.role && PRIVILEGED.includes(data.role)) {
+        return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only a super admin can grant admin roles' } });
+      }
+    }
+
+    // never lock everyone out: the last active super admin cannot be demoted or deactivated
+    const losingSuperAdmin =
+      target.role === 'SUPER_ADMIN' &&
+      ((data.role && data.role !== 'SUPER_ADMIN') || (data.status && data.status !== 'ACTIVE'));
+    if (losingSuperAdmin) {
+      const others = await app.prisma.profile.count({ where: { role: 'SUPER_ADMIN', status: 'ACTIVE', id: { not: targetId } } });
+      if (others === 0) {
+        return reply.code(400).send({ success: false, error: { code: 'LAST_SUPER_ADMIN', message: 'There must be at least one active super admin' } });
+      }
     }
 
     const user = await authService.updateProfile(targetId, { fullName: data.fullName, department: data.department });

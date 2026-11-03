@@ -27,6 +27,8 @@ const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m
 const Reports = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.Reports })));
 const Assignments = lazy(() => import('@/pages/Assignments').then((m) => ({ default: m.Assignments })));
 const Activate = lazy(() => import('@/pages/Activate').then((m) => ({ default: m.Activate })));
+const UserDetail = lazy(() => import('@/pages/UserDetail').then((m) => ({ default: m.UserDetail })));
+const UserEdit = lazy(() => import('@/pages/UserEdit').then((m) => ({ default: m.UserEdit })));
 const RecycleBin = lazy(() => import('@/pages/RecycleBin').then((m) => ({ default: m.RecycleBin })));
 const SsoSettings = lazy(() => import('@/pages/SsoSettings').then((m) => ({ default: m.SsoSettings })));
 const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ default: m.MailSettings })));
@@ -150,6 +152,8 @@ function AppRoutes() {
           <Route element={<RoleGate roles={ADMIN_ROLES} />}>
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/users/:id" element={<UserDetail />} />
+            <Route path="/users/:id/edit" element={<UserEdit />} />
             <Route path="/admin-control-center" element={<AdminControlCenter />} />
           </Route>
 

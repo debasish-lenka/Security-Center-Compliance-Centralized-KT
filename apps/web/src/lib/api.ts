@@ -1623,3 +1623,11 @@ export const recycleBinApi = {
   restore: (id: string) => api.post(`/v1/recycle-bin/${id}/restore`),
   purge: (id: string) => api.delete(`/v1/recycle-bin/${id}`),
 };
+
+// Project team management (owner / lead)
+export const teamApi = {
+  available: (projectId: string) => api.get(`/v1/projects/${projectId}/members/available`),
+  add: (projectId: string, userId: string, role: string) => api.post(`/v1/projects/${projectId}/members`, { userId, role }),
+  setRole: (projectId: string, memberId: string, role: string) => api.patch(`/v1/projects/${projectId}/members/${memberId}`, { role }),
+  remove: (projectId: string, memberId: string) => api.delete(`/v1/projects/${projectId}/members/${memberId}`),
+};

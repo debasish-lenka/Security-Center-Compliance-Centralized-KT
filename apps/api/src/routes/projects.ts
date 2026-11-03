@@ -372,7 +372,7 @@ export async function projectRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ success: true, data: members });
+    return reply.send({ success: true, data: members.map((m) => ({ ...m, user: { ...m.user, department: (m.user.department as any)?.name ?? null } })) });
   });
 
   app.post('/:projectId/members', {
@@ -430,28 +430,44 @@ export async function projectRoutes(app: FastifyInstance) {
     return reply.code(201).send({ success: true, data: member });
   });
 
-  app.patch('/:projectId/members/:memberId', async (request, reply) => {
+  const MEMBER_ROLES = ['OWNER', 'LEAD', 'CONTRIBUTOR', 'REVIEWER', 'VIEWER'] as const;
+
+  // A project always keeps at least one Owner
+  async function isLastOwner(projectId: string, memberId: string) {
+    const owners = await app.prisma.projectMember.findMany({ where: { projectId, role: 'OWNER' }, select: { id: true } });
+    return owners.length === 1 && owners[0].id === memberId;
+  }
+
+  app.patch('/:projectId/members/:memberId', {
+    schema: { body: z.object({ role: z.enum(MEMBER_ROLES) }) },
+  }, async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;
     const { projectId, memberId } = request.params as { projectId: string; memberId: string };
-    const { role } = request.body as { role: 'OWNER' | 'LEAD' | 'CONTRIBUTOR' | 'REVIEWER' | 'VIEWER' };
+    const { role } = request.body as { role: (typeof MEMBER_ROLES)[number] };
 
     const hasAccess = await checkProjectAccess(userId, userRole, projectId, 'edit');
     if (!hasAccess) {
-      return reply.code(403).send({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
-      });
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } });
     }
 
-    const member = await app.prisma.projectMember.update({
-      where: { id: memberId },
-      data: { role },
-    });
+    // the member must belong to THIS project
+    const member = await app.prisma.projectMember.findFirst({ where: { id: memberId, projectId } });
+    if (!member) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Member not found in this project' } });
+    }
+    const myMembership = await app.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } }, select: { role: true } });
+    const isOwnerOrAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || myMembership?.role === 'OWNER';
+    if ((role === 'OWNER' || member.role === 'OWNER') && !isOwnerOrAdmin) {
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only an owner can change owners' } });
+    }
+    if (member.role === 'OWNER' && role !== 'OWNER' && (await isLastOwner(projectId, memberId))) {
+      return reply.code(400).send({ success: false, error: { code: 'LAST_OWNER', message: 'The project needs at least one owner. Make someone else an owner first.' } });
+    }
 
-    await auditLogger.logResource('UPDATE', userId, 'project_member', memberId, { role }, request.ip, request.headers['user-agent']);
-
-    return reply.send({ success: true, data: member });
+    const updated = await app.prisma.projectMember.update({ where: { id: memberId }, data: { role } });
+    await auditLogger.logResource('UPDATE', userId, 'project_member', memberId, { role, from: member.role, projectId }, request.ip, request.headers['user-agent']);
+    return reply.send({ success: true, data: updated });
   });
 
   app.delete('/:projectId/members/:memberId', async (request, reply) => {
@@ -461,16 +477,25 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const hasAccess = await checkProjectAccess(userId, userRole, projectId, 'edit');
     if (!hasAccess) {
-      return reply.code(403).send({
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
-      });
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } });
+    }
+
+    const member = await app.prisma.projectMember.findFirst({ where: { id: memberId, projectId } });
+    if (!member) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Member not found in this project' } });
+    }
+    if (member.role === 'OWNER') {
+      const myMembership = await app.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } }, select: { role: true } });
+      if (!(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || myMembership?.role === 'OWNER')) {
+        return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only an owner can remove an owner' } });
+      }
+      if (await isLastOwner(projectId, memberId)) {
+        return reply.code(400).send({ success: false, error: { code: 'LAST_OWNER', message: 'The project needs at least one owner' } });
+      }
     }
 
     await app.prisma.projectMember.delete({ where: { id: memberId } });
-
-    await auditLogger.logResource('UNASSIGN', userId, 'project_member', memberId, {}, request.ip, request.headers['user-agent']);
-
+    await auditLogger.logResource('UNASSIGN', userId, 'project_member', memberId, { projectId, userId: member.userId, role: member.role }, request.ip, request.headers['user-agent']);
     return reply.send({ success: true, data: null });
   });
 
@@ -599,6 +624,6 @@ export async function projectRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ success: true, data: users });
+    return reply.send({ success: true, data: users.map((u) => ({ ...u, department: (u.department as any)?.name ?? null })) });
   });
 }
