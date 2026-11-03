@@ -29,6 +29,7 @@ const Assignments = lazy(() => import('@/pages/Assignments').then((m) => ({ defa
 const Activate = lazy(() => import('@/pages/Activate').then((m) => ({ default: m.Activate })));
 const UserDetail = lazy(() => import('@/pages/UserDetail').then((m) => ({ default: m.UserDetail })));
 const UserEdit = lazy(() => import('@/pages/UserEdit').then((m) => ({ default: m.UserEdit })));
+const Backups = lazy(() => import('@/pages/Backups').then((m) => ({ default: m.Backups })));
 const RecycleBin = lazy(() => import('@/pages/RecycleBin').then((m) => ({ default: m.RecycleBin })));
 const SsoSettings = lazy(() => import('@/pages/SsoSettings').then((m) => ({ default: m.SsoSettings })));
 const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ default: m.MailSettings })));
@@ -163,6 +164,7 @@ function AppRoutes() {
           <Route element={<RoleGate roles={SUPER_ADMIN_ROLES} />}>
             <Route path="/roles" element={<Roles />} />
             <Route path="/recycle-bin" element={<RecycleBin />} />
+            <Route path="/backups" element={<Backups />} />
             <Route path="/mail-settings" element={<MailSettings />} />
             <Route path="/sso-settings" element={<SsoSettings />} />
           </Route>

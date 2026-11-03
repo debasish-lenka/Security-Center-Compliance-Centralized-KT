@@ -1640,3 +1640,23 @@ export const teamApi = {
   setRole: (projectId: string, memberId: string, role: string) => api.patch(`/v1/projects/${projectId}/members/${memberId}`, { role }),
   remove: (projectId: string, memberId: string) => api.delete(`/v1/projects/${projectId}/members/${memberId}`),
 };
+
+// Server backups (super admin only)
+export const backupsApi = {
+  list: () => api.get('/v1/backups'),
+  saveSettings: (data: any) => api.put('/v1/backups/settings', data),
+  run: () => api.post('/v1/backups/run'),
+  remove: (name: string) => api.delete(`/v1/backups/${name}`),
+  // the file needs the login header, so fetch it and hand the browser a local copy
+  download: async (name: string, file: 'db' | 'documents') => {
+    const res = await api.get(`/v1/backups/${name}/${file}`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dbi-${name}-${file === 'db' ? 'db.sql.gz' : 'documents.tgz'}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+};

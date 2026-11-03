@@ -18,6 +18,10 @@ const EnvSchema = z.object({
   // Uploaded files are stored on local disk here
   STORAGE_DIR: z.string().default('./Documents'),
 
+  // Backups (database dump + Documents) are written here; PG_DUMP_PATH only needs setting when pg_dump is not on PATH
+  BACKUP_DIR: z.string().default('./backups'),
+  PG_DUMP_PATH: z.string().default('pg_dump'),
+
   // true only when served over HTTPS (Secure cookies are dropped on plain HTTP)
   COOKIE_SECURE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
 

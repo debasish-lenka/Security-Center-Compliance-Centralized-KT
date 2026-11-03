@@ -1064,3 +1064,20 @@ model RecycledDocument {
   @@index([projectId])
   @@map("recycled_documents")
 }
+
+// One row (id "default"): when and how the server backs itself up
+model BackupSettings {
+  id               String    @id @default("default")
+  enabled          Boolean   @default(false)
+  frequency        String    @default("DAILY") // DAILY | WEEKLY
+  timeUtc          String    @default("20:30") // HH:mm, UTC
+  weekday          Int       @default(0) // 0 = Sunday, used when WEEKLY
+  keep             Int       @default(14)
+  includeDocuments Boolean   @default(true)
+  lastRunAt        DateTime?
+  lastStatus       String? // OK | FAILED | RUNNING
+  lastMessage      String?
+  updatedAt        DateTime  @updatedAt
+
+  @@map("backup_settings")
+}

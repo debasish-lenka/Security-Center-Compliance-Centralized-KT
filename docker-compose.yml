@@ -37,9 +37,11 @@ services:
       FRONTEND_URL: ${CORS_ORIGIN:-https://localhost:8443}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       STORAGE_DIR: /data/Documents
+      BACKUP_DIR: /data/backups
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin@123}
     volumes:
       - ./Documents:/data/Documents   # uploaded files appear in <project>/Documents on the host
+      - ./backups:/data/backups       # backups made from the Backups page (and ./backup.sh) appear in <project>/backups
     # no published ports: web proxies /api to it
 
   web:

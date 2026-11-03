@@ -37,6 +37,13 @@ docker compose restart api
 docker compose down            # stop (data kept); add -v to ALSO delete the database
 ```
 
+## Backups from the dashboard (Super Admin > Backups)
+The Super Admin can press **Back up now**, switch on a daily/weekly **schedule**, choose how many backups to keep, download a backup, or delete one. Files go to `backups/` next to `docker-compose.yml` (same layout as `./backup.sh`, so `./restore.sh` restores them). The schedule time is shown in your clock and stored in UTC.
+
+- Create the folder as yourself before the first start: `mkdir -p backups` (otherwise Docker creates it owned by root). Files made by the dashboard are owned by root, so use `sudo ./restore.sh backups/<date>` and `sudo rm -rf` to delete one by hand.
+- The dashboard backup holds the database and Documents but **not `.env`**; `./backup.sh` also copies `.env`. Keep a copy of `.env` somewhere safe.
+- Restoring is deliberately not on the page (it replaces all current data): run `./restore.sh` on the server.
+
 ## Backup and restore
 `./backup.sh` saves the database, the `Documents` folder and `.env` (it holds the keys that decrypt 2FA secrets) into `backups/<date>/`, checks the files, and keeps the newest 14 (`KEEP=30 ./backup.sh` to change). A failed backup is deleted, never left looking good.
 
