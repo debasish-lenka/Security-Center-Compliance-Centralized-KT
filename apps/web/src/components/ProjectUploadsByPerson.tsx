@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, FileText, Image as ImageIcon, Loader2 } from
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { documentsApi } from '@/lib/api';
+import { CreateKtDialog } from '@/components/CreateKtDialog';
 
 interface Item {
   id: string; name: string; mimeType: string; size: number; createdAt: string; isImage: boolean; previewUrl: string | null;
@@ -19,6 +20,7 @@ const kb = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${M
 export function ProjectUploadsByPerson({ projectId, members }: { projectId: string; members: { userId: string; role: string; user?: { fullName: string } }[] }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState<string | null>(null);
+  const [ktOpen, setKtOpen] = useState(false);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['documents-timeline', projectId],
@@ -48,7 +50,10 @@ export function ProjectUploadsByPerson({ projectId, members }: { projectId: stri
           <CardTitle>Uploads by person</CardTitle>
           <p className="mt-1 text-sm text-dbi-textSecondary">{totalImages} images · {totalDocs} documents from {rows.filter((r) => r.images.length + r.docs.length > 0).length} people</p>
         </div>
-        <Button onClick={() => navigate(`/projects/${projectId}/uploads`)} disabled={items.length === 0}>Show all images and documents</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setKtOpen(true)}>Create KT</Button>
+          <Button onClick={() => navigate(`/projects/${projectId}/uploads`)} disabled={items.length === 0}>Show all images and documents</Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {isLoading && <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-dbi-cyan" /></div>}
@@ -114,6 +119,7 @@ export function ProjectUploadsByPerson({ projectId, members }: { projectId: stri
           );
         })}
       </CardContent>
+      <CreateKtDialog open={ktOpen} onOpenChange={setKtOpen} projects={[{ id: projectId, name: 'This project' }]} initialProjectId={projectId} />
     </Card>
   );
 }

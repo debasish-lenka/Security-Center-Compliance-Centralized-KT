@@ -34,6 +34,8 @@
     "fastify": "^4.27.0",
     "fastify-plugin": "^4.5.1",
     "fastify-zod": "^1.4.0",
+    "fflate": "^0.8.2",
+    "jimp": "^0.22.12",
     "nodemailer": "^10.3.1",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.20.1",

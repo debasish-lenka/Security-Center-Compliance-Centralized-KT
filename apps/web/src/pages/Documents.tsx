@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, projectsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { DocumentTimeline } from '@/components/DocumentTimeline';
+import { CreateKtDialog } from '@/components/CreateKtDialog';
 import { DeleteRequestDialog } from '@/components/DeleteRequestDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +35,7 @@ export function Documents() {
   const { user: me } = useAuth();
   const queryClient = useQueryClient();
   const [view, setView] = useState<'list' | 'timeline'>('list');
+  const [ktOpen, setKtOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId');
   const urlSearch = searchParams.get('search') || '';
@@ -104,11 +106,16 @@ export function Documents() {
           <h1 className="text-3xl font-bold text-dbi-textPrimary">Document Vault</h1>
           <p className="text-dbi-textSecondary">Secure document storage and management</p>
         </div>
-        <Button onClick={() => setIsUploadOpen(true)}>
-          <Upload className="mr-2 h-4 w-4" />
-          Upload Document
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setKtOpen(true)}>Create KT</Button>
+          <Button onClick={() => setIsUploadOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload Document
+          </Button>
+        </div>
       </div>
+
+      <CreateKtDialog open={ktOpen} onOpenChange={setKtOpen} projects={projects} initialProjectId={projectFilter !== 'ALL' ? projectFilter : undefined} />
 
       <div className="inline-flex rounded-lg border border-dbi-border p-1" role="tablist" aria-label="View">
         <Button type="button" size="sm" variant={view === 'list' ? 'default' : 'ghost'} onClick={() => setView('list')}>List</Button>

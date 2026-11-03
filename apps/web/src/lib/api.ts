@@ -647,6 +647,7 @@ const mockComplianceApi = {
 };
 
 const mockDocumentsApi = {
+  createKtPack: async (_projectId: string, _body: { kind: 'images' | 'documents'; types?: string[] }) => createMockResponse({ items: [] as any[] }),
   timeline: async (_projectId: string) => createMockResponse({ items: [] as any[] }),
   list: async (params?: Record<string, string>) => {
     let items = [...mockDocuments];
@@ -1253,6 +1254,8 @@ export const documentsApi = MOCK_MODE ? mockDocumentsApi : {
   list: realDocumentsList,
   // every file of one project, oldest first, with uploader and time
   timeline: (projectId: string) => api.get(`/v1/projects/${projectId}/documents/timeline`),
+  // put the images (one PDF) or documents (PDF merged, Word / Excel in a ZIP) of a project together; saved in the vault
+  createKtPack: (projectId: string, body: { kind: 'images' | 'documents'; types?: string[] }) => api.post(`/v1/projects/${projectId}/kt-pack`, body),
   get: (id: string) => api.get(`/v1/documents/${id}`),
   create: (data: any) => api.post('/v1/documents', data),
   update: (id: string, data: any) => api.patch(`/v1/documents/${id}`, data),

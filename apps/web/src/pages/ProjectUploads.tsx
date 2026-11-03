@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DocumentTimeline } from '@/components/DocumentTimeline';
+import { CreateKtDialog } from '@/components/CreateKtDialog';
 import { documentsApi, projectsApi } from '@/lib/api';
 
 // One page with everything the whole team uploaded to a project: every image and document one after
@@ -11,6 +12,7 @@ import { documentsApi, projectsApi } from '@/lib/api';
 export function ProjectUploads() {
   const { id } = useParams<{ id: string }>();
   const [who, setWho] = useState<string | undefined>();
+  const [ktOpen, setKtOpen] = useState(false);
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', id],
@@ -47,7 +49,9 @@ export function ProjectUploads() {
           <h1 className="text-3xl font-bold text-dbi-textPrimary">{p.name}: all uploads</h1>
           <p className="text-dbi-textSecondary">{images} images · {items.length - images} documents from {byPerson.size} people, all in one place</p>
         </div>
+        <Button variant="outline" className="ml-auto" onClick={() => setKtOpen(true)}>Create KT</Button>
       </div>
+      <CreateKtDialog open={ktOpen} onOpenChange={setKtOpen} projects={[{ id: p.id, name: p.name }]} initialProjectId={p.id} />
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant={!who ? 'default' : 'outline'} onClick={() => setWho(undefined)}>Everyone ({items.length})</Button>
