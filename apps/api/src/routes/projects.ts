@@ -204,10 +204,11 @@ export async function projectRoutes(app: FastifyInstance) {
     const userRole = request.user!.role;
     const data = request.body as z.infer<typeof CreateProjectSchema>;
 
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+    // Anyone may start a project; viewers are read-only accounts and may not
+    if (userRole === 'VIEWER') {
       return reply.code(403).send({
         success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to create projects' },
+        error: { code: 'FORBIDDEN', message: 'Read-only accounts cannot create projects' },
       });
     }
 
@@ -259,9 +260,16 @@ export async function projectRoutes(app: FastifyInstance) {
         },
       });
 
+      // The creator stays on the project as its lead when they named someone else as owner
+      if (userId !== data.ownerId) {
+        await tx.projectMember.create({
+          data: { projectId: newProject.id, userId, role: 'LEAD', assignedBy: userId },
+        });
+      }
+
       // Add other members
       for (const memberId of data.memberIds) {
-        if (memberId !== data.ownerId) {
+        if (memberId !== data.ownerId && memberId !== userId) {
           await tx.projectMember.create({
             data: {
               projectId: newProject.id,

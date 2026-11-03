@@ -12,12 +12,14 @@ import { Pagination } from '@/components/ui/pagination';
 import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const statusOptions = ['ALL', 'NOT_STARTED', 'ONGOING', 'COMPLETED', 'ON_HOLD', 'OVERDUE', 'AT_RISK'];
 const priorityOptions = ['ALL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 export function Projects() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
@@ -90,10 +92,12 @@ export function Projects() {
           <h1 className="text-3xl font-bold text-dbi-textPrimary">All Projects</h1>
           <p className="text-dbi-textSecondary">Manage and monitor all security projects</p>
         </div>
-        <Button onClick={() => navigate('/projects/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
+        {user?.role !== 'VIEWER' && (
+          <Button onClick={() => navigate('/projects/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        )}
       </div>
 
       <Card>

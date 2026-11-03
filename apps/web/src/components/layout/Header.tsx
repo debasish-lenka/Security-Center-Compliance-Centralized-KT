@@ -9,9 +9,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { NotificationBell } from '@/components/NotificationBell';
-import { Search, Settings, LogOut, User, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
+import { Menu, Search, Settings, LogOut, User, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
 
-export function Header() {
+export function Header({ onMenu }: { onMenu?: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -46,8 +46,11 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b bg-dbi-surface/80 backdrop-blur-sm">
-      <div className="flex h-full items-center justify-between px-4 md:px-6 lg:ml-64">
+      <div className="flex h-full items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden" onClick={onMenu} aria-label="Open menu">
+            <Menu className="h-5 w-5" />
+          </Button>
           <form onSubmit={handleSearch} className="relative w-64 max-w-[300px] hidden md:block">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dbi-textSecondary" aria-hidden="true" />
             <Input

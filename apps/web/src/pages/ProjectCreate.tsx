@@ -31,7 +31,8 @@ export function ProjectCreate() {
 
   const { data: usersData } = useQuery({
     queryKey: ['users-for-select'],
-    queryFn: () => usersApi.list({ status: 'ACTIVE', limit: '100' }),
+    // the directory is open to every signed-in user, unlike the admin-only user list
+    queryFn: () => usersApi.directory({ limit: '200' }),
   });
 
   const users = usersData?.data?.items || [];

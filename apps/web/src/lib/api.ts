@@ -574,6 +574,7 @@ const mockProjectsApi = {
 };
 
 const mockUsersApi = {
+  directory: async (_params?: Record<string, string>) => createMockResponse({ items: [] as { id: string; fullName: string; email: string }[] }),
   list: async (params?: Record<string, string>) => {
     let items = [...mockUsers];
     if (params?.status) {
@@ -1091,6 +1092,8 @@ export const projectsApi = MOCK_MODE ? mockProjectsApi : {
 };
 
 export const usersApi = MOCK_MODE ? mockUsersApi : {
+  // names only, open to every signed-in user (owner / assignee pickers)
+  directory: (params?: Record<string, string>) => api.get('/v1/users/directory', { params }),
   list: (params?: Record<string, string>) => api.get('/v1/users', { params }),
   get: (id: string) => api.get(`/v1/users/${id}`),
   create: (data: any) => api.post('/v1/users', data),

@@ -8,8 +8,10 @@ import { ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getVisibleSections, getVisibleItems, type UserRole } from '@/config/navigation.config';
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
+  const [collapsedPref, setCollapsed] = useState(false);
+  // the drawer on a small screen is always shown in full
+  const collapsed = collapsedPref && !mobileOpen;
   const { user } = useAuth();
   const userRole = user?.role as UserRole | undefined;
   const visibleSections = getVisibleSections(userRole);
@@ -17,8 +19,9 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen border-r bg-dbi-sidebar transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
+        'fixed left-0 top-0 z-40 h-screen w-64 border-r bg-dbi-sidebar transition-transform duration-300 lg:translate-x-0 lg:transition-all',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        collapsed && 'lg:w-16'
       )}
     >
       <div className="flex h-full flex-col">
@@ -34,9 +37,9 @@ export function Sidebar() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={() => (mobileOpen ? onClose?.() : setCollapsed(!collapsedPref))}
             className="text-dbi-textSecondary hover:text-dbi-textPrimary"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={mobileOpen ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
           </Button>
@@ -55,6 +58,7 @@ export function Sidebar() {
                   <NavLink
                     key={item.href}
                     to={item.href}
+                    onClick={onClose}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',

@@ -229,6 +229,25 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: null });
   });
 
+  // Names for pickers (project owner, assignee...). Any signed-in person may use it; it returns only
+  // id, name and email of active accounts, never roles, status or anything else.
+  app.get('/directory', {
+    schema: { querystring: z.object({ search: z.string().trim().max(100).optional(), limit: z.coerce.number().int().positive().max(200).default(100) }) },
+    preHandler: [app.authenticate],
+  }, async (request, reply) => {
+    const { search, limit } = request.query as { search?: string; limit: number };
+    const items = await app.prisma.profile.findMany({
+      where: {
+        status: 'ACTIVE',
+        ...(search ? { OR: [{ fullName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {}),
+      },
+      select: { id: true, fullName: true, email: true },
+      orderBy: { fullName: 'asc' },
+      take: limit,
+    });
+    return reply.send({ success: true, data: { items } });
+  });
+
   app.get('/:userId', async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;
