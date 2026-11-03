@@ -12,9 +12,10 @@ import { ProjectTeam } from '@/components/ProjectTeam';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
-import { Plus, Edit, Trash2, Eye, Download, ExternalLink, ArrowLeft, Users, Flag, Calendar, Image as ImageIcon, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, ArrowLeft, Users, Flag, Calendar, Image as ImageIcon, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
 import { ProjectProgress } from '@/components/ProjectProgress';
+import { ProjectUploadsByPerson } from '@/components/ProjectUploadsByPerson';
 import { progressTone } from '@/lib/progress-style';
 import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 
@@ -289,77 +290,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Card>
-              <CardHeader>
-                <CardTitle>Project Documents</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {documents.length === 0 ? (
-                  <div className="text-center py-8 text-dbi-textSecondary">
-                    <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                    <p>No documents uploaded yet</p>
-                    <Button asChild className="mt-4" variant="outline">
-                      <Link to={`/documents?projectId=${id}`}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Upload Document
-                      </Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Size</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Uploaded By</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {documents.map((doc: any) => (
-                          <TableRow key={doc.id}>
-                            <TableCell className="font-medium">{doc.name}</TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className="text-xs">{doc.type.toUpperCase()}</Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-dbi-textSecondary">
-                              {(doc.size / 1024).toFixed(1)} KB
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className={getStatusColor(doc.status)}>
-                                {doc.status.replace('_', ' ')}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-dbi-textSecondary">{doc.uploadedBy?.fullName}</TableCell>
-                            <TableCell className="text-sm text-dbi-textSecondary">{formatDate(doc.createdAt)}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="icon" asChild>
-                                  <a href={doc.url} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="h-4 w-4" />
-                                  </a>
-                                </Button>
-                                <Button variant="ghost" size="icon" asChild>
-                                  <a href={doc.url} download>
-                                    <Download className="h-4 w-4" />
-                                  </a>
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <ProjectUploadsByPerson projectId={id!} members={project.members ?? []} />
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-4">

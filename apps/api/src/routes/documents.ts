@@ -461,7 +461,9 @@ export async function documentRoutes(app: FastifyInstance) {
     const ownerMembership = await app.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId: finalOwnerId } },
     });
-    if (!ownerMembership) {
+    // (an admin or super admin may upload to any project, so they own their own upload without being on the team)
+    const adminOwnsOwnUpload = finalOwnerId === userId && ['SUPER_ADMIN', 'ADMIN'].includes(request.user!.role);
+    if (!ownerMembership && !adminOwnsOwnUpload) {
       return reply.code(400).send({ success: false, error: { code: 'INVALID_OWNER', message: 'Owner must be a project member' } });
     }
 

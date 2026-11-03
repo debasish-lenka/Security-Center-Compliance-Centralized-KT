@@ -26,7 +26,17 @@ const size = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `$
 
 // Everything uploaded to one project, one below the other. Images are shown in full; under every file
 // the uploader's name and the date and time are printed automatically, and a new upload joins the bottom.
-export function DocumentTimeline({ projects, initialProjectId }: { projects: { id: string; name: string }[]; initialProjectId?: string }) {
+export function DocumentTimeline({
+  projects,
+  initialProjectId,
+  hideProjectPicker = false,
+  onlyUserId,
+}: {
+  projects: { id: string; name: string }[];
+  initialProjectId?: string;
+  hideProjectPicker?: boolean; // the project is already fixed by the page
+  onlyUserId?: string; // show one person's uploads only
+}) {
   const [projectId, setProjectId] = useState(initialProjectId ?? '');
   const [newestFirst, setNewestFirst] = useState(false);
   const [zoom, setZoom] = useState<Item | null>(null);
@@ -42,17 +52,20 @@ export function DocumentTimeline({ projects, initialProjectId }: { projects: { i
       return (res.data?.items ?? res.data?.data?.items ?? []) as Item[];
     },
   });
-  const items = newestFirst ? [...(data ?? [])].reverse() : data ?? [];
+  const all = (data ?? []).filter((d) => !onlyUserId || d.uploader?.id === onlyUserId);
+  const items = newestFirst ? [...all].reverse() : all;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {hideProjectPicker ? <span /> : (
         <Select value={projectId} onValueChange={setProjectId}>
           <SelectTrigger className="w-72 bg-dbi-elevated border-dbi-border"><SelectValue placeholder="Choose a project" /></SelectTrigger>
           <SelectContent>
             {projects.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        )}
         <Button variant="outline" size="sm" onClick={() => setNewestFirst((v) => !v)}>
           <ArrowDownUp className="mr-2 h-4 w-4" /> {newestFirst ? 'Newest first' : 'Oldest first'}
         </Button>

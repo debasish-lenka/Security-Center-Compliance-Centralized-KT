@@ -6,6 +6,7 @@ import { PublicLayout } from '@/components/layout/Layout';
 import { Login } from '@/pages/Login';
 const ExecutiveDashboard = lazy(() => import('@/pages/ExecutiveDashboard').then((m) => ({ default: m.ExecutiveDashboard })));
 const Projects = lazy(() => import('@/pages/Projects').then((m) => ({ default: m.Projects })));
+const ProjectUploads = lazy(() => import('@/pages/ProjectUploads').then((m) => ({ default: m.ProjectUploads })));
 const ProjectDetail = lazy(() => import('@/pages/ProjectDetail').then((m) => ({ default: m.ProjectDetail })));
 const ProjectCreate = lazy(() => import('@/pages/ProjectCreate').then((m) => ({ default: m.ProjectCreate })));
 const ProjectEdit = lazy(() => import('@/pages/ProjectEdit').then((m) => ({ default: m.ProjectEdit })));
@@ -134,6 +135,7 @@ function AppRoutes() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/new" element={<ProjectCreate />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/uploads" element={<ProjectUploads />} />
           <Route path="/projects/:id/edit" element={<ProjectEdit />} />
           <Route path="/kt-reports" element={<KTReports />} />
           <Route path="/kt-reports/new" element={<KTReportCreate />} />
