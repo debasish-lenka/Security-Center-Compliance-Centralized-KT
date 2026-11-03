@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/utils';
 import { assignmentsApi, projectsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDialog } from '@/components/TaskDialog';
+import { DeleteApprovalsPanel } from '@/components/DeleteApprovalsPanel';
 
 export function Assignments() {
   const queryClient = useQueryClient();
@@ -114,6 +115,8 @@ export function Assignments() {
           onCreated={() => queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('assignments') })}
         />
       </div>
+
+      <DeleteApprovalsPanel />
 
       {/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-4">

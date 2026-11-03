@@ -12,6 +12,7 @@ import {
   Settings,
   Mail,
   KeyRound,
+  Trash2,
   BookOpen,
   Shield,
 } from 'lucide-react';
@@ -80,6 +81,7 @@ export const navigationSections: NavSection[] = [
     items: [
       { name: 'Team & Users', href: '/users', icon: Users, roles: ADMIN_ROLES },
       { name: 'Admin Control Center', href: '/admin-control-center', icon: Shield, roles: ADMIN_ROLES },
+      { name: 'Recycle Bin', href: '/recycle-bin', icon: Trash2, roles: SUPER_ADMIN_ROLES },
       // Office 365 integrations: switch ENABLE_INTEGRATIONS on when mail / Microsoft sign-in are set up
       ...(ENABLE_INTEGRATIONS
         ? [

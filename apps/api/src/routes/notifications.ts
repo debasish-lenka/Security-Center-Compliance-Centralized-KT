@@ -2,6 +2,15 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
 
+// Where a notification should take the user when clicked
+function linkFor(n: { type: string; resourceType: string | null; resourceId: string | null }): string | null {
+  if (n.type === 'DOCUMENT_DELETE_REQUESTED') return '/assignments'; // the approvals card sits there and on the dashboard
+  if (n.resourceType === 'document_delete_request' || n.resourceType === 'document') return '/documents';
+  if (n.resourceType === 'project' && n.resourceId) return `/projects/${n.resourceId}`;
+  if (n.resourceType === 'kt_report' && n.resourceId) return `/kt-reports/${n.resourceId}`;
+  return null;
+}
+
 export async function notificationRoutes(app: FastifyInstance) {
   const auditLogger = createAuditLogger(app);
 
@@ -46,7 +55,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 
     return reply.send({
       success: true,
-      data: { items: notifications, total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
+      data: { items: notifications.map((n) => ({ ...n, link: linkFor(n) })), total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
     });
   });
 

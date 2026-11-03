@@ -1181,17 +1181,13 @@ const CATEGORY_BY_TYPE = (mime: string) =>
 
 const realDocumentsList = async (params?: Record<string, string>) => {
   const { projectId, ...rest } = params ?? {};
-  let projectIds: string[];
-  if (projectId) {
-    projectIds = [projectId];
-  } else {
-    const res = await api.get('/v1/projects', { params: { limit: '100' } });
-    projectIds = (res.data?.data?.items ?? []).map((p: { id: string }) => p.id);
-  }
+  const projectsRes = await api.get('/v1/projects', { params: { limit: '100' } });
+  const projects: { id: string; name: string }[] = projectsRes.data?.items ?? [];
+  const projectIds = projectId ? [projectId] : projects.map((p) => p.id);
   const pages = await Promise.all(
     projectIds.map((id) =>
       api.get(`/v1/projects/${id}/documents`, { params: { limit: '100', ...(rest.search ? { search: rest.search } : {}) } })
-        .then((r) => (r.data?.data?.items ?? []).map((d: any) => ({ ...d, projectId: id })))
+        .then((r) => (r.data?.data?.items ?? r.data?.items ?? []).map((d: any) => ({ ...d, projectId: id })))
         .catch(() => [])
     )
   );
@@ -1201,6 +1197,8 @@ const realDocumentsList = async (params?: Record<string, string>) => {
       ...d,
       type: d.mimeType,
       uploadedBy: d.uploader ?? d.owner,
+      project: projects.find((p) => p.id === d.projectId) ?? undefined,
+      deleteRequestPending: (d.deleteRequests?.length ?? 0) > 0,
       url: `/api/v1/projects/${d.projectId}/documents/${d.id}/file`,
     };
   });
@@ -1608,4 +1606,20 @@ export const mailSettingsApi = {
 export const ssoSettingsApi = {
   get: () => api.get('/v1/admin/sso-settings'),
   save: (data: Record<string, unknown>) => api.put('/v1/admin/sso-settings', data),
+};
+
+// Deleting a document needs a manager's approval; approved documents wait 30 days in the recycle bin
+export const deleteRequestsApi = {
+  request: (projectId: string, documentId: string, reason: string, immediate = false) =>
+    api.post(`/v1/projects/${projectId}/documents/${documentId}/delete-request`, { reason, immediate }),
+  list: (scope: 'approver' | 'mine', status = 'PENDING') => api.get('/v1/delete-requests', { params: { scope, status } }),
+  approve: (id: string, note?: string) => api.post(`/v1/delete-requests/${id}/approve`, { note }),
+  reject: (id: string, note: string) => api.post(`/v1/delete-requests/${id}/reject`, { note }),
+  cancel: (id: string) => api.post(`/v1/delete-requests/${id}/cancel`),
+};
+
+export const recycleBinApi = {
+  list: () => api.get('/v1/recycle-bin'),
+  restore: (id: string) => api.post(`/v1/recycle-bin/${id}/restore`),
+  purge: (id: string) => api.delete(`/v1/recycle-bin/${id}`),
 };

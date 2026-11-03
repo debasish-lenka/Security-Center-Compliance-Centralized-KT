@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
+import { recycleDocument } from '../services/recycle-bin.js';
 import { createNotificationService } from '../services/notifications.js';
 
 const UploadDocumentSchema = z.object({
@@ -253,6 +254,7 @@ export async function documentRoutes(app: FastifyInstance) {
         status: true,
         reviewStatus: true,
         reviewerId: true,
+        deleteRequests: { where: { status: 'PENDING' }, select: { id: true } },
         visibility: true,
         visibleToTeamIds: true,
         visibleToDeptIds: true,
@@ -616,6 +618,13 @@ export async function documentRoutes(app: FastifyInstance) {
     const userRole = request.user!.role;
     const { projectId, documentId } = request.params as { projectId: string; documentId: string };
 
+    if (userRole !== 'SUPER_ADMIN') {
+      return reply.code(403).send({
+        success: false,
+        error: { code: 'APPROVAL_REQUIRED', message: 'Documents are deleted through a delete request that a manager approves' },
+      });
+    }
+
     const hasAccess = await checkDocumentAccess(app, userId, userRole, documentId);
     if (!hasAccess) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
@@ -626,16 +635,8 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
     }
 
-    // Delete from storage
-    await storage.delete(document.storageKey);
-    // Delete versions
-    const versions = await app.prisma.documentVersion.findMany({ where: { documentId } });
-    for (const v of versions) {
-      await storage.delete(v.storageKey);
-    }
-
-    // Delete from database (cascade will handle versions and access events)
-    await app.prisma.projectDocument.delete({ where: { id: documentId } });
+    // Move to the recycle bin (kept for 30 days) instead of destroying it
+    await recycleDocument(app, documentId, userId);
 
     await auditLogger.logResource('DELETE', userId, 'document', documentId, { name: document.name }, request.ip, request.headers['user-agent']);
 

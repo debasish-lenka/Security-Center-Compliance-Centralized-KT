@@ -18,6 +18,7 @@ import { authMiddleware } from './middleware/auth.js';
 import { enforceProjectScope } from './middleware/project-scope.js';
 import { AuditLogger } from './services/audit-logger.js';
 import { authPlugin } from './plugins/auth.js';
+import { startPurgeJob } from './services/recycle-bin.js';
 
 const app = Fastify({
   // signed file links (/api/v1/files/<token>) are ~200 characters; the default limit is 100
@@ -207,6 +208,7 @@ process.on('SIGINT', shutdown);
 
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
+  startPurgeJob(app); // removes recycle-bin entries older than 30 days
   app.log.info(`🚀 DBI Security Center API running on http://${env.HOST}:${env.PORT}`);
   app.log.info(`📚 API Documentation available at http://${env.HOST}:${env.PORT}/docs`);
 } catch (err) {

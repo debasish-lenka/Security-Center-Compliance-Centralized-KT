@@ -63,6 +63,8 @@ model Profile {
   totpEnabled                 Boolean   @default(false)
   recoveryCodeHashes          String[]  @default([])
   inviteTokens                InviteToken[]
+  deleteRequestsMade          DocumentDeleteRequest[] @relation("DeleteRequester")
+  deleteRequestsDecided       DocumentDeleteRequest[] @relation("DeleteDecider")
 
   // How the person signs in: password on this server, or their Microsoft 365 account
   authProvider                AuthProvider @default(LOCAL)
@@ -216,6 +218,7 @@ model Project {
   comments               ProjectComment[]
   activityFeed           ActivityFeed[]
   knowledgeBooks         KnowledgeBook[]
+  deleteRequests         DocumentDeleteRequest[]
 
   @@index([createdById])
   @@index([ownerId])
@@ -618,6 +621,7 @@ model ProjectDocument {
   versions     DocumentVersion[]
   accessEvents DocumentAccessEvent[]
   reviews      DocumentReview[]
+  deleteRequests DocumentDeleteRequest[]
 
   @@index([projectId])
   @@index([uploadedById])
@@ -832,6 +836,9 @@ enum NotificationType {
   REMEDIATION_TASK_ASSIGNED
   REMEDIATION_TASK_DUE
   REMEDIATION_TASK_OVERDUE
+  DOCUMENT_DELETE_REQUESTED
+  DOCUMENT_DELETE_APPROVED
+  DOCUMENT_DELETE_REJECTED
   MENTION
   CRITICAL_ALERT
   SYSTEM_MAINTENANCE
@@ -996,4 +1003,62 @@ model SsoSettings {
   updatedAt       DateTime @updatedAt
 
   @@map("sso_settings")
+}
+
+// ============================================
+// Document delete approval
+// ============================================
+
+enum DeleteRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// A document is only deleted after a manager approves a request like this one.
+// The request outlives the document (documentName is a snapshot) so there is always a record.
+model DocumentDeleteRequest {
+  id            String              @id @default(uuid())
+  documentId    String?
+  projectId     String
+  documentName  String
+  reason        String
+  status        DeleteRequestStatus @default(PENDING)
+  requestedById String
+  decidedById   String?
+  decisionNote  String?
+  // true when the requester is the project's own manager (or it has none): only a super admin can decide
+  escalated     Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  decidedAt     DateTime?
+
+  document      ProjectDocument?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy   Profile             @relation("DeleteRequester", fields: [requestedById], references: [id])
+  decidedBy     Profile?            @relation("DeleteDecider", fields: [decidedById], references: [id])
+
+  @@index([projectId, status])
+  @@index([documentId])
+  @@index([requestedById])
+  @@map("document_delete_requests")
+}
+
+// Deleted documents wait here for 30 days. The files stay on disk; the document and its versions are
+// kept as a snapshot so a super admin can restore them, or purge them for good.
+model RecycledDocument {
+  id           String   @id @default(uuid())
+  documentId   String   // original id, reused when restored
+  projectId    String
+  documentName String
+  snapshot     Json     // the document row and its version rows
+  size         Int      @default(0)
+  deletedById  String
+  requestId    String?
+  deletedAt    DateTime @default(now())
+  purgeAt      DateTime
+
+  @@index([purgeAt])
+  @@index([projectId])
+  @@map("recycled_documents")
 }

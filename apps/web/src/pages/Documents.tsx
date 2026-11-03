@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { documentsApi, projectsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { DeleteRequestDialog } from '@/components/DeleteRequestDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -90,16 +91,8 @@ export function Documents() {
     }));
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this document?')) return;
-    try {
-      await documentsApi.delete(id);
-      toast({ title: 'Document deleted', description: 'The document has been deleted successfully' });
-      refetch();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete document', variant: 'destructive' });
-    }
-  };
+  // Deleting needs a manager's approval: the button opens a request form instead of deleting
+  const [deleteDoc, setDeleteDoc] = useState<{ id: string; name: string; projectId: string } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -228,6 +221,7 @@ export function Documents() {
                                 onClick={() => setSelectedDoc(doc)}
                               >
                                 {doc.name}
+                                {doc.deleteRequestPending && <Badge className="ml-2 bg-dbi-amber/15 text-dbi-amber">Delete pending</Badge>}
                               </Button>
                               <p className="text-sm text-dbi-textSecondary line-clamp-1">{doc.description}</p>
                             </div>
@@ -289,7 +283,7 @@ export function Documents() {
                             >
                               <MessageSquare className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)} className="text-dbi-critical hover:text-dbi-critical" title="Delete">
+                            <Button variant="ghost" size="icon" onClick={() => setDeleteDoc({ id: doc.id, name: doc.name, projectId: doc.projectId || doc.project?.id || '' })} disabled={doc.deleteRequestPending} className="text-dbi-critical hover:text-dbi-critical" title={doc.deleteRequestPending ? 'Delete request pending approval' : 'Request delete'}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -396,6 +390,13 @@ export function Documents() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DeleteRequestDialog
+        doc={deleteDoc}
+        open={!!deleteDoc}
+        onOpenChange={(open) => { if (!open) setDeleteDoc(null); }}
+        onDone={() => refetch()}
+      />
 
       {/* Upload Document Dialog */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
