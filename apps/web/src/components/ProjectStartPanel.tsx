@@ -21,11 +21,13 @@ export function ProjectStartPanel({
   info,
   last,
   compact = false,
+  chips = false,
 }: {
   projectId: string;
   info: StartInfo | null | undefined;
   last: LastUpdate | null | undefined;
   compact?: boolean;
+  chips?: boolean; // the team's names, green once started, amber while waiting
 }) {
   const queryClient = useQueryClient();
   const start = useMutation({
@@ -43,11 +45,35 @@ export function ProjectStartPanel({
   const allStarted = info.total > 0 && info.started === info.total;
   const lastLine = last ? `Latest update: ${last.by} ${last.text} · ${formatDate(last.at, 'relative')}` : 'No updates yet';
 
+  const noTeam = info.total === 0;
+
+  if (chips) {
+    return (
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-dbi-textPrimary">
+          {noTeam ? 'No team members selected yet' : `Team: ${info.started} of ${info.total} started`}
+        </p>
+        {!noTeam && (
+          <div className="flex flex-wrap gap-1">
+            {info.startedBy.slice(0, 8).map((s) => (
+              <span key={s.userId} title={`Started ${formatDate(s.at, 'relative')}`} className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600">✓ {s.fullName}</span>
+            ))}
+            {info.waiting.slice(0, 8).map((n) => (
+              <span key={n} title="Has not started yet" className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600">{n}</span>
+            ))}
+            {info.total > 16 && <span className="text-xs text-dbi-textSecondary">+{info.total - 16} more</span>}
+          </div>
+        )}
+        <p className="line-clamp-1 text-xs text-dbi-textSecondary">{lastLine}</p>
+      </div>
+    );
+  }
+
   if (compact) {
     return (
       <div className="space-y-0.5 text-xs text-dbi-textSecondary">
         <p className={mustStart ? 'font-medium text-dbi-amber' : ''}>
-          {mustStart ? 'Waiting for you to start · ' : ''}{info.started} of {info.total} started
+          {noTeam ? 'No team members selected yet' : `${mustStart ? 'Waiting for you to start · ' : ''}${info.started} of ${info.total} started`}
         </p>
         <p className="line-clamp-1">{lastLine}</p>
       </div>
@@ -60,7 +86,7 @@ export function ProjectStartPanel({
         <div className="flex items-center gap-2">
           {allStarted ? <CheckCircle2 className="h-5 w-5 text-dbi-success" /> : <UserCheck className="h-5 w-5 text-dbi-cyan" />}
           <div>
-            <p className="font-medium text-dbi-textPrimary">{info.started} of {info.total} people started this project</p>
+            <p className="font-medium text-dbi-textPrimary">{noTeam ? 'No team members selected for this project yet' : `${info.started} of ${info.total} team members started this project`}</p>
             <p className="text-xs text-dbi-textSecondary">{lastLine}</p>
           </div>
         </div>

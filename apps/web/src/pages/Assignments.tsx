@@ -13,6 +13,8 @@ import { TaskDialog } from '@/components/TaskDialog';
 import { DeleteApprovalsPanel } from '@/components/DeleteApprovalsPanel';
 import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
+import { PriorityLegend } from '@/components/PriorityLegend';
+import { priorityRank, priorityStyle } from '@/lib/priority-style';
 
 export function Assignments() {
   const queryClient = useQueryClient();
@@ -53,8 +55,8 @@ export function Assignments() {
   });
 
   const tasks = tasksData?.data?.items || [];
-  // not yet started by me first
-  const myProjects: any[] = [...(myProjectsData?.data?.items || [])].sort((a: any, b: any) => Number(b.mustStart) - Number(a.mustStart));
+  // the ones I still have to start first, then the most severe
+  const myProjects: any[] = [...(myProjectsData?.data?.items || [])].sort((a: any, b: any) => Number(b.mustStart) - Number(a.mustStart) || priorityRank(a.priority) - priorityRank(b.priority));
   const toStart = myProjects.filter((p) => p.mustStart).length;
 
   const getPriorityBadgeVariant = (priority: string) => {
@@ -138,19 +140,21 @@ export function Assignments() {
               <FolderKanban className="h-5 w-5 text-dbi-cyan" /> My Projects ({myProjects.length})
               {toStart > 0 && <Badge className="bg-dbi-amber/15 text-dbi-amber">{toStart} to start</Badge>}
             </CardTitle>
+            <PriorityLegend />
           </CardHeader>
           <CardContent className="space-y-3">
             {myProjects.map((p: any) => (
-              <div key={p.id} className="space-y-2 rounded-lg bg-dbi-elevated/50 p-3">
+              <div key={p.id} className={`space-y-2 rounded-lg p-3 ${priorityStyle(p.priority).card}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Link to={`/projects/${p.id}`} className="font-medium text-dbi-textPrimary hover:text-dbi-cyan">{p.name}</Link>
                   <div className="flex items-center gap-2">
+                    <Badge className={priorityStyle(p.priority).badge}>{p.priority}</Badge>
                     <Badge variant="secondary">{p.role}</Badge>
                     <Badge variant="outline">{String(p.status).replace(/_/g, ' ')}</Badge>
                     <span className="w-10 text-right text-xs font-medium text-dbi-textPrimary">{p.progress ?? 0}%</span>
                   </div>
                 </div>
-                <ProjectStartPanel projectId={p.id} info={p.startInfo} last={p.lastUpdate} compact={!p.mustStart} />
+                <ProjectStartPanel projectId={p.id} info={p.startInfo} last={p.lastUpdate} compact={!p.mustStart} chips={!p.mustStart && p.role !== 'Contributor' && p.role !== 'Reviewer'} />
               </div>
             ))}
           </CardContent>

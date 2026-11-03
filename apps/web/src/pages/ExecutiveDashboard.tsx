@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
+import { PriorityLegend } from '@/components/PriorityLegend';
+import { priorityRank, priorityStyle } from '@/lib/priority-style';
 import { executiveDashboardApi } from '@/lib/api';
 import { MetricCard } from '@/components/charts/MetricCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -380,23 +382,29 @@ export function ExecutiveDashboard() {
             <BarChart2 className="h-5 w-5 text-dbi-cyan" />
             {isManagerView ? 'My Projects' : 'Projects'}
           </CardTitle>
+          <PriorityLegend />
           <Link to="/projects" className="text-sm text-dbi-cyan hover:underline">View all</Link>
         </CardHeader>
         <CardContent className="space-y-2">
           {myProjects.length === 0 && <p className="py-3 text-center text-sm text-dbi-textSecondary">No projects yet</p>}
-          {myProjects.map((project: any) => (
-            <Link key={project.id} to={`/projects/${project.id}`} className="flex items-center justify-between gap-3 rounded-lg p-3 transition-colors hover:bg-dbi-elevated">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-dbi-textPrimary">{project.name}</p>
-                <p className="text-xs text-dbi-textSecondary">{String(project.status).replace(/_/g, ' ')}{project.myRole ? ` · you: ${String(project.myRole).toLowerCase()}` : ''}</p>
-                <ProjectStartPanel projectId={project.id} info={project.startInfo} last={project.lastUpdate} compact />
+          {[...myProjects].sort((x: any, y: any) => priorityRank(x.priority) - priorityRank(y.priority)).map((project: any) => {
+            const sty = priorityStyle(project.priority);
+            return (
+              <div key={project.id} className={`rounded-lg p-3 ${sty.card}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link to={`/projects/${project.id}`} className="block truncate font-medium text-dbi-textPrimary hover:text-dbi-cyan">{project.name}</Link>
+                    <p className="text-xs text-dbi-textSecondary">{String(project.status).replace(/_/g, ' ')}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <Badge className={sty.badge}>{project.priority}</Badge>
+                    <span className="w-10 text-right text-xs font-medium text-dbi-textPrimary">{project.progress ?? 0}%</span>
+                  </div>
+                </div>
+                <div className="mt-2"><ProjectStartPanel projectId={project.id} info={project.startInfo} last={project.lastUpdate} chips /></div>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <Badge className={getPriorityColor(project.priority)}>{project.priority}</Badge>
-                <span className="w-10 text-right text-xs font-medium text-dbi-textPrimary">{project.progress ?? 0}%</span>
-              </div>
-            </Link>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 

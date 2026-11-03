@@ -1,10 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 // Who has pressed "Start project", and who made the latest change on a project.
+// Only the team members picked for the work count (contributors and reviewers). The owner, the managers /
+// leads and read-only viewers do not have to start anything, so they are never listed or counted.
+export const TEAM_ROLES = ['CONTRIBUTOR', 'REVIEWER'] as const;
 
 export interface StartInfo {
   started: number; // people who pressed Start
-  total: number;   // people who are expected to (everyone on the project except read-only viewers)
+  total: number;   // the team members expected to start
   startedBy: { userId: string; fullName: string; at: Date }[];
   waiting: string[]; // names of those who have not started yet
   iStarted: boolean | null; // null when the viewer is not one of them
@@ -14,7 +17,7 @@ export async function startInfo(app: FastifyInstance, projectIds: string[], view
   const out = new Map<string, StartInfo>();
   if (projectIds.length === 0) return out;
   const members = await app.prisma.projectMember.findMany({
-    where: { projectId: { in: projectIds }, role: { not: 'VIEWER' }, user: { status: 'ACTIVE' } },
+    where: { projectId: { in: projectIds }, role: { in: [...TEAM_ROLES] }, user: { status: 'ACTIVE' } },
     select: { projectId: true, userId: true, acceptedAt: true, user: { select: { fullName: true } } },
     orderBy: { acceptedAt: 'asc' },
   });

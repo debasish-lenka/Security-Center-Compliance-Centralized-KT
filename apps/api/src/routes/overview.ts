@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma, ProjectStatus } from '@prisma/client';
 import { z } from 'zod';
-import { latestUpdates, startInfo } from '../services/project-progress.js';
+import { TEAM_ROLES, latestUpdates, startInfo } from '../services/project-progress.js';
 
 // Roles that see the executive dashboard. Managers only see the projects they belong to.
 const LEADERSHIP = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER'];
@@ -220,7 +220,7 @@ export async function overviewRoutes(app: FastifyInstance) {
       role: m.role.charAt(0) + m.role.slice(1).toLowerCase(),
       startInfo: starts.get(m.projectId) ?? null,
       lastUpdate: updates.get(m.projectId) ?? null,
-      mustStart: m.role !== 'VIEWER' && !m.acceptedAt,
+      mustStart: (TEAM_ROLES as readonly string[]).includes(m.role) && !m.acceptedAt,
     }))));
   });
 

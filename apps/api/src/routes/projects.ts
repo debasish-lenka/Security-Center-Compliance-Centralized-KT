@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { latestUpdates, startInfo } from '../services/project-progress.js';
+import { TEAM_ROLES, latestUpdates, startInfo } from '../services/project-progress.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 
@@ -224,7 +224,9 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const member = await app.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } }, select: { role: true, acceptedAt: true } });
     if (!member) return reply.code(403).send({ success: false, error: { code: 'NOT_ON_PROJECT', message: 'You are not on this project' } });
-    if (member.role === 'VIEWER') return reply.code(403).send({ success: false, error: { code: 'READ_ONLY', message: 'Viewers do not start projects' } });
+    if (!(TEAM_ROLES as readonly string[]).includes(member.role)) {
+      return reply.code(403).send({ success: false, error: { code: 'NOT_TEAM', message: 'Only the team members chosen for this project start it' } });
+    }
 
     const project = await app.prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true, status: true, startDate: true, createdById: true } });
     if (!project) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } });
