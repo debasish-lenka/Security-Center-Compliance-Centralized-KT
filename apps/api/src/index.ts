@@ -20,6 +20,7 @@ import { AuditLogger } from './services/audit-logger.js';
 import { authPlugin } from './plugins/auth.js';
 import { startPurgeJob } from './services/recycle-bin.js';
 import { startBackupJob } from './services/backup.js';
+import { recordProjectActivity } from './services/project-progress.js';
 
 const app = Fastify({
   // signed file links (/api/v1/files/<token>) are ~200 characters; the default limit is 100
@@ -177,6 +178,8 @@ app.addHook('onRequest', authMiddleware);
 
 // Project scope middleware - enforces project-level access
 app.addHook('onRequest', enforceProjectScope);
+// remember who changed what on a project (shown as "latest update"); hooks must be added before listen()
+app.addHook('onResponse', async (request, reply) => { await recordProjectActivity(app, request, reply.statusCode); });
 
 // Health check
 app.get('/health', async () => ({

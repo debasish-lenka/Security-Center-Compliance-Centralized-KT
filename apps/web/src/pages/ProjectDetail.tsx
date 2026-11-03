@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi, documentsApi, ktReportsApi } from '@/lib/api';
@@ -11,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
 import { Plus, Edit, Trash2, Eye, Download, ExternalLink, ArrowLeft, Users, Flag, Calendar, DollarSign, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { ProjectStartPanel } from '@/components/ProjectStartPanel';
+import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +41,11 @@ export function ProjectDetail() {
   const project = projectData?.data;
   const documents = documentsData?.data?.items || [];
   const reports = reportsData?.data?.items || [];
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { user: me } = useAuth();
+  const myMembership = (project?.members ?? []).find((m: any) => m.userId === me?.id);
+  const canAskDelete = me?.role === 'SUPER_ADMIN' || me?.role === 'ADMIN' || ['OWNER', 'LEAD'].includes(myMembership?.role);
 
   if (projectLoading) {
     return (
@@ -73,17 +81,6 @@ export function ProjectDetail() {
     AT_RISK: 'bg-orange-500/20 text-orange-300',
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) return;
-    try {
-      await projectsApi.delete(id!);
-      toast({ title: 'Project deleted', description: 'The project has been deleted successfully' });
-      navigate('/projects');
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete project', variant: 'destructive' });
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -108,9 +105,11 @@ export function ProjectDetail() {
               <Edit className="h-4 w-4" />
             </Link>
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleDelete} className="text-dbi-critical hover:text-dbi-critical">
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canAskDelete && (
+            <Button variant="ghost" size="icon" onClick={() => setDeleteOpen(true)} aria-label="Delete project" className="text-dbi-critical hover:text-dbi-critical">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -238,6 +237,8 @@ export function ProjectDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          <ProjectStartPanel projectId={project.id} info={project.startInfo} last={project.lastUpdate} />
+
           <Card>
             <CardHeader>
               <CardTitle>Description</CardTitle>
@@ -479,6 +480,15 @@ export function ProjectDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {project && (
+        <ProjectDeleteDialog
+          project={{ id: project.id, name: project.name }}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDone={() => navigate('/projects')}
+        />
+      )}
     </div>
   );
 }

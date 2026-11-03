@@ -14,6 +14,7 @@ import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
+import { ProjectStartPanel } from '@/components/ProjectStartPanel';
 
 const statusOptions = ['ALL', 'NOT_STARTED', 'ONGOING', 'COMPLETED', 'ON_HOLD', 'OVERDUE', 'AT_RISK'];
 const priorityOptions = ['ALL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -237,6 +238,9 @@ export function Projects() {
                               />
                             </div>
                             <span className="text-xs text-dbi-textSecondary">{project.progress}%</span>
+                          </div>
+                          <div className="mt-1 w-56">
+                            <ProjectStartPanel projectId={project.id} info={project.startInfo} last={project.lastUpdate} compact />
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">

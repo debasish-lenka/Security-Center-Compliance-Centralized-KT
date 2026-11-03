@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma, ProjectStatus } from '@prisma/client';
 import { z } from 'zod';
+import { latestUpdates, startInfo } from '../services/project-progress.js';
 
 // Roles that see the executive dashboard. Managers only see the projects they belong to.
 const LEADERSHIP = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER'];
@@ -135,6 +136,9 @@ export async function overviewRoutes(app: FastifyInstance) {
       alerts.push({ id: 'kt-pending', type: 'INFO', title: `${pendingKt} KT report${pendingKt > 1 ? 's' : ''} awaiting approval`, message: 'Submitted and not yet reviewed', projectId: null, timestamp: stamp });
     }
 
+    const topProjects = [...projects].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 8);
+    const [startMap, updateMap] = await Promise.all([startInfo(app, topProjects.map((p) => p.id), userId), latestUpdates(app, topProjects.map((p) => p.id))]);
+    const myProjectRows = topProjects.map((p) => ({ id: p.id, name: p.name, status: p.status, priority: p.priority, progress: p.progress, myRole: p.members.find((m) => m.userId === userId)?.role ?? null, startInfo: startMap.get(p.id) ?? null, lastUpdate: updateMap.get(p.id) ?? null }));
     const upcomingDeadlines = projects
       .filter((p) => p.status !== 'COMPLETED' && p.expectedCompletionDate)
       .sort((a, b) => a.expectedCompletionDate!.getTime() - b.expectedCompletionDate!.getTime())
@@ -164,10 +168,7 @@ export async function overviewRoutes(app: FastifyInstance) {
         alerts,
         upcomingDeadlines,
         // every project in scope (a manager's own ones), newest activity first, whether or not it has a deadline
-        myProjects: [...projects]
-          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-          .slice(0, 8)
-          .map((p) => ({ id: p.id, name: p.name, status: p.status, priority: p.priority, progress: p.progress, myRole: p.members.find((m) => m.userId === userId)?.role ?? null })),
+        myProjects: myProjectRows,
         recentActivity: audit.map((a) => ({
           id: a.id,
           action: ACTION_LABELS[a.action] ?? a.action,
@@ -212,7 +213,15 @@ export async function overviewRoutes(app: FastifyInstance) {
       where: { userId: request.userId! },
       include: { project: { select: { id: true, name: true, status: true, progress: true, priority: true, expectedCompletionDate: true } } },
     });
-    return reply.send(list(memberships.map((m) => ({ ...m.project, role: m.role.charAt(0) + m.role.slice(1).toLowerCase() }))));
+    const ids = memberships.map((m) => m.projectId);
+    const [starts, updates] = await Promise.all([startInfo(app, ids, request.userId!), latestUpdates(app, ids)]);
+    return reply.send(list(memberships.map((m) => ({
+      ...m.project,
+      role: m.role.charAt(0) + m.role.slice(1).toLowerCase(),
+      startInfo: starts.get(m.projectId) ?? null,
+      lastUpdate: updates.get(m.projectId) ?? null,
+      mustStart: m.role !== 'VIEWER' && !m.acceptedAt,
+    }))));
   });
 
   app.get('/assignments/kt-reports', async (request, reply) => {

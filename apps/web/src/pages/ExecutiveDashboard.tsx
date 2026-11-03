@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { ProjectStartPanel } from '@/components/ProjectStartPanel';
 import { executiveDashboardApi } from '@/lib/api';
 import { MetricCard } from '@/components/charts/MetricCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +45,8 @@ export function ExecutiveDashboard() {
     },
   });
 
+  const { user: me } = useAuth(); // hooks stay above every early return
+
   if (isLoading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -70,7 +73,6 @@ export function ExecutiveDashboard() {
   const alerts = metricsData?.data?.alerts;
   const upcomingDeadlines = metricsData?.data?.upcomingDeadlines;
   const myProjects: any[] = metricsData?.data?.myProjects ?? [];
-  const { user: me } = useAuth();
   const isManagerView = me?.role === 'MANAGER';
   const recentActivity = metricsData?.data?.recentActivity;
 
@@ -387,6 +389,7 @@ export function ExecutiveDashboard() {
               <div className="min-w-0">
                 <p className="truncate font-medium text-dbi-textPrimary">{project.name}</p>
                 <p className="text-xs text-dbi-textSecondary">{String(project.status).replace(/_/g, ' ')}{project.myRole ? ` · you: ${String(project.myRole).toLowerCase()}` : ''}</p>
+                <ProjectStartPanel projectId={project.id} info={project.startInfo} last={project.lastUpdate} compact />
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <Badge className={getPriorityColor(project.priority)}>{project.priority}</Badge>

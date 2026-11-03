@@ -259,6 +259,7 @@ model ProjectMember {
   @@index([projectId])
   @@index([userId])
   @@map("project_members")
+  acceptedAt DateTime? // when this person pressed "Start project"
 }
 
 enum ProjectMemberRole {
@@ -815,6 +816,7 @@ model Notification {
 }
 
 enum NotificationType {
+  PROJECT_STARTED
   PROJECT_DELETE_REQUESTED
   PROJECT_DELETE_DECIDED
   DOCUMENT_CHANGED

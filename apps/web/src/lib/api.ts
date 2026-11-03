@@ -523,6 +523,7 @@ const mockDashboardApi = {
 };
 
 const mockProjectsApi = {
+  start: async (_id: string) => createMockResponse({ data: { alreadyStarted: false } }),
   list: async (params?: Record<string, string>) => {
     let items = [...mockProjects.items];
     if (params?.status) {
@@ -1061,6 +1062,7 @@ export const projectsApi = MOCK_MODE ? mockProjectsApi : {
     return { ...res, data: res.data?.data ?? res.data };
   },
   create: (data: any) => api.post('/v1/projects', data),
+  start: (id: string) => api.post(`/v1/projects/${id}/start`),
   update: (id: string, data: any) => api.patch(`/v1/projects/${id}`, data),
   delete: (id: string) => api.delete(`/v1/projects/${id}`),
   getMembers: (projectId: string) => api.get(`/v1/projects/${projectId}/members`),

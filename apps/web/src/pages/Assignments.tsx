@@ -4,13 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Filter, Calendar, AlertTriangle, Clock, FileText, CheckCircle, ChevronRight, Shield, Activity } from 'lucide-react';
+import { Plus, Filter, Calendar, AlertTriangle, Clock, FileText, CheckCircle, ChevronRight, Shield, Activity, FolderKanban } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { formatDate } from '@/lib/utils';
 import { assignmentsApi, projectsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDialog } from '@/components/TaskDialog';
 import { DeleteApprovalsPanel } from '@/components/DeleteApprovalsPanel';
 import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
+import { ProjectStartPanel } from '@/components/ProjectStartPanel';
 
 export function Assignments() {
   const queryClient = useQueryClient();
@@ -20,6 +22,11 @@ export function Assignments() {
     queryKey: ['projects-for-task'],
     queryFn: () => projectsApi.list({ limit: '100' }),
   });
+  const { data: myProjectsData } = useQuery({
+    queryKey: ['assignments-projects'],
+    queryFn: () => assignmentsApi.getMyProjects(),
+  });
+
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
     queryKey: ['assignments-tasks'],
     queryFn: () => assignmentsApi.getMyTasks(),
@@ -46,6 +53,9 @@ export function Assignments() {
   });
 
   const tasks = tasksData?.data?.items || [];
+  // not yet started by me first
+  const myProjects: any[] = [...(myProjectsData?.data?.items || [])].sort((a: any, b: any) => Number(b.mustStart) - Number(a.mustStart));
+  const toStart = myProjects.filter((p) => p.mustStart).length;
 
   const getPriorityBadgeVariant = (priority: string) => {
     switch (priority) {
@@ -119,6 +129,34 @@ export function Assignments() {
 
       <DeleteApprovalsPanel />
       <ProjectDeleteApprovals />
+
+      {/* The projects I am on: the ones I still have to start come first */}
+      {myProjects.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FolderKanban className="h-5 w-5 text-dbi-cyan" /> My Projects ({myProjects.length})
+              {toStart > 0 && <Badge className="bg-dbi-amber/15 text-dbi-amber">{toStart} to start</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {myProjects.map((p: any) => (
+              <div key={p.id} className="space-y-2 rounded-lg bg-dbi-elevated/50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Link to={`/projects/${p.id}`} className="font-medium text-dbi-textPrimary hover:text-dbi-cyan">{p.name}</Link>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{p.role}</Badge>
+                    <Badge variant="outline">{String(p.status).replace(/_/g, ' ')}</Badge>
+                    <span className="w-10 text-right text-xs font-medium text-dbi-textPrimary">{p.progress ?? 0}%</span>
+                  </div>
+                </div>
+                <ProjectStartPanel projectId={p.id} info={p.startInfo} last={p.lastUpdate} compact={!p.mustStart} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
 
       {/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-4">

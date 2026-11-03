@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { latestUpdates, startInfo } from '../services/project-progress.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 
@@ -127,8 +128,13 @@ export async function projectRoutes(app: FastifyInstance) {
       ? (await app.prisma.profile.findMany({ where: { role: 'SUPER_ADMIN', status: 'ACTIVE' }, select: { fullName: true } })).map((a) => a.fullName)
       : [];
 
+    const ids = projects.map((p) => p.id);
+    const [starts, updates] = await Promise.all([startInfo(app, ids, userId), latestUpdates(app, ids)]);
+
     const projectsWithMembers = projects.map(p => ({
       ...p,
+      startInfo: starts.get(p.id) ?? null,
+      lastUpdate: updates.get(p.id) ?? null,
       deleteRequest: (() => {
         const w = waiting.find((x) => x.projectId === p.id);
         return w ? { id: w.id, reason: w.reason, createdAt: w.createdAt, requestedById: w.requestedById, pendingWith: approvers } : null;
@@ -207,7 +213,50 @@ export async function projectRoutes(app: FastifyInstance) {
       });
     }
 
-    return reply.send({ success: true, data: project });
+    const [starts, updates] = await Promise.all([startInfo(app, [projectId], userId), latestUpdates(app, [projectId])]);
+    return reply.send({ success: true, data: { ...project, startInfo: starts.get(projectId) ?? null, lastUpdate: updates.get(projectId) ?? null } });
+  });
+
+  // A person on the project presses "Start project". The first one moves the project to Ongoing.
+  app.post('/:projectId/start', async (request, reply) => {
+    const userId = request.userId!;
+    const { projectId } = request.params as { projectId: string };
+
+    const member = await app.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } }, select: { role: true, acceptedAt: true } });
+    if (!member) return reply.code(403).send({ success: false, error: { code: 'NOT_ON_PROJECT', message: 'You are not on this project' } });
+    if (member.role === 'VIEWER') return reply.code(403).send({ success: false, error: { code: 'READ_ONLY', message: 'Viewers do not start projects' } });
+
+    const project = await app.prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true, status: true, startDate: true, createdById: true } });
+    if (!project) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } });
+
+    const wasStarted = !!member.acceptedAt;
+    if (!wasStarted) {
+      await app.prisma.projectMember.update({ where: { projectId_userId: { projectId, userId } }, data: { acceptedAt: new Date() } });
+      if (project.status === 'NOT_STARTED') {
+        await app.prisma.project.update({ where: { id: projectId }, data: { status: 'ONGOING', startDate: project.startDate ?? new Date() } });
+      }
+      await app.prisma.activityFeed.create({
+        data: { actorId: userId, action: 'START', resourceType: 'project', projectId, details: { text: 'started the project' }, ipAddress: request.ip, userAgent: request.headers['user-agent'] },
+      });
+    }
+
+    const info = (await startInfo(app, [projectId], userId)).get(projectId)!;
+    if (!wasStarted) {
+      // tell the owner, the leads and whoever created the project
+      const leads = await app.prisma.projectMember.findMany({ where: { projectId, role: { in: ['OWNER', 'LEAD'] }, userId: { not: userId } }, select: { userId: true } });
+      const targets = [...new Set([...leads.map((l) => l.userId), ...(project.createdById !== userId ? [project.createdById] : [])])];
+      await app.prisma.notification.createMany({
+        data: targets.map((t) => ({
+          userId: t,
+          type: 'PROJECT_STARTED' as const,
+          title: 'Project started',
+          message: `${request.user!.fullName} started "${project.name}" (${info.started} of ${info.total} have started)`,
+          resourceType: 'project',
+          resourceId: projectId,
+        })),
+      });
+    }
+    return reply.send({ success: true, data: { alreadyStarted: wasStarted, startInfo: info } });
   });
 
   // Create project
@@ -273,7 +322,7 @@ export async function projectRoutes(app: FastifyInstance) {
       if (data.managerId) roles.set(data.managerId, 'LEAD');
       roles.set(data.ownerId, 'OWNER');
       for (const [memberId, role] of roles) {
-        await tx.projectMember.create({ data: { projectId: newProject.id, userId: memberId, role, assignedBy: userId } });
+        await tx.projectMember.create({ data: { projectId: newProject.id, userId: memberId, role, assignedBy: userId, acceptedAt: memberId === userId ? new Date() : null } });
       }
 
       return newProject;
