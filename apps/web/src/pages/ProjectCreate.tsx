@@ -22,6 +22,7 @@ export function ProjectCreate() {
     description: '',
     category: '',
     ownerId: '',
+    managerId: 'none',
     startDate: '',
     expectedCompletionDate: '',
     priority: 'MEDIUM',
@@ -36,6 +37,11 @@ export function ProjectCreate() {
   });
 
   const users = usersData?.data?.items || [];
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const toggleMember = (id: string) => setMemberIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  // the owner and the manager are on the project anyway, so they are not listed again as team members
+  const pickable = users.filter((u: any) => u.id !== formData.ownerId && u.id !== formData.managerId && `${u.fullName} ${u.email}`.toLowerCase().includes(memberSearch.toLowerCase()));
 
   const createMutation = useMutation({
     mutationFn: (data: any) => projectsApi.create(data),
@@ -57,6 +63,8 @@ export function ProjectCreate() {
       expectedCompletionDate: formData.expectedCompletionDate || null,
       budget: formData.budget ? parseFloat(formData.budget) : null,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+      managerId: formData.managerId !== 'none' ? formData.managerId : null,
+      memberIds: memberIds.filter((id) => id !== formData.ownerId && id !== formData.managerId),
     };
     createMutation.mutate(payload);
   };
@@ -129,7 +137,7 @@ export function ProjectCreate() {
               </div>
 
               <div>
-                <Label htmlFor="ownerId">Project Owner *</Label>
+                <Label htmlFor="ownerId">Project Owner (Lead) *</Label>
                 <Select value={formData.ownerId} onValueChange={v => setFormData(prev => ({ ...prev, ownerId: v }))}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select owner" />
@@ -140,6 +148,37 @@ export function ProjectCreate() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="managerId">Manager</Label>
+                <Select value={formData.managerId} onValueChange={v => setFormData(prev => ({ ...prev, managerId: v }))}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No manager</SelectItem>
+                    {users.filter((u: any) => u.id !== formData.ownerId).map((u: any) => (
+                      <SelectItem key={u.id} value={u.id}>{u.fullName} ({u.email})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-dbi-textSecondary">The project also shows on the manager's dashboard.</p>
+              </div>
+
+              <div className="md:col-span-2">
+                <Label htmlFor="memberSearch">Team members ({memberIds.length} selected)</Label>
+                <Input id="memberSearch" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} placeholder="Search people..." className="mt-1" />
+                <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-md border border-dbi-border p-2">
+                  {pickable.length === 0 && <p className="p-2 text-sm text-dbi-textSecondary">No one to add.</p>}
+                  {pickable.map((u: any) => (
+                    <label key={u.id} className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5 hover:bg-dbi-elevated">
+                      <input type="checkbox" className="h-4 w-4" checked={memberIds.includes(u.id)} onChange={() => toggleMember(u.id)} />
+                      <span className="text-sm text-dbi-textPrimary">{u.fullName} <span className="text-dbi-textSecondary">({u.email})</span></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-dbi-textSecondary">Choose one or many. You can add or remove people later from the project's Team tab.</p>
               </div>
 
               <div>

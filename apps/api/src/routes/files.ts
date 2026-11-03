@@ -45,7 +45,7 @@ export async function fileRoutes(app: FastifyInstance) {
       try {
         const chunks: Buffer[] = [];
         for await (const c of storage.openRead(payload.k)) chunks.push(c as Buffer);
-        const marked = await watermarkPdf(Buffer.concat(chunks), payload.w);
+        const marked = await watermarkPdf(Buffer.concat(chunks), payload.w, payload.u);
         reply.header('Content-Length', marked.length);
         return reply.send(marked);
       } catch {

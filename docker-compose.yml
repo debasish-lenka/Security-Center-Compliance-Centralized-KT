@@ -39,6 +39,7 @@ services:
       STORAGE_DIR: /data/Documents
       BACKUP_DIR: /data/backups
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-1000}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}   # time zone printed on PDFs (author name, date and time)
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin@123}
     volumes:
       - ./Documents:/data/Documents   # uploaded files appear in <project>/Documents on the host

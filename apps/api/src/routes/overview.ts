@@ -52,8 +52,8 @@ export async function overviewRoutes(app: FastifyInstance) {
       app.prisma.project.findMany({
         where: projectWhere,
         select: {
-          id: true, name: true, status: true, priority: true, progress: true, expectedCompletionDate: true,
-          members: { select: { userId: true } },
+          id: true, name: true, status: true, priority: true, progress: true, expectedCompletionDate: true, updatedAt: true,
+          members: { select: { userId: true, role: true } },
         },
       }),
       app.prisma.complianceControl.findMany({ where: controlWhere, select: { id: true, category: true, status: true } }),
@@ -163,6 +163,11 @@ export async function overviewRoutes(app: FastifyInstance) {
         charts: { healthTrend, riskHeatmap, compliancePosture, resourceAllocation, budgetTracking: [] },
         alerts,
         upcomingDeadlines,
+        // every project in scope (a manager's own ones), newest activity first, whether or not it has a deadline
+        myProjects: [...projects]
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+          .slice(0, 8)
+          .map((p) => ({ id: p.id, name: p.name, status: p.status, priority: p.priority, progress: p.progress, myRole: p.members.find((m) => m.userId === userId)?.role ?? null })),
         recentActivity: audit.map((a) => ({
           id: a.id,
           action: ACTION_LABELS[a.action] ?? a.action,

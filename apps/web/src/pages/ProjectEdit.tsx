@@ -222,7 +222,7 @@ export function ProjectEdit() {
               </div>
 
               <div>
-                <Label htmlFor="ownerId">Project Owner *</Label>
+                <Label htmlFor="ownerId">Project Owner (Lead) *</Label>
                 <Select value={formData.ownerId} onValueChange={v => setFormData(prev => ({ ...prev, ownerId: v }))}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select owner" />

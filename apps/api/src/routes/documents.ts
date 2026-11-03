@@ -4,6 +4,7 @@ import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 import { recycleDocument } from '../services/recycle-bin.js';
 import { createNotificationService } from '../services/notifications.js';
+import { formatWhen } from '../services/watermark.js';
 import { adminReasonError, describeChanges, diffFields, tellSuperAdmins } from '../services/document-oversight.js';
 
 const UploadDocumentSchema = z.object({
@@ -98,8 +99,14 @@ async function checkProjectAccess(app: FastifyInstance, userId: string, userRole
 // Text stamped on a PDF for whoever opens it: who, when, and which document
 async function stampFor(app: FastifyInstance, userId: string, docName: string): Promise<string> {
   const u = await app.prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true, email: true } });
-  const when = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const when = formatWhen(new Date());
   return `CONFIDENTIAL - ${u?.fullName ?? 'User'} (${u?.email ?? userId}) - ${when} - ${docName}`.slice(0, 220);
+}
+
+// "Uploaded by NAME on 03/11/2026 15:09 GMT+5:30": printed under every page of the PDF
+async function uploadNote(app: FastifyInstance, by: { uploadedById: string; createdAt: Date }): Promise<string> {
+  const u = await app.prisma.profile.findUnique({ where: { id: by.uploadedById }, select: { fullName: true } });
+  return `Uploaded by ${u?.fullName ?? 'Unknown'} on ${formatWhen(by.createdAt)}`;
 }
 
 async function checkDocumentAccess(app: FastifyInstance, userId: string, userRole: string, documentId: string) {
@@ -566,7 +573,7 @@ export async function documentRoutes(app: FastifyInstance) {
     });
     await auditLogger.logResource('DOWNLOAD', userId, 'document', documentId, { name: document.name }, request.ip, request.headers['user-agent']);
 
-    return reply.redirect(await storage.getDownloadUrl(document.storageKey, document.originalName, 60, await stampFor(app, userId, document.name)));
+    return reply.redirect(await storage.getDownloadUrl(document.storageKey, document.originalName, 60, await stampFor(app, userId, document.name), await uploadNote(app, document)));
   });
 
   // Get download URL
@@ -585,7 +592,7 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
     }
 
-    const downloadUrl = await storage.getDownloadUrl(document.storageKey, document.originalName, 300, await stampFor(app, userId, document.name)); // 5 minutes
+    const downloadUrl = await storage.getDownloadUrl(document.storageKey, document.originalName, 300, await stampFor(app, userId, document.name), await uploadNote(app, document)); // 5 minutes
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
@@ -613,7 +620,7 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
     }
 
-    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300, await stampFor(app, userId, document.name)); // 5 minutes
+    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300, await stampFor(app, userId, document.name), await uploadNote(app, document)); // 5 minutes
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
@@ -869,7 +876,7 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Version not found' } });
     }
 
-    const downloadUrl = await storage.getDownloadUrl(version.storageKey, `v${version.version}-${documentId}`, 300, await stampFor(app, userId, `${documentId} v${version.version}`));
+    const downloadUrl = await storage.getDownloadUrl(version.storageKey, `v${version.version}-${documentId}`, 300, await stampFor(app, userId, `${documentId} v${version.version}`), await uploadNote(app, version));
 
     // Log access event
     await app.prisma.documentAccessEvent.create({
@@ -1303,7 +1310,7 @@ export async function documentRoutes(app: FastifyInstance) {
     }
 
     // Generate preview URL with watermark
-    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300, await stampFor(app, userId, document.name));
+    const previewUrl = await storage.getPreviewUrl(document.storageKey, 300, await stampFor(app, userId, document.name), await uploadNote(app, document));
 
     // Log access event
     await app.prisma.documentAccessEvent.create({

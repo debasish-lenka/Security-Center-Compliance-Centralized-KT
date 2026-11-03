@@ -22,6 +22,9 @@ const EnvSchema = z.object({
   BACKUP_DIR: z.string().default('./backups'),
   PG_DUMP_PATH: z.string().default('pg_dump'),
 
+  // Time zone used for the dates and times printed on PDFs (e.g. Asia/Kolkata)
+  APP_TIMEZONE: z.string().default('UTC'),
+
   // true only when served over HTTPS (Secure cookies are dropped on plain HTTP)
   COOKIE_SECURE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
 

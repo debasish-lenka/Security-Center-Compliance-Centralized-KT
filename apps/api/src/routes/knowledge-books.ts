@@ -1,4 +1,7 @@
 import PDFDocument from 'pdfkit';
+import { extname } from 'path';
+import { PDFDocument as PdfLib, StandardFonts, rgb } from 'pdf-lib';
+import { formatWhen, latin } from '../services/watermark.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
@@ -345,7 +348,7 @@ async function generateKnowledgeBookAsync(
     });
 
     // Generate PDF content
-    const pdfBuffer = await generatePDF(project, documents, config);
+    const pdfBuffer = await generatePDF(project, documents, config, storage);
 
     // Upload to storage
     const storageKey = storage.generateKey(`${project.name}-knowledge-book-${Date.now()}.pdf`, project.id);
@@ -425,8 +428,10 @@ async function generateKnowledgeBookAsync(
   }
 }
 
-// Builds the knowledge book as a real PDF: cover page, table of contents, one section per document
-async function generatePDF(project: any, documents: any[], config: any): Promise<Buffer> {
+// Builds the knowledge book as a real PDF: cover page, table of contents, one section per document,
+// followed by the real pages of every PDF document. Each page carries the name, date and time of the
+// person who made it at the bottom.
+async function generatePDF(project: any, documents: any[], config: any, storage: ReturnType<typeof getStorageService>): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 56, bufferPages: true, info: { Title: config.title, Author: 'DBI Security Center' } });
   const chunks: Buffer[] = [];
   doc.on('data', (c: Buffer) => chunks.push(c));
@@ -460,8 +465,10 @@ async function generatePDF(project: any, documents: any[], config: any): Promise
   });
 
   // One section per document (metadata; the files themselves stay in the Document Vault)
+  const sectionPage: number[] = [];
   documents.forEach((d, i) => {
     doc.addPage();
+    sectionPage.push(doc.bufferedPageRange().count - 1);
     doc.fillColor(cyan).fontSize(10).font('Helvetica-Bold').text(`SECTION ${i + 1}`);
     doc.moveDown(0.3).fillColor('#0f172a').fontSize(18).text(d.name);
     doc.moveDown(0.8).fontSize(11).font('Helvetica');
@@ -481,12 +488,41 @@ async function generatePDF(project: any, documents: any[], config: any): Promise
     if (description) doc.moveDown(0.8).fillColor('#0f172a').text(String(description), { width: doc.page.width - 112 });
   });
 
-  // Page numbers
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    doc.fontSize(9).fillColor(grey).text(`${i + 1} / ${range.count}`, 56, doc.page.height - 40, { width: doc.page.width - 112, align: 'center' });
-  }
   doc.end();
-  return done;
+  const front = await done;
+
+  // Join the real pages of the PDF documents after the front matter
+  const out = await PdfLib.load(front);
+  const font = await out.embedFont(StandardFonts.Helvetica);
+  const credit = (d: any) => `Prepared by ${d.uploader?.fullName ?? 'Unknown'} - ${formatWhen(new Date(d.createdAt))}`;
+  const marks: (string | null)[] = new Array(out.getPageCount()).fill(null);
+  documents.forEach((d, i) => { marks[sectionPage[i]] = credit(d); });
+
+  for (const d of documents) {
+    if (extname(d.storageKey ?? '').toLowerCase() !== '.pdf' || !(await storage.exists(d.storageKey))) continue;
+    try {
+      const chunks: Buffer[] = [];
+      for await (const c of storage.openRead(d.storageKey)) chunks.push(c as Buffer);
+      const src = await PdfLib.load(Buffer.concat(chunks));
+      for (const page of await out.copyPages(src, src.getPageIndices())) {
+        out.addPage(page);
+        marks.push(credit(d));
+      }
+    } catch {
+      // a damaged PDF cannot be merged; its section page still lists it
+    }
+  }
+
+  const total = out.getPageCount();
+  out.getPages().forEach((page, i) => {
+    const { width } = page.getSize();
+    const mark = marks[i];
+    if (mark) {
+      const t = latin(mark);
+      page.drawText(t, { x: Math.max(8, (width - font.widthOfTextAtSize(t, 8)) / 2), y: 24, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+    }
+    const n = `${i + 1} / ${total}`;
+    page.drawText(n, { x: Math.max(8, (width - font.widthOfTextAtSize(n, 8)) / 2), y: 12, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+  });
+  return Buffer.from(await out.save());
 }

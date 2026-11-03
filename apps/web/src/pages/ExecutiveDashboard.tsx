@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { executiveDashboardApi } from '@/lib/api';
 import { MetricCard } from '@/components/charts/MetricCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -66,6 +68,9 @@ export function ExecutiveDashboard() {
   const charts = metricsData?.data?.charts;
   const alerts = metricsData?.data?.alerts;
   const upcomingDeadlines = metricsData?.data?.upcomingDeadlines;
+  const myProjects: any[] = metricsData?.data?.myProjects ?? [];
+  const { user: me } = useAuth();
+  const isManagerView = me?.role === 'MANAGER';
   const recentActivity = metricsData?.data?.recentActivity;
 
   const getHealthColor = (score: number) => {
@@ -363,6 +368,32 @@ export function ExecutiveDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Projects in scope: for a manager these are the projects they were added to */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart2 className="h-5 w-5 text-dbi-cyan" />
+            {isManagerView ? 'My Projects' : 'Projects'}
+          </CardTitle>
+          <Link to="/projects" className="text-sm text-dbi-cyan hover:underline">View all</Link>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {myProjects.length === 0 && <p className="py-3 text-center text-sm text-dbi-textSecondary">No projects yet</p>}
+          {myProjects.map((project: any) => (
+            <Link key={project.id} to={`/projects/${project.id}`} className="flex items-center justify-between gap-3 rounded-lg p-3 transition-colors hover:bg-dbi-elevated">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-dbi-textPrimary">{project.name}</p>
+                <p className="text-xs text-dbi-textSecondary">{String(project.status).replace(/_/g, ' ')}{project.myRole ? ` · you: ${String(project.myRole).toLowerCase()}` : ''}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <Badge className={getPriorityColor(project.priority)}>{project.priority}</Badge>
+                <span className="w-10 text-right text-xs font-medium text-dbi-textPrimary">{project.progress ?? 0}%</span>
+              </div>
+            </Link>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* Upcoming Deadlines & Recent Activity */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

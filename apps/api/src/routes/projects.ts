@@ -8,6 +8,7 @@ const CreateProjectSchema = z.object({
   description: z.string().optional().nullable(),
   category: z.string().max(100).optional().nullable(),
   ownerId: z.string().uuid(),
+  managerId: z.string().uuid().optional().nullable(), // the project shows on this person's dashboard too
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   expectedCompletionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
@@ -221,12 +222,13 @@ export async function projectRoutes(app: FastifyInstance) {
       });
     }
 
-    // Verify members exist
-    if (data.memberIds.length > 0) {
+    // Verify members (and the manager) exist
+    const wanted = [...new Set([...data.memberIds, ...(data.managerId ? [data.managerId] : [])])];
+    if (wanted.length > 0) {
       const members = await app.prisma.profile.findMany({
-        where: { id: { in: data.memberIds } },
+        where: { id: { in: wanted } },
       });
-      if (members.length !== data.memberIds.length) {
+      if (members.length !== wanted.length) {
         return reply.code(400).send({
           success: false,
           error: { code: 'INVALID_MEMBERS', message: 'One or more members not found' },
@@ -250,35 +252,15 @@ export async function projectRoutes(app: FastifyInstance) {
         },
       });
 
-      // Add owner as member
-      await tx.projectMember.create({
-        data: {
-          projectId: newProject.id,
-          userId: data.ownerId,
-          role: 'OWNER',
-          assignedBy: userId,
-        },
-      });
-
-      // The creator stays on the project as its lead when they named someone else as owner
-      if (userId !== data.ownerId) {
-        await tx.projectMember.create({
-          data: { projectId: newProject.id, userId, role: 'LEAD', assignedBy: userId },
-        });
-      }
-
-      // Add other members
-      for (const memberId of data.memberIds) {
-        if (memberId !== data.ownerId && memberId !== userId) {
-          await tx.projectMember.create({
-            data: {
-              projectId: newProject.id,
-              userId: memberId,
-              role: 'CONTRIBUTOR',
-              assignedBy: userId,
-            },
-          });
-        }
+      // One membership per person; the strongest role wins: owner (the project lead) > manager / creator > contributor
+      const roles = new Map<string, 'OWNER' | 'LEAD' | 'CONTRIBUTOR'>();
+      for (const id of data.memberIds) roles.set(id, 'CONTRIBUTOR');
+      // the creator stays on the project as lead when someone else is named owner
+      if (userId !== data.ownerId) roles.set(userId, 'LEAD');
+      if (data.managerId) roles.set(data.managerId, 'LEAD');
+      roles.set(data.ownerId, 'OWNER');
+      for (const [memberId, role] of roles) {
+        await tx.projectMember.create({ data: { projectId: newProject.id, userId: memberId, role, assignedBy: userId } });
       }
 
       return newProject;
@@ -288,7 +270,7 @@ export async function projectRoutes(app: FastifyInstance) {
 
     // Notify assigned members
     const notificationService = (await import('../services/notifications.js')).createNotificationService(app);
-    const allMemberIds = [data.ownerId, ...data.memberIds.filter(id => id !== data.ownerId)];
+    const allMemberIds = [...new Set([data.ownerId, ...(data.managerId ? [data.managerId] : []), ...data.memberIds])];
     for (const memberId of allMemberIds) {
       if (memberId !== userId) {
         await notificationService.notifyProjectAssigned(memberId, project.id, data.name);
