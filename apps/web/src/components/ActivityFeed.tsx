@@ -62,7 +62,7 @@ export function ActivityFeed({ projectId, userId, documentId }: ActivityFeedProp
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['activity-feed', documentId, projectId, userId, timeRange, actionFilter, resourceFilter, severityFilter, projectFilter, userFilter, search, currentPage],
     queryFn: () => auditLogsApi.getActivityFeed(params),
-    refetchInterval: !paused ? 5000 : false,
+    refetchInterval: !paused ? 15000 : false,
     refetchOnWindowFocus: !paused,
   });
 

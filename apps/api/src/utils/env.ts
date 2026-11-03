@@ -33,7 +33,8 @@ const EnvSchema = z.object({
 
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
 
-  RATE_LIMIT_MAX: z.coerce.number().default(100),
+  // per IP per window; a dashboard page alone makes dozens of calls. Login and 2FA have their own strict limits.
+  RATE_LIMIT_MAX: z.coerce.number().default(1000),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
 
   ENCRYPTION_KEY: z.string().length(32),
