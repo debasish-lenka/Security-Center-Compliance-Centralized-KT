@@ -444,7 +444,15 @@ export async function taskRoutes(app: FastifyInstance) {
     const seen = isAdminRole(request.user!.role) || isLeadRole(request.projectRole) || task.assigneeId === me || task.reporterId === me;
     if (!seen) return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
     const rows = await app.prisma.taskReview.findMany({ where: { taskId }, orderBy: { createdAt: 'asc' } });
+    // A work session pointed to as proof keeps changing after the task was submitted (the night check reads its
+    // screenshots), so the verifier sees its CURRENT state; the submitted snapshot is the fallback if it is gone.
+    const sessionIds = [...new Set(rows.flatMap((r) => ((r.evidence as { type: string; id: string }[] | null) ?? []).filter((e) => e.type === 'SESSION').map((e) => e.id)))];
+    const live = new Map((sessionIds.length ? await app.prisma.workSession.findMany({ where: { id: { in: sessionIds } }, include: { _count: { select: { entries: { where: { kind: 'SHOT' } } } } } }) : []).map((s) => [s.id, s]));
+    const freshen = (e: any) => {
+      const s = e?.type === 'SESSION' ? live.get(e.id) : null;
+      return s ? { ...e, minutes: minutesBetween(s.startedAt, s.endedAt), evidence: evidenceOf(s, s._count.entries), toolCheck: s.toolCheck, ocrSeen: s.ocrSeen, ocrChecked: s.ocrChecked, shots: s._count.entries } : e;
+    };
     const names = new Map((await app.prisma.profile.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.actorId))] } }, select: { id: true, fullName: true } })).map((p) => [p.id, p.fullName]));
-    return reply.send({ success: true, data: { items: rows.map((r) => ({ id: r.id, kind: r.kind, note: r.note, evidence: r.evidence ?? [], selfVerified: r.selfVerified, createdAt: r.createdAt, by: names.get(r.actorId) ?? 'Unknown' })) } });
+    return reply.send({ success: true, data: { items: rows.map((r) => ({ id: r.id, kind: r.kind, note: r.note, evidence: ((r.evidence as any[] | null) ?? []).map(freshen), selfVerified: r.selfVerified, createdAt: r.createdAt, by: names.get(r.actorId) ?? 'Unknown' })) } });
   });
 }

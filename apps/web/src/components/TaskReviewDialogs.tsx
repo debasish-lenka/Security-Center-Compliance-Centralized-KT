@@ -17,8 +17,10 @@ const EVIDENCE: Record<string, { label: string; cls: string }> = {
   PARTIAL: { label: 'Partial evidence', cls: 'bg-dbi-warning/20 text-dbi-warning' },
   NONE: { label: 'No evidence', cls: 'bg-dbi-critical/20 text-dbi-critical' },
 };
-const toolText = (s: { toolCheck: string | null }) =>
-  s.toolCheck === 'SEEN' ? 'Tool seen' : s.toolCheck === 'LOW' ? 'Tool rarely seen' : s.toolCheck === 'NOT_SEEN' ? 'Tool NOT seen' : s.toolCheck === 'NO_LINK' ? 'No tool set' : 'Not checked yet';
+const toolText = (s: { toolCheck: string | null; ocrSeen?: number; ocrChecked?: number }) => {
+  const n = s.ocrChecked ? ` (${s.ocrSeen ?? 0}/${s.ocrChecked})` : '';
+  return s.toolCheck === 'SEEN' ? `Tool seen${n}` : s.toolCheck === 'LOW' ? `Tool rarely seen${n}` : s.toolCheck === 'NOT_SEEN' ? `Tool NOT seen${n}` : s.toolCheck === 'NO_LINK' ? 'No tool set' : 'Not checked yet';
+};
 
 // One piece of proof, as the person pointed to it when submitting
 export function EvidenceLine({ projectId, e }: { projectId: string; e: any }) {
