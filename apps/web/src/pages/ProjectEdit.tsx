@@ -87,6 +87,7 @@ export function ProjectEdit() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['work-state', id] }); // the Work Log buttons follow the new work links
       toast({ title: 'Success', description: 'Project updated successfully' });
       navigate(`/projects/${id}`);
     },

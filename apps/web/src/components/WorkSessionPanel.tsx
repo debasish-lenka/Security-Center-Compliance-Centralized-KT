@@ -40,7 +40,7 @@ const EvidenceBadge = ({ level }: { level: string }) => { const e = EVIDENCE[lev
 
 export function WorkSessionPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
-  const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
+  const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
   const sessionsQ = useQuery({ queryKey: ['work-sessions', projectId], queryFn: async () => (await workApi.sessions(projectId)).data.data, refetchInterval: 20_000 }); // the table follows running sessions
   const state = stateQ.data;
   const active = state?.active ?? null;
@@ -427,6 +427,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
               </table>
             </div>
           )}
+          <p className="mt-2 text-xs text-dbi-textSecondary"><b>Evidence</b>: how well the screen backs the session (Full = the whole screen was shared the whole time; Partial = sharing was cut or only a window was shared; No evidence = never shared). <b>Tool on screen</b>: how many screenshots show the tool's web address, read at night (a hint, not proof). The numbers in brackets are screenshots that show it / screenshots read.</p>
           <p className="mt-2 text-xs text-dbi-textSecondary">Screenshots are deleted after the retention period; the notes and the generated KT stay. Documents made here are in the <Link className="underline" to={`/documents?projectId=${projectId}`}>Document Vault</Link>.</p>
         </CardContent>
       </Card>
