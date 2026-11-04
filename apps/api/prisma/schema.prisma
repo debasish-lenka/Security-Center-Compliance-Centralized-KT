@@ -857,6 +857,7 @@ model Notification {
 }
 
 enum NotificationType {
+  WORK_STALLED
   PROJECT_STARTED
   PROJECT_DELETE_REQUESTED
   PROJECT_DELETE_DECIDED
@@ -1143,4 +1144,19 @@ model ProjectDeleteRequest {
   @@index([projectId])
   @@index([status])
   @@map("project_delete_requests")
+}
+
+// Reminders for work that is not moving: after how many days with no sign of progress people are reminded,
+// the project lead is told, and the admins are alerted. Set by an admin.
+model ReminderSettings {
+  id                 String    @id @default("default")
+  enabled            Boolean   @default(true)
+  stalledAfterDays   Int       @default(7) // no progress on an assigned task for this long: the person is reminded and the lead is told
+  notStartedAfterDays Int      @default(7) // assigned to a project but never pressed "Start project" for this long
+  escalateAfterDays  Int       @default(7) // this many days after that, the admins are alerted too
+  lastRunAt          DateTime?
+  lastSummary        String?
+  updatedAt          DateTime  @updatedAt
+
+  @@map("reminder_settings")
 }

@@ -31,6 +31,7 @@ const Activate = lazy(() => import('@/pages/Activate').then((m) => ({ default: m
 const UserDetail = lazy(() => import('@/pages/UserDetail').then((m) => ({ default: m.UserDetail })));
 const UserEdit = lazy(() => import('@/pages/UserEdit').then((m) => ({ default: m.UserEdit })));
 const Backups = lazy(() => import('@/pages/Backups').then((m) => ({ default: m.Backups })));
+const Reminders = lazy(() => import('@/pages/Reminders').then((m) => ({ default: m.Reminders })));
 const RecycleBin = lazy(() => import('@/pages/RecycleBin').then((m) => ({ default: m.RecycleBin })));
 const SsoSettings = lazy(() => import('@/pages/SsoSettings').then((m) => ({ default: m.SsoSettings })));
 const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ default: m.MailSettings })));
@@ -158,6 +159,7 @@ function AppRoutes() {
             <Route path="/users/:id" element={<UserDetail />} />
             <Route path="/users/:id/edit" element={<UserEdit />} />
             <Route path="/admin-control-center" element={<AdminControlCenter />} />
+            <Route path="/reminders" element={<Reminders />} />
           </Route>
 
           {/* ADMINISTRATION */}

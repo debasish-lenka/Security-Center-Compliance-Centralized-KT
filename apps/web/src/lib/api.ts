@@ -1695,3 +1695,10 @@ export const workApi = {
   session: (projectId: string, sessionId: string) => api.get(`/v1/projects/${projectId}/work/sessions/${sessionId}`),
   generateKt: (projectId: string) => api.post(`/v1/projects/${projectId}/work/generate-kt`),
 };
+
+// Reminders for work that is not moving (settings are in days; the admin decides)
+export const remindersApi = {
+  get: () => api.get('/v1/admin/reminders'),
+  save: (data: { enabled: boolean; stalledAfterDays: number; notStartedAfterDays: number; escalateAfterDays: number }) => api.put('/v1/admin/reminders', data),
+  runNow: () => api.post('/v1/admin/reminders/run'),
+};
