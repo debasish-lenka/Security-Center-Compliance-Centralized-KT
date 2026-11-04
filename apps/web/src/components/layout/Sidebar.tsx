@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -19,13 +18,13 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen w-64 border-r bg-dbi-sidebar transition-transform duration-300 lg:translate-x-0 lg:transition-all',
+        'fixed left-0 top-0 z-40 h-[100dvh] w-64 border-r bg-dbi-sidebar transition-transform duration-300 lg:translate-x-0 lg:transition-all',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',
         collapsed && 'lg:w-16'
       )}
     >
       <div className="flex h-full flex-col">
-        <div className="flex h-16 items-center justify-between border-b px-4">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b px-4">
           {!collapsed && (
             <Link to="/dashboard" className="flex items-center gap-2">
               <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500">
@@ -45,8 +44,8 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
           </Button>
         </div>
 
-        <ScrollArea className="flex-1">
-          <nav className="flex-1 p-3 space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <nav className="space-y-4 p-3 pb-6">
             {visibleSections.map((section) => (
               <div key={section.label} className="space-y-1">
                 {!collapsed && (
@@ -61,7 +60,7 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
                     onClick={onClose}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors [@media(max-height:760px)]:py-1.5',
                         isActive
                           ? 'bg-dbi-cyan/10 text-dbi-cyan'
                           : 'text-dbi-textSecondary hover:bg-dbi-elevated hover:text-dbi-textPrimary',
@@ -80,9 +79,9 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
               </div>
             ))}
           </nav>
-        </ScrollArea>
+        </div>
 
-        <div className="border-t p-3">
+        <div className="shrink-0 border-t p-3">
           {!collapsed && (
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="h-8 w-8 rounded-full bg-dbi-cyan/20 flex items-center justify-center">
