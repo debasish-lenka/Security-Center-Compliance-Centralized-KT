@@ -25,7 +25,7 @@ interface WorkLink { label: string; url: string }
 
 export function WorkSessionPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
-  const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, refetchOnWindowFocus: true });
+  const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
   const sessionsQ = useQuery({ queryKey: ['work-sessions', projectId], queryFn: async () => (await workApi.sessions(projectId)).data.data });
   const state = stateQ.data;
   const active = state?.active ?? null;
@@ -127,8 +127,10 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
       sendEvent('Started sharing the screen');
       timerRef.current = window.setInterval(look, LOOK_EVERY_MS);
       return true;
-    } catch {
+    } catch (e: any) {
       sendEvent('Screen sharing was not allowed');
+      const why = e?.name === 'NotAllowedError' ? 'The sharing dialog was cancelled or the browser did not allow it.' : e?.name === 'NotFoundError' ? 'There is no screen to share.' : `The browser said: ${e?.name ?? 'unknown error'}.`;
+      toast({ title: 'Screen sharing did not start', description: `${why} Press "Share screen" to try again. Your work is still recorded, but without screenshots.`, variant: 'destructive' });
       return false;
     }
   }, [endShare, look, sendEvent]);
@@ -153,6 +155,8 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
     try {
       const r = await workApi.start(projectId, { linkUrl: link?.url ?? null, linkLabel: link?.label ?? null });
       sessionRef.current = r.data.data.id; // events and pictures need the id before the page has re-drawn
+      await stateQ.refetch(); // show "Running" now, not after the screen-share dialog is answered
+      setBusy(null);
       await startShare();
       refresh();
     } catch (e: any) {
