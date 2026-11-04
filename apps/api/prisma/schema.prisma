@@ -241,6 +241,9 @@ model WorkSession {
   endReason   String?  // STOPPED, IDLE (no sign of life for a while)
   lastSeenAt  DateTime @default(now())
   includedIn  String?  // id of the KT document version that already holds this session's notes and pictures
+  shareStarts Int      @default(0) // how many times screen sharing was started in this session
+  shareStops  Int      @default(0) // how many times it was stopped or refused
+  surface     String?  // what was shared: monitor (whole screen), window or browser (a tab)
   entries     WorkEntry[]
 
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1159,4 +1162,13 @@ model ReminderSettings {
   updatedAt          DateTime  @updatedAt
 
   @@map("reminder_settings")
+}
+
+// How strictly work is recorded. Set by an admin.
+model WorkSettings {
+  id                 String   @id @default("default")
+  requireScreenShare Boolean  @default(true) // work cannot start without sharing the whole screen
+  updatedAt          DateTime @updatedAt
+
+  @@map("work_settings")
 }

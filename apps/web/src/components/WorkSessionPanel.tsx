@@ -23,6 +23,13 @@ const errText = (e: any, fallback: string) => e?.response?.data?.error?.message 
 
 interface WorkLink { label: string; url: string }
 
+const EVIDENCE: Record<string, { label: string; cls: string; hint: string }> = {
+  FULL: { label: 'Full evidence', cls: 'bg-dbi-success/20 text-dbi-success', hint: 'The whole screen was shared the whole time and pictures were taken' },
+  PARTIAL: { label: 'Partial evidence', cls: 'bg-dbi-warning/20 text-dbi-warning', hint: 'Sharing was interrupted, only a window or tab was shared, or no picture was taken' },
+  NONE: { label: 'No evidence', cls: 'bg-dbi-critical/20 text-dbi-critical', hint: 'The screen was never shared' },
+};
+const EvidenceBadge = ({ level }: { level: string }) => { const e = EVIDENCE[level] ?? EVIDENCE.NONE; return <Badge title={e.hint} className={e.cls}>{e.label}</Badge>; };
+
 export function WorkSessionPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
@@ -101,6 +108,11 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
     else if (sinceLast >= SIGN_OF_LIFE_MS) frame('HEARTBEAT');
   }, [frame]);
 
+  const postShare = useCallback((st: 'STARTED' | 'STOPPED' | 'DENIED' | 'REJECTED', surface?: string) => {
+    const sid = sessionRef.current;
+    if (sid) workApi.share(projectId, sid, st, surface ?? null).catch(() => undefined);
+  }, [projectId]);
+
   const endShare = useCallback((announce: boolean) => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
@@ -109,31 +121,55 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
     prevRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setSharing(false);
-    if (announce) sendEvent('Stopped sharing the screen');
-  }, [sendEvent]);
+    if (announce) postShare('STOPPED');
+  }, [postShare]);
 
-  const startShare = useCallback(async () => {
-    if (!navigator.mediaDevices?.getDisplayMedia) { toast({ title: 'Screen sharing is not available in this browser', variant: 'destructive' }); return false; }
+  // Ask the browser for the screen. Only the whole screen is asked for; what the person really chose is checked afterwards.
+  const askScreen = useCallback(async (): Promise<{ stream: MediaStream; surface: string } | null> => {
+    if (!navigator.mediaDevices?.getDisplayMedia) { toast({ title: 'Screen sharing is not available in this browser', variant: 'destructive' }); return null; }
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 2 }, audio: false });
-      streamRef.current = stream;
-      const v = videoRef.current!;
-      v.srcObject = stream;
-      await v.play();
-      stream.getVideoTracks()[0].onended = () => endShare(true); // the person stopped sharing from the browser bar
-      prevRef.current = null;
-      lastShotRef.current = 0;
-      setSharing(true);
-      sendEvent('Started sharing the screen');
-      timerRef.current = window.setInterval(look, LOOK_EVERY_MS);
-      return true;
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 2, displaySurface: 'monitor' }, audio: false,
+        monitorTypeSurfaces: 'include', selfBrowserSurface: 'exclude', surfaceSwitching: 'exclude',
+      } as any);
+      const surface = (stream.getVideoTracks()[0].getSettings() as any).displaySurface ?? 'monitor'; // a browser that does not say: taken as the whole screen
+      return { stream, surface };
     } catch (e: any) {
-      sendEvent('Screen sharing was not allowed');
       const why = e?.name === 'NotAllowedError' ? 'The sharing dialog was cancelled or the browser did not allow it.' : e?.name === 'NotFoundError' ? 'There is no screen to share.' : `The browser said: ${e?.name ?? 'unknown error'}.`;
-      toast({ title: 'Screen sharing did not start', description: `${why} Press "Share screen" to try again. Your work is still recorded, but without screenshots.`, variant: 'destructive' });
+      toast({ title: 'Screen sharing did not start', description: why, variant: 'destructive' });
+      return null;
+    }
+  }, []);
+
+  const notWholeScreen = () => toast({ title: 'Share the whole screen', description: 'A single window or browser tab is not accepted. In the sharing dialog choose "Entire screen" and press Share.', variant: 'destructive' });
+
+  // run the capture on a stream that was already accepted
+  const attach = useCallback(async (stream: MediaStream) => {
+    streamRef.current = stream;
+    const v = videoRef.current!;
+    v.srcObject = stream;
+    await v.play();
+    stream.getVideoTracks()[0].onended = () => endShare(true); // the person stopped sharing from the browser bar
+    prevRef.current = null;
+    lastShotRef.current = 0;
+    setSharing(true);
+    timerRef.current = window.setInterval(look, LOOK_EVERY_MS);
+  }, [endShare, look]);
+
+  // share (again) while a session is running
+  const startShare = useCallback(async (requireWhole: boolean) => {
+    const got = await askScreen();
+    if (!got) { postShare('DENIED'); return false; }
+    if (requireWhole && got.surface !== 'monitor') {
+      got.stream.getTracks().forEach((t) => t.stop());
+      postShare('REJECTED');
+      notWholeScreen();
       return false;
     }
-  }, [endShare, look, sendEvent]);
+    await attach(got.stream);
+    postShare('STARTED', got.surface);
+    return true;
+  }, [askScreen, attach, postShare]);
 
   // a sign of life every minute while a session is open; the clock for the running time
   useEffect(() => {
@@ -153,11 +189,19 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
     if (link) window.open(link.url, '_blank', 'noopener'); // inside the click, so the browser lets it open
     setBusy('start');
     try {
-      const r = await workApi.start(projectId, { linkUrl: link?.url ?? null, linkLabel: link?.label ?? null });
+      const must = !!state?.requireShare;
+      let got: { stream: MediaStream; surface: string } | null = null;
+      if (must) {
+        // no work without the screen: ask first, and only the whole screen is accepted
+        got = await askScreen();
+        if (!got) return;
+        if (got.surface !== 'monitor') { got.stream.getTracks().forEach((t) => t.stop()); notWholeScreen(); return; }
+      }
+      const r = await workApi.start(projectId, { linkUrl: link?.url ?? null, linkLabel: link?.label ?? null, surface: got?.surface ?? null });
       sessionRef.current = r.data.data.id; // events and pictures need the id before the page has re-drawn
       await stateQ.refetch(); // show "Running" now, not after the screen-share dialog is answered
       setBusy(null);
-      await startShare();
+      if (got) await attach(got.stream); else await startShare(false);
       refresh();
     } catch (e: any) {
       toast({ title: 'Could not start', description: errText(e, 'Try again'), variant: 'destructive' });
@@ -266,12 +310,17 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
                   ? <Badge className="bg-dbi-success/20 text-dbi-success">Screen is being shared</Badge>
                   : <Badge className="bg-dbi-warning/20 text-dbi-warning">Screen is not shared</Badge>}
               </div>
+              {!sharing && (
+                <p className="rounded-md border border-dbi-warning/40 bg-dbi-warning/10 p-2 text-sm text-dbi-warning">
+                  Your screen is not being shared, so this work has {active.evidence === 'NONE' ? 'no' : 'only partial'} screen evidence. Press "Share screen" and choose the whole screen.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {links.map((l) => (
                   <Button key={l.url} variant="outline" size="sm" onClick={() => openLink(l)}><ExternalLink className="mr-1 h-4 w-4" />Open {l.label}</Button>
                 ))}
                 {!sharing
-                  ? <Button size="sm" variant="outline" onClick={() => void startShare()}><MonitorUp className="mr-1 h-4 w-4" />Share screen</Button>
+                  ? <Button size="sm" variant="outline" onClick={() => void startShare(!!state?.requireShare)}><MonitorUp className="mr-1 h-4 w-4" />Share screen</Button>
                   : <Button size="sm" variant="outline" onClick={() => endShare(true)}><StopCircle className="mr-1 h-4 w-4" />Stop sharing</Button>}
                 <Button size="sm" variant="outline" onClick={() => (sharing ? frame('MANUAL') : fileRef.current?.click())}><Camera className="mr-1 h-4 w-4" />Add screenshot</Button>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" data-testid="shot-file" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void addPicture(f); }} />
@@ -327,7 +376,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-dbi-border text-left text-xs text-dbi-textSecondary">
-                    <th className="py-2 pr-3">Person</th><th className="pr-3">Started</th><th className="pr-3">Length</th><th className="pr-3">Tool</th><th className="pr-3">Notes</th><th className="pr-3">Pictures</th><th className="pr-3">Status</th><th />
+                    <th className="py-2 pr-3">Person</th><th className="pr-3">Started</th><th className="pr-3">Length</th><th className="pr-3">Tool</th><th className="pr-3">Notes</th><th className="pr-3">Pictures</th><th className="pr-3">Evidence</th><th className="pr-3">Status</th><th />
                   </tr>
                 </thead>
                 <tbody>
@@ -339,6 +388,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
                       <td className="pr-3">{s.linkLabel ?? '-'}</td>
                       <td className="pr-3">{s.notes}</td>
                       <td className="pr-3">{s.shots}</td>
+                      <td className="pr-3"><EvidenceBadge level={s.evidence} /></td>
                       <td className="pr-3">
                         {!s.endedAt ? <Badge className="bg-dbi-success/20 text-dbi-success">Running</Badge>
                           : s.endReason === 'IDLE' ? <Badge className="bg-dbi-warning/20 text-dbi-warning">Ended idle</Badge>
@@ -370,6 +420,7 @@ function SessionDialog({ projectId, sessionId, onClose }: { projectId: string; s
         <DialogHeader>
           <DialogTitle>{s ? `${s.userName ?? 'Work session'} - ${formatDateTimeIST(s.startedAt)}` : 'Work session'}</DialogTitle>
           <DialogDescription>{s ? `${mins(s.minutes)}${s.linkLabel ? ` in ${s.linkLabel}` : ''}. Everything recorded in this session, in order.` : 'Loading...'}</DialogDescription>
+          {s && <div><EvidenceBadge level={s.evidence} /></div>}
         </DialogHeader>
         {q.isLoading && <Loader2 className="mx-auto h-6 w-6 animate-spin" />}
         {s && (

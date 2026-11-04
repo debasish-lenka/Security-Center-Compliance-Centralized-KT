@@ -5,8 +5,19 @@ import { formatWhen, latin, watermarkPdf } from './watermark.js';
 // Every "Generate KT" adds a new version of the same document.
 
 export interface KtEntry { kind: string; text: string | null; reason: string | null; createdAt: Date; image?: Buffer | null }
+export type Evidence = 'FULL' | 'PARTIAL' | 'NONE';
+
+// How well a session is backed by the screen: the whole screen was shared the whole time and pictures were taken (FULL),
+// sharing was cut, a window / tab was shared, or no picture exists (PARTIAL), or nothing was ever shared (NONE).
+export function evidenceOf(s: { shareStarts: number; shareStops: number; surface: string | null }, shots: number): Evidence {
+  if (s.shareStarts === 0) return 'NONE';
+  if (s.shareStops > 0 || s.surface !== 'monitor' || shots === 0) return 'PARTIAL';
+  return 'FULL';
+}
+export const evidenceText = (e: Evidence) => (e === 'FULL' ? 'Full (whole screen shared, pictures taken)' : e === 'PARTIAL' ? 'Partial (sharing was interrupted, not the whole screen, or no pictures)' : 'None (the screen was never shared)');
+
 export interface KtSession {
-  startedAt: Date; endedAt: Date | null; endReason: string | null; linkLabel: string | null; linkUrl: string | null; entries: KtEntry[];
+  evidence: Evidence; startedAt: Date; endedAt: Date | null; endReason: string | null; linkLabel: string | null; linkUrl: string | null; entries: KtEntry[];
 }
 
 const W = 595, H = 842, M = 48;
@@ -59,6 +70,8 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
   para('Summary', 13, bold);
   para(`${opts.sessions.length} work session${opts.sessions.length === 1 ? '' : 's'}, ${lengthOf(minutes)} in total`, 10);
   para(`${notes} note${notes === 1 ? '' : 's'}, ${shots} screenshot${shots === 1 ? '' : 's'}`, 10);
+  const weak = opts.sessions.filter((s) => s.evidence !== 'FULL').length;
+  if (weak) para(`Screen evidence: ${opts.sessions.length - weak} of ${opts.sessions.length} sessions are fully backed by the screen; ${weak} are not.`, 10, font, red);
   if (shareStops || idle) para(`Attention: screen sharing was stopped ${shareStops} time(s) and ${idle} session(s) ended because there was no sign of activity.`, 10, font, red);
 
   for (const [i, s] of opts.sessions.entries()) {
@@ -66,6 +79,7 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
     para(`Session ${i + 1}`, 15, bold, teal);
     para(`${formatWhen(s.startedAt)}  to  ${s.endedAt ? formatWhen(s.endedAt) : 'still running'}   (${lengthOf(minutesBetween(s.startedAt, s.endedAt))})`, 10, bold);
     if (s.linkUrl) para(`Tool: ${s.linkLabel ? `${s.linkLabel} - ` : ''}${s.linkUrl}`, 9, font, grey);
+    para(`Screen evidence: ${evidenceText(s.evidence)}`, 9, font, s.evidence === 'FULL' ? teal : red);
     if (s.endReason === 'IDLE') para('This session ended by itself: no sign of activity for a while.', 9, font, red);
     y -= 6;
     if (s.entries.length === 0) para('Nothing was written or captured in this session.', 10, font, grey);
@@ -81,7 +95,7 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
         para(`${formatWhen(e.createdAt)}  -  Screenshot${e.reason ? ` (${e.reason.toLowerCase()})` : ''}`, 9, bold, grey);
         if (!e.image) { para('(the picture is no longer stored)', 9, font, grey, 8); continue; }
         try {
-          const img = await pdf.embedJpg(e.image);
+          const img = await pdf.embedJpg(new Uint8Array(e.image)); // a copy: a small Buffer lives in a shared pool and pdf-lib reads the whole pool
           const scale = Math.min((W - 2 * M) / img.width, 300 / img.height, 1.5);
           const w = img.width * scale, h = img.height * scale;
           ensure(h + 14);

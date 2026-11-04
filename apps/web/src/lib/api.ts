@@ -1684,12 +1684,14 @@ export const projectDeleteApi = {
 // Work sessions: start / stop work on a project, notes, screenshots, and the versioned work KT
 export const workApi = {
   state: (projectId: string) => api.get(`/v1/projects/${projectId}/work/state`),
-  start: (projectId: string, body: { linkUrl?: string | null; linkLabel?: string | null }) => api.post(`/v1/projects/${projectId}/work/start`, body),
+  start: (projectId: string, body: { linkUrl?: string | null; linkLabel?: string | null; surface?: string | null }) => api.post(`/v1/projects/${projectId}/work/start`, body),
   heartbeat: (projectId: string, sessionId: string) => api.post(`/v1/projects/${projectId}/work/${sessionId}/heartbeat`),
   note: (projectId: string, sessionId: string, text: string) => api.post(`/v1/projects/${projectId}/work/${sessionId}/note`, { text }),
   event: (projectId: string, sessionId: string, text: string) => api.post(`/v1/projects/${projectId}/work/${sessionId}/event`, { text }),
   shot: (projectId: string, sessionId: string, image: string, reason: 'CHANGE' | 'MANUAL' | 'HEARTBEAT' | 'NOTE' | 'STOP') =>
     api.post(`/v1/projects/${projectId}/work/${sessionId}/shot`, { image, reason }),
+  share: (projectId: string, sessionId: string, state: 'STARTED' | 'STOPPED' | 'DENIED' | 'REJECTED', surface?: string | null) =>
+    api.post(`/v1/projects/${projectId}/work/${sessionId}/share`, { state, surface: surface ?? null }),
   stop: (projectId: string, sessionId: string) => api.post(`/v1/projects/${projectId}/work/${sessionId}/stop`),
   sessions: (projectId: string, userId?: string) => api.get(`/v1/projects/${projectId}/work/sessions`, { params: userId ? { userId } : undefined }),
   session: (projectId: string, sessionId: string) => api.get(`/v1/projects/${projectId}/work/sessions/${sessionId}`),
@@ -1701,4 +1703,6 @@ export const remindersApi = {
   get: () => api.get('/v1/admin/reminders'),
   save: (data: { enabled: boolean; stalledAfterDays: number; notStartedAfterDays: number; escalateAfterDays: number }) => api.put('/v1/admin/reminders', data),
   runNow: () => api.post('/v1/admin/reminders/run'),
+  getWork: () => api.get('/v1/admin/work-settings'),
+  saveWork: (data: { requireScreenShare: boolean }) => api.put('/v1/admin/work-settings', data),
 };

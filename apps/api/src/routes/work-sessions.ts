@@ -5,7 +5,11 @@ import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 import { tellSuperAdmins } from '../services/document-oversight.js';
 import { formatWhen } from '../services/watermark.js';
-import { lengthOf, minutesBetween, workKtPdf } from '../services/work-kt.js';
+import { evidenceOf, lengthOf, minutesBetween, workKtPdf } from '../services/work-kt.js';
+
+export const getWorkSettings = (app: FastifyInstance) => app.prisma.workSettings.upsert({ where: { id: 'default' }, create: { id: 'default' }, update: {} });
+const SURFACE = z.enum(['monitor', 'window', 'browser']);
+const surfaceName = (s: string) => (s === 'monitor' ? 'the whole screen' : s === 'window' ? 'a window' : 'a browser tab');
 
 // Work sessions: a person presses "Start work" on a project, writes notes and (with their permission) shares
 // their screen; the system keeps the notes and a few screenshots, and "Generate KT" turns them into one
@@ -48,7 +52,8 @@ export async function workSessionRoutes(app: FastifyInstance) {
     return out;
   };
 
-  const shape = (s: { id: string; userId: string; linkLabel: string | null; linkUrl: string | null; startedAt: Date; endedAt: Date | null; endReason: string | null; lastSeenAt: Date; includedIn: string | null }, c?: { notes: number; shots: number }, name?: string) => ({
+  const shape = (s: { id: string; userId: string; linkLabel: string | null; linkUrl: string | null; startedAt: Date; endedAt: Date | null; endReason: string | null; lastSeenAt: Date; includedIn: string | null; shareStarts: number; shareStops: number; surface: string | null }, c?: { notes: number; shots: number }, name?: string) => ({
+    shareStarts: s.shareStarts, shareStops: s.shareStops, surface: s.surface, evidence: evidenceOf(s, c?.shots ?? 0),
     id: s.id, userId: s.userId, userName: name, linkLabel: s.linkLabel, linkUrl: s.linkUrl, startedAt: s.startedAt, endedAt: s.endedAt, endReason: s.endReason,
     lastSeenAt: s.lastSeenAt, minutes: minutesBetween(s.startedAt, s.endedAt), notes: c?.notes ?? 0, shots: c?.shots ?? 0, inKt: !!s.includedIn,
   });
@@ -58,10 +63,11 @@ export async function workSessionRoutes(app: FastifyInstance) {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId!;
     await closeStale(projectId);
-    const [project, sessions, pending] = await Promise.all([
+    const [project, sessions, pending, settings] = await Promise.all([
       app.prisma.project.findUnique({ where: { id: projectId }, select: { name: true, workLinks: true } }),
       app.prisma.workSession.findMany({ where: { projectId, userId }, orderBy: { startedAt: 'desc' }, take: 10 }),
       app.prisma.workSession.findMany({ where: { projectId, userId, includedIn: null }, select: { id: true, endedAt: true } }),
+      getWorkSettings(app),
     ]);
     const c = await counts(sessions.map((s) => s.id));
     const pc = await counts(pending.map((s) => s.id));
@@ -72,6 +78,7 @@ export async function workSessionRoutes(app: FastifyInstance) {
     return {
       success: true,
       data: {
+        requireShare: settings.requireScreenShare,
         links: (project?.workLinks as { label: string; url: string }[] | null) ?? [],
         active: active ? { ...shape(active, c.get(active.id)), notesList: activeNotes } : null,
         recent: sessions.map((s) => shape(s, c.get(s.id))),
@@ -81,16 +88,19 @@ export async function workSessionRoutes(app: FastifyInstance) {
   });
 
   app.post('/:projectId/work/start', {
-    schema: { body: z.object({ linkUrl: z.string().max(500).optional().nullable(), linkLabel: z.string().max(60).optional().nullable() }) },
+    schema: { body: z.object({ linkUrl: z.string().max(500).optional().nullable(), linkLabel: z.string().max(60).optional().nullable(), surface: SURFACE.optional().nullable() }) },
   }, async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId!;
-    const { linkUrl, linkLabel } = request.body as { linkUrl?: string | null; linkLabel?: string | null };
+    const { linkUrl, linkLabel, surface } = request.body as { linkUrl?: string | null; linkLabel?: string | null; surface?: string | null };
+    const settings = await getWorkSettings(app);
+    if (settings.requireScreenShare && surface !== 'monitor') return bad(reply, 400, 'SHARE_REQUIRED', 'Share your whole screen to start work');
     await closeStale(projectId);
     const open = await app.prisma.workSession.findFirst({ where: { projectId, userId, endedAt: null } });
     if (open) return bad(reply, 409, 'ALREADY_RUNNING', 'You already have a work session running on this project');
-    const session = await app.prisma.workSession.create({ data: { projectId, userId, linkUrl: linkUrl ?? null, linkLabel: linkLabel ?? null } });
+    const session = await app.prisma.workSession.create({ data: { projectId, userId, linkUrl: linkUrl ?? null, linkLabel: linkLabel ?? null, surface: surface ?? null, shareStarts: surface ? 1 : 0 } });
     await app.prisma.workEntry.create({ data: { sessionId: session.id, kind: 'EVENT', text: linkUrl ? `Started work, opened ${linkLabel ? `${linkLabel} (${linkUrl})` : linkUrl}` : 'Started work' } });
+    if (surface) await app.prisma.workEntry.create({ data: { sessionId: session.id, kind: 'EVENT', text: `Started sharing ${surfaceName(surface)}` } });
     await app.prisma.activityFeed.create({ data: { actorId: userId, action: 'CREATE', resourceType: 'work_session', projectId, details: { text: 'started a work session' }, ipAddress: request.ip, userAgent: request.headers['user-agent'] } });
     await auditLogger.logResource('CREATE', userId, 'work_session', session.id, { projectId, link: linkUrl ?? null }, request.ip, request.headers['user-agent']);
     return reply.code(201).send({ success: true, data: shape(session) });
@@ -115,7 +125,29 @@ export async function workSessionRoutes(app: FastifyInstance) {
     return reply.code(201).send({ success: true, data: { id: e.id, text: e.text, createdAt: e.createdAt } });
   });
 
-  // What happened to the screen sharing (started, stopped by the person): kept so it cannot be hidden
+  // Screen sharing started / stopped / refused: counted on the session and written down, so it cannot be hidden
+  app.post('/:projectId/work/:sessionId/share', {
+    schema: { body: z.object({ state: z.enum(['STARTED', 'STOPPED', 'DENIED', 'REJECTED']), surface: SURFACE.optional().nullable() }) },
+  }, async (request, reply) => {
+    const { projectId, sessionId } = request.params as { projectId: string; sessionId: string };
+    const s = await mine(projectId, sessionId, request.userId!);
+    if (!s) return bad(reply, 404, 'NOT_FOUND', 'Work session not found');
+    if (s.endedAt) return bad(reply, 409, 'ENDED', 'This work session has ended');
+    const { state, surface } = request.body as { state: 'STARTED' | 'STOPPED' | 'DENIED' | 'REJECTED'; surface?: string | null };
+    const settings = await getWorkSettings(app);
+    if (state === 'STARTED' && settings.requireScreenShare && surface !== 'monitor') return bad(reply, 400, 'SHARE_REQUIRED', 'Share your whole screen');
+    const text = { STARTED: `Started sharing ${surfaceName(surface ?? 'monitor')}`, STOPPED: 'Stopped sharing the screen', DENIED: 'Screen sharing was not allowed', REJECTED: 'Shared a window or tab instead of the whole screen (not accepted)' }[state];
+    await app.prisma.workEntry.create({ data: { sessionId: s.id, kind: 'EVENT', text } });
+    await app.prisma.workSession.update({
+      where: { id: s.id },
+      data: state === 'STARTED'
+        ? { shareStarts: { increment: 1 }, surface: s.surface && s.surface !== 'monitor' ? s.surface : (surface ?? s.surface), lastSeenAt: new Date() }
+        : { shareStops: { increment: 1 }, lastSeenAt: new Date() },
+    });
+    return reply.code(201).send({ success: true, data: { ok: true } });
+  });
+
+  // Other events (a tool was opened)
   app.post('/:projectId/work/:sessionId/event', { schema: { body: z.object({ text: z.string().trim().min(1).max(200) }) } }, async (request, reply) => {
     const { projectId, sessionId } = request.params as { projectId: string; sessionId: string };
     const s = await mine(projectId, sessionId, request.userId!);
@@ -222,7 +254,7 @@ export async function workSessionRoutes(app: FastifyInstance) {
         }
         entries.push({ kind: e.kind, text: e.text, reason: e.reason, createdAt: e.createdAt, image });
       }
-      ktSessions.push({ startedAt: s.startedAt, endedAt: s.endedAt, endReason: s.endReason, linkLabel: s.linkLabel, linkUrl: s.linkUrl, entries });
+      ktSessions.push({ evidence: evidenceOf(s, s.entries.filter((e) => e.kind === 'SHOT').length), startedAt: s.startedAt, endedAt: s.endedAt, endReason: s.endReason, linkLabel: s.linkLabel, linkUrl: s.linkUrl, entries });
     }
 
     const name = `Work KT - ${project.name} - ${me.fullName}`;

@@ -16,6 +16,11 @@ const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went 
 // Admin sets after how many days quiet work is flagged (default 7). The check runs about once a day.
 export function Reminders() {
   const qc = useQueryClient();
+  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean } });
+  const setRequire = async (v: boolean) => {
+    try { await remindersApi.saveWork({ requireScreenShare: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'Screen sharing is now required to start work' : 'Screen sharing is now optional' }); }
+    catch (e) { toast({ title: 'Not saved', description: errMsg(e), variant: 'destructive' }); }
+  };
   const q = useQuery({ queryKey: ['reminders'], queryFn: async () => (await remindersApi.get()).data.data as Settings });
   const [form, setForm] = useState<{ enabled: boolean; stalled: string; notStarted: string; escalate: string } | null>(null);
   const [busy, setBusy] = useState<'save' | 'run' | null>(null);
@@ -65,10 +70,23 @@ export function Reminders() {
       <div className="flex items-center gap-3">
         <BellRing className="h-7 w-7 text-dbi-primary" />
         <div>
-          <h1 className="text-3xl font-bold text-dbi-textPrimary">Reminders</h1>
+          <h1 className="text-3xl font-bold text-dbi-textPrimary">Reminders and work recording</h1>
           <p className="text-dbi-textSecondary">What happens when someone's work stops moving</p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Work recording: screen sharing</CardTitle>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="work-require" className="text-sm">{workQ.data?.requireScreenShare ? 'Required' : 'Optional'}</Label>
+            <Switch id="work-require" checked={!!workQ.data?.requireScreenShare} disabled={!workQ.data} onCheckedChange={setRequire} aria-label="Screen sharing required to start work" />
+          </div>
+        </CardHeader>
+        <CardContent className="text-sm text-dbi-textSecondary">
+          When Required, nobody can press Start work in a project's Work Log until they share their whole screen (a single window or tab is not accepted). Work without full screen sharing is marked Partial or No evidence in the work sessions table and in the generated KT.
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
