@@ -1,22 +1,23 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Ban, Check, History, Loader2, Pencil, Plus, Send, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { projectsApi } from '@/lib/api';
+import { projectsApi, taskFlowApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { formatDate, formatDateTimeIST } from '@/lib/utils';
 import { TaskDialog } from '@/components/TaskDialog';
+import { BlockTaskDialog, SubmitTaskDialog, TaskHistoryDialog, VerifyTaskDialog } from '@/components/TaskReviewDialogs';
 
-const STATUSES = [
-  ['TODO', 'To do'],
-  ['IN_PROGRESS', 'In progress'],
-  ['REVIEW', 'In review'],
-  ['BLOCKED', 'Blocked'],
-  ['DONE', 'Done'],
-] as const;
+const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
+  TODO: { label: 'To do', cls: 'bg-slate-500/15 text-slate-400' },
+  IN_PROGRESS: { label: 'In progress', cls: 'bg-dbi-cyan/15 text-dbi-cyan' },
+  REVIEW: { label: 'Waiting for verification', cls: 'bg-dbi-amber/15 text-dbi-amber' },
+  BLOCKED: { label: 'Blocked', cls: 'bg-dbi-critical/15 text-dbi-critical' },
+  DONE: { label: 'Done (verified)', cls: 'bg-dbi-success/20 text-dbi-success' },
+};
 
 const PRIORITY_STYLE: Record<string, string> = {
   LOW: 'bg-slate-500/15 text-slate-400',
@@ -32,6 +33,10 @@ export function ProjectWork({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const [taskOpen, setTaskOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
+  const [submitting, setSubmitting] = useState<any | null>(null);
+  const [verifying, setVerifying] = useState<any | null>(null);
+  const [blocking, setBlocking] = useState<any | null>(null);
+  const [history, setHistory] = useState<any | null>(null);
   const [msName, setMsName] = useState('');
   const [msDue, setMsDue] = useState('');
 
@@ -56,6 +61,11 @@ export function ProjectWork({ projectId }: { projectId: string }) {
     mutationFn: async ({ id, status }: { id: string; status: string }) => { await projectsApi.updateTask(projectId, id, { status }); },
     onSuccess: refreshTasks,
     onError: (e) => toast({ title: 'Could not update task', description: errMsg(e), variant: 'destructive' }),
+  });
+  const unblock = useMutation({
+    mutationFn: async (id: string) => { await taskFlowApi.unblock(projectId, id); },
+    onSuccess: refreshTasks,
+    onError: (e) => toast({ title: 'Could not unblock', description: errMsg(e), variant: 'destructive' }),
   });
   const removeTask = useMutation({
     mutationFn: async (id: string) => { await projectsApi.deleteTask(projectId, id); },
@@ -88,43 +98,68 @@ export function ProjectWork({ projectId }: { projectId: string }) {
           </Button>
         </CardHeader>
         <CardContent>
+          {tasks.filter((t: any) => t.can?.verify).length > 0 && (
+            <p className="mb-3 rounded-md border border-dbi-amber/40 bg-dbi-amber/10 p-2 text-sm text-dbi-amber">
+              {tasks.filter((t: any) => t.can?.verify).length} task(s) are waiting for your verification. Press Verify on them.
+            </p>
+          )}
           {tasksLoading ? (
             <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-dbi-cyan" /></div>
           ) : tasks.length === 0 ? (
             <p className="py-6 text-center text-sm text-dbi-textSecondary">No tasks yet. Add the first one.</p>
           ) : (
             <div className="space-y-2">
-              {tasks.map((t: any) => (
-                <div key={t.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-dbi-elevated/60 p-3">
-                  <div className="min-w-0 flex-1">
-                    <p className={`font-medium text-dbi-textPrimary ${t.status === 'DONE' ? 'line-through opacity-60' : ''}`}>{t.title}</p>
-                    <p className="text-xs text-dbi-textSecondary">
-                      {t.assignee?.fullName ?? 'Unassigned'}{t.dueDate ? ` · due ${formatDate(t.dueDate)}` : ''}
-                    </p>
+              {tasks.map((t: any) => {
+                const st = STATUS_STYLE[t.status] ?? STATUS_STYLE.TODO;
+                const back = t.status === 'IN_PROGRESS' && t.latestReview?.kind === 'CHANGES_REQUESTED';
+                return (
+                  <div key={t.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-dbi-elevated/60 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className={`font-medium text-dbi-textPrimary ${t.status === 'DONE' ? 'opacity-70' : ''}`}>{t.title}</p>
+                      <p className="text-xs text-dbi-textSecondary">
+                        {t.assignee?.fullName ?? 'Unassigned'}{t.dueDate ? ` · due ${formatDate(t.dueDate)}` : ''}
+                        {t.status === 'REVIEW' && t.submittedAt ? ` · submitted ${formatDateTimeIST(t.submittedAt)}` : ''}
+                        {t.status === 'DONE' && t.verifiedAt ? ` · verified ${formatDateTimeIST(t.verifiedAt)}` : ''}
+                      </p>
+                      {t.status === 'BLOCKED' && t.blockedReason && <p className="mt-1 text-xs text-dbi-critical">Blocked: {t.blockedReason}</p>}
+                      {back && <p className="mt-1 text-xs text-dbi-warning">Sent back{t.latestReview?.by ? ` by ${t.latestReview.by}` : ''}: {t.latestReview?.note}</p>}
+                    </div>
+                    <Badge className={PRIORITY_STYLE[t.priority] ?? ''}>{t.priority}</Badge>
+                    {t.can?.move ? (
+                      <select
+                        aria-label="Task status"
+                        value={t.status}
+                        onChange={(e) => setStatus.mutate({ id: t.id, status: e.target.value })}
+                        className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                      >
+                        <option value="TODO">To do</option>
+                        <option value="IN_PROGRESS">In progress</option>
+                      </select>
+                    ) : (
+                      <Badge className={st.cls}>{st.label}</Badge>
+                    )}
+                    {t.can?.submit && <Button size="sm" onClick={() => setSubmitting(t)}><Send className="mr-1 h-4 w-4" />Submit for review</Button>}
+                    {t.can?.verify && <Button size="sm" onClick={() => setVerifying(t)}><ShieldCheck className="mr-1 h-4 w-4" />Verify</Button>}
+                    {t.can?.block && <Button size="sm" variant="outline" onClick={() => setBlocking(t)}><Ban className="mr-1 h-4 w-4" />Blocked?</Button>}
+                    {t.can?.unblock && <Button size="sm" variant="outline" onClick={() => unblock.mutate(t.id)}>Unblock</Button>}
+                    <Button variant="ghost" size="icon" aria-label={`History of ${t.title}`} title="History" onClick={() => setHistory(t)}>
+                      <History className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" aria-label={`Edit ${t.title}`} title="Edit" onClick={() => setEditing(t)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Delete task"
+                      className="text-dbi-critical hover:text-dbi-critical"
+                      onClick={() => { if (confirm(`Delete "${t.title}"?`)) removeTask.mutate(t.id); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Badge className={PRIORITY_STYLE[t.priority] ?? ''}>{t.priority}</Badge>
-                  <select
-                    aria-label="Task status"
-                    value={t.status}
-                    onChange={(e) => setStatus.mutate({ id: t.id, status: e.target.value })}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                  >
-                    {STATUSES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-                  </select>
-                  <Button variant="ghost" size="icon" aria-label={`Edit ${t.title}`} title="Edit" onClick={() => setEditing(t)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Delete task"
-                    className="text-dbi-critical hover:text-dbi-critical"
-                    onClick={() => { if (confirm(`Delete "${t.title}"?`)) removeTask.mutate(t.id); }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -174,6 +209,10 @@ export function ProjectWork({ projectId }: { projectId: string }) {
         </CardContent>
       </Card>
 
+      <SubmitTaskDialog projectId={projectId} task={submitting} open={!!submitting} onOpenChange={(o) => { if (!o) setSubmitting(null); }} onDone={refreshTasks} />
+      <VerifyTaskDialog projectId={projectId} task={verifying} open={!!verifying} onOpenChange={(o) => { if (!o) setVerifying(null); }} onDone={refreshTasks} />
+      <BlockTaskDialog projectId={projectId} task={blocking} open={!!blocking} onOpenChange={(o) => { if (!o) setBlocking(null); }} onDone={refreshTasks} />
+      <TaskHistoryDialog projectId={projectId} task={history} open={!!history} onOpenChange={(o) => { if (!o) setHistory(null); }} />
       <TaskDialog open={taskOpen} onOpenChange={setTaskOpen} fixedProjectId={projectId} onCreated={refreshTasks} />
       <TaskDialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }} fixedProjectId={projectId} task={editing} onCreated={refreshTasks} />
     </div>

@@ -330,6 +330,11 @@ model Task {
   reporterId  String
   dueDate     DateTime?
   completedAt DateTime?
+  blockedReason String?  // why the person is stuck (set with the Blocked button)
+  submittedAt DateTime?  // when it was last submitted for verification
+  verifiedAt  DateTime?
+  verifiedById String?
+  reviews     TaskReview[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -865,6 +870,10 @@ model Notification {
 }
 
 enum NotificationType {
+  TASK_SUBMITTED
+  TASK_VERIFIED
+  TASK_REJECTED
+  TASK_BLOCKED
   WORK_STALLED
   PROJECT_STARTED
   PROJECT_DELETE_REQUESTED
@@ -1173,10 +1182,28 @@ model ReminderSettings {
 model WorkSettings {
   id                 String   @id @default("default")
   requireScreenShare Boolean  @default(true) // work cannot start without sharing the whole screen
+  requireTaskEvidence Boolean @default(true) // a task cannot be submitted for verification without evidence (a work session or a document)
   ocrEnabled         Boolean  @default(true) // read the screenshots at night and check that the tool is on screen
   ocrLastRunAt       DateTime?
   ocrLastSummary     String?
   updatedAt          DateTime @updatedAt
 
   @@map("work_settings")
+}
+
+// What happened to a task: submitted for verification, approved, sent back, blocked, unblocked
+model TaskReview {
+  id           String   @id @default(uuid())
+  taskId       String
+  kind         String   // SUBMITTED | APPROVED | CHANGES_REQUESTED | BLOCKED | UNBLOCKED
+  actorId      String
+  note         String?
+  evidence     Json?    // what the person pointed to when submitting (a snapshot)
+  selfVerified Boolean  @default(false) // a super admin verified their own task
+  createdAt    DateTime @default(now())
+
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@map("task_reviews")
 }

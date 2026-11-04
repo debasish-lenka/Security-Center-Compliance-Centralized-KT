@@ -49,7 +49,7 @@ export async function runStalledCheck(app: FastifyInstance, source: 'schedule' |
     app.prisma.workSession.groupBy({ by: ['userId', 'projectId'], where: { projectId: { in: projectIds } }, _max: { lastSeenAt: true } }),
     app.prisma.task.findMany({
       where: { projectId: { in: projectIds }, status: { in: [...OPEN] }, assigneeId: { not: null } },
-      select: { id: true, title: true, projectId: true, assigneeId: true, createdAt: true, updatedAt: true },
+      select: { id: true, title: true, projectId: true, assigneeId: true, status: true, submittedAt: true, createdAt: true, updatedAt: true },
     }),
   ]);
   const lastWork = new Map<string, number>();
@@ -65,6 +65,22 @@ export async function runStalledCheck(app: FastifyInstance, source: 'schedule' |
   for (const t of tasks) {
     const p = byId.get(t.projectId);
     if (!p || !t.assigneeId || !active(p, t.assigneeId)) continue;
+    // a task waiting for verification is waiting on the leads, not on the person who submitted it
+    if (t.status === 'REVIEW') {
+      const waited = Math.floor((now - (t.submittedAt ?? t.updatedAt).getTime()) / DAY);
+      if (waited < settings.stalledAfterDays) continue;
+      summary.tasks++;
+      const by = p.members.find((m) => m.userId === t.assigneeId)?.user.fullName ?? 'Someone';
+      for (const lead of leadsOf(p).filter((l) => l !== t.assigneeId)) {
+        if (await tell(lead, `Verify: ${by} - "${t.title}"`, `${by} submitted "${t.title}" in ${p.name} ${waited} days ago and it is still waiting for your verification.`, p.id)) summary.leadsTold++;
+      }
+      if (waited >= settings.stalledAfterDays + settings.escalateAfterDays) {
+        for (const a of admins.filter((x) => x !== t.assigneeId && !leadsOf(p).includes(x))) {
+          if (await tell(a, `Escalation: nobody verified ${by}'s "${t.title}"`, `${by} submitted "${t.title}" in ${p.name} ${waited} days ago and the project lead has not verified it.`, p.id)) summary.escalated++;
+        }
+      }
+      continue;
+    }
     const last = Math.max(t.updatedAt.getTime(), t.createdAt.getTime(), lastWork.get(`${t.assigneeId}|${t.projectId}`) ?? 0);
     const idle = Math.floor((now - last) / DAY);
     if (idle < settings.stalledAfterDays) continue;

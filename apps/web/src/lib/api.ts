@@ -1705,6 +1705,16 @@ export const remindersApi = {
   save: (data: { enabled: boolean; stalledAfterDays: number; notStartedAfterDays: number; escalateAfterDays: number }) => api.put('/v1/admin/reminders', data),
   runNow: () => api.post('/v1/admin/reminders/run'),
   getWork: () => api.get('/v1/admin/work-settings'),
-  saveWork: (data: { requireScreenShare?: boolean; ocrEnabled?: boolean }) => api.put('/v1/admin/work-settings', data),
+  saveWork: (data: { requireScreenShare?: boolean; ocrEnabled?: boolean; requireTaskEvidence?: boolean }) => api.put('/v1/admin/work-settings', data),
   runOcr: () => api.post('/v1/admin/work-ocr/run'),
+};
+
+// Submit for verification, verify, blocked
+export const taskFlowApi = {
+  evidenceOptions: (projectId: string) => api.get(`/v1/projects/${projectId}/tasks/evidence-options`),
+  submit: (projectId: string, taskId: string, body: { summary: string; evidence: { type: 'SESSION' | 'DOCUMENT'; id: string }[] }) => api.post(`/v1/projects/${projectId}/tasks/${taskId}/submit`, body),
+  verify: (projectId: string, taskId: string, body: { decision: 'APPROVE' | 'REJECT'; note?: string }) => api.post(`/v1/projects/${projectId}/tasks/${taskId}/verify`, body),
+  block: (projectId: string, taskId: string, reason: string) => api.post(`/v1/projects/${projectId}/tasks/${taskId}/block`, { reason }),
+  unblock: (projectId: string, taskId: string) => api.post(`/v1/projects/${projectId}/tasks/${taskId}/unblock`, {}),
+  reviews: (projectId: string, taskId: string) => api.get(`/v1/projects/${projectId}/tasks/${taskId}/reviews`),
 };

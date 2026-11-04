@@ -17,7 +17,11 @@ const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went 
 export function Reminders() {
   const qc = useQueryClient();
   const ocrWaitRef = useRef<string | null | undefined>(undefined); // the last-run time when the button was pressed; set while waiting
-  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean; ocrEnabled: boolean; ocrPending: number; ocrRunning: boolean; ocrLastRunAt: string | null; ocrLastSummary: string | null }, refetchInterval: (q) => (q.state.data?.ocrRunning || ocrWaitRef.current ? 2000 : false) });
+  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean; requireTaskEvidence: boolean; ocrEnabled: boolean; ocrPending: number; ocrRunning: boolean; ocrLastRunAt: string | null; ocrLastSummary: string | null }, refetchInterval: (q) => (q.state.data?.ocrRunning || ocrWaitRef.current ? 2000 : false) });
+  const setEvidence = async (v: boolean) => {
+    try { await remindersApi.saveWork({ requireTaskEvidence: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'Proof is now required to submit a task' : 'Proof is now optional when submitting a task' }); }
+    catch (e) { toast({ title: 'Not saved', description: errMsg(e), variant: 'destructive' }); }
+  };
   const [ocrBusy, setOcrBusy] = useState(false);
   const setOcr = async (v: boolean) => {
     try { await remindersApi.saveWork({ ocrEnabled: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'The screenshot check is on' : 'The screenshot check is off' }); }
@@ -97,6 +101,19 @@ export function Reminders() {
           <p className="text-dbi-textSecondary">What happens when someone's work stops moving</p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Tasks: proof when submitting</CardTitle>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="task-evidence" className="text-sm">{workQ.data?.requireTaskEvidence ? 'Required' : 'Optional'}</Label>
+            <Switch id="task-evidence" checked={!!workQ.data?.requireTaskEvidence} disabled={!workQ.data} onCheckedChange={setEvidence} aria-label="Proof required to submit a task" />
+          </div>
+        </CardHeader>
+        <CardContent className="text-sm text-dbi-textSecondary">
+          A task is finished in two steps: the person submits it (what they did, and proof), then the project owner or a lead verifies it. Nobody verifies their own task (a super admin may, and it is marked). {workQ.data?.requireTaskEvidence ? 'Required: a task cannot be submitted without at least one proof, a finished work session or a document the person uploaded.' : 'Optional: a task can be submitted with only a written summary.'} The project's percentage counts verified tasks only.
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">

@@ -76,7 +76,7 @@ export function TaskDialog({
         assigneeId: assigneeId || null,
         dueDate: dueDate || null,
       };
-      if (task) await projectsApi.updateTask(projectId, task.id, { ...body, status });
+      if (task) await projectsApi.updateTask(projectId, task.id, ['TODO', 'IN_PROGRESS'].includes(task.status) ? { ...body, status } : body);
       else await projectsApi.createTask(projectId, body);
       toast({ title: task ? 'Task updated' : 'Task created' });
       onOpenChange(false);
@@ -144,12 +144,13 @@ export function TaskDialog({
               </select>
             </div>
           </div>
-          {task && (
+          {task && ['TODO', 'IN_PROGRESS'].includes(task.status) && (
             <div className="space-y-2">
               <Label htmlFor="task-status">Status</Label>
               <select id="task-status" className={selectClass} value={status} onChange={(e) => setStatus(e.target.value)}>
-                {[['TODO', 'To do'], ['IN_PROGRESS', 'In progress'], ['REVIEW', 'In review'], ['BLOCKED', 'Blocked'], ['DONE', 'Done']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {[['TODO', 'To do'], ['IN_PROGRESS', 'In progress']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
+              <p className="text-xs text-muted-foreground">A task is finished with "Submit for review" and verified by the project owner or lead.</p>
             </div>
           )}
           <DialogFooter>

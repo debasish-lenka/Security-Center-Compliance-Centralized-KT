@@ -33,8 +33,8 @@ export async function reminderRoutes(app: FastifyInstance) {
 
   // How strictly work is recorded: is sharing the whole screen needed to start work?
   app.get('/admin/work-settings', { preHandler: admins }, async (_request, reply) => reply.send({ success: true, data: { ...(await getWorkSettings(app)), ocrPending: await pendingPictures(app), ocrRunning: isOcrRunning() } }));
-  app.put('/admin/work-settings', { schema: { body: z.object({ requireScreenShare: z.boolean().optional(), ocrEnabled: z.boolean().optional() }) }, preHandler: admins }, async (request, reply) => {
-    const data = request.body as { requireScreenShare?: boolean; ocrEnabled?: boolean };
+  app.put('/admin/work-settings', { schema: { body: z.object({ requireScreenShare: z.boolean().optional(), ocrEnabled: z.boolean().optional(), requireTaskEvidence: z.boolean().optional() }) }, preHandler: admins }, async (request, reply) => {
+    const data = request.body as { requireScreenShare?: boolean; ocrEnabled?: boolean; requireTaskEvidence?: boolean };
     const before = await getWorkSettings(app);
     const settings = await app.prisma.workSettings.update({ where: { id: 'default' }, data });
     await auditLogger.logResource('UPDATE', request.userId!, 'work_settings', 'default', { changes: diffFields(before as Record<string, any>, data) }, request.ip, request.headers['user-agent']);
