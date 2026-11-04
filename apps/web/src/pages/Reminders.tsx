@@ -84,19 +84,18 @@ export function Reminders() {
           </p>
           <div className="grid gap-5 md:grid-cols-3">
             {days('rem-stalled', 'Task has not moved', 'Remind the person and tell the project lead after this many days without progress.', form.stalled, (v) => setForm({ ...form, stalled: v }))}
-            {days('rem-notstarted', 'Project not started', 'A person added to a project who still has not pressed Start project after this many days.', form.notStarted, (v) => setForm({ ...form, notStarted: v }))}
+            {days('rem-notstarted', 'Person has not started the project', 'A person added to a project who still has not pressed Start project after this many days.', form.notStarted, (v) => setForm({ ...form, notStarted: v }))}
             {days('rem-escalate', 'Then alert the admins', 'This many more days after the lead was told, the admins get an alert too.', form.escalate, (v) => setForm({ ...form, escalate: v }))}
           </div>
           {!valid && <p className="text-sm text-dbi-critical">Each value must be a whole number from 1 to 90.</p>}
           <div className="flex flex-wrap gap-2">
             <Button onClick={save} disabled={!valid || busy !== null}>{busy === 'save' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save</Button>
             <Button variant="outline" onClick={run} disabled={!valid || busy !== null}>{busy === 'run' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Save and run the check now</Button>
+            <span className="self-center text-xs text-dbi-textSecondary">This saves the days, then sends the real reminders now.</span>
           </div>
           {result && <p className="rounded-md border border-dbi-border p-3 text-sm text-dbi-textPrimary">{result}</p>}
-          <p className="text-xs text-dbi-textSecondary">
-            {q.data?.lastRunAt ? `Last check: ${formatDateTimeIST(q.data.lastRunAt)} - ${q.data.lastSummary ?? ''}` : 'The check has not run yet.'}
-            {' '}The same reminder is not sent again within the "task has not moved" number of days. Reminders appear in each person's Notifications.
-          </p>
+          <p className="text-xs text-dbi-textSecondary">{q.data?.lastRunAt ? `Last check: ${formatDateTimeIST(q.data.lastRunAt)}. ${q.data.lastSummary ?? ''}.` : 'The check has not run yet.'}</p>
+          <p className="text-xs text-dbi-textSecondary">The same reminder is not sent again within the "task has not moved" number of days. Reminders appear in each person's Notifications.</p>
         </CardContent>
       </Card>
     </div>

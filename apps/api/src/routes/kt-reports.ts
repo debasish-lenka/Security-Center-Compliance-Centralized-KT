@@ -297,7 +297,7 @@ export async function ktReportRoutes(app: FastifyInstance) {
       userId: report.userId,
       type: 'COMMENT_ADDED',
       title: `KT Report ${action === 'APPROVE' ? 'Approved' : 'Rejected'}`,
-      message: `Your KT report for ${report.reportDate.toISOString().split('T')[0]} has been ${action.toLowerCase()}`,
+      message: `Your KT report for ${report.reportDate.toISOString().split('T')[0]} has been ${action === 'APPROVE' ? 'approved' : 'rejected'}`,
       resourceType: 'kt_report',
       resourceId: reportId,
     });

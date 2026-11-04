@@ -27,6 +27,16 @@ const queryClient = new QueryClient({
   },
 });
 
+// A tab left open across an update asks for page files that no longer exist (blank page): load the new version once.
+window.addEventListener('vite:preloadError', () => {
+  try {
+    if (sessionStorage.getItem('dbi_reloaded_for_update')) return; // never loop
+    sessionStorage.setItem('dbi_reloaded_for_update', '1');
+    setTimeout(() => sessionStorage.removeItem('dbi_reloaded_for_update'), 15_000);
+  } catch { /* storage blocked: reload anyway */ }
+  window.location.reload();
+});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
