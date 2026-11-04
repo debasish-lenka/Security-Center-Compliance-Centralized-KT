@@ -41,7 +41,7 @@ export class StorageService {
   private makeUrl(key: string, mode: FileTokenMode, expiresIn: number, name?: string, watermark?: string, note?: string): string {
     const payload: FileTokenPayload = { k: key, m: mode, n: name, w: watermark, u: note, e: Date.now() + expiresIn * 1000 };
     const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    return `/api/v1/files/${body}.${this.sign(body)}`;
+    return `/api/v1/files/${body}.${this.sign(body)}${name ? `/${encodeURIComponent(name)}` : ''}`; // the name is only for the browser's tab title; the token is the credential
   }
 
   verifyToken(token: string): FileTokenPayload | null {

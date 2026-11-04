@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { extname } from 'path';
 import { getStorageService } from '../services/storage.js';
 import { watermarkPdf } from '../services/watermark.js';
@@ -24,7 +24,7 @@ export async function fileRoutes(app: FastifyInstance) {
   app.removeContentTypeParser(['application/json', 'text/plain']);
   app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit: MAX_UPLOAD }, (_req, body, done) => done(null, body));
 
-  app.get('/:token', async (request, reply) => {
+  const serve = async (request: FastifyRequest, reply: FastifyReply) => {
     const payload = storage.verifyToken((request.params as { token: string }).token);
     if (!payload || payload.m === 'upload') {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid or expired link' } });
@@ -57,7 +57,9 @@ export async function fileRoutes(app: FastifyInstance) {
       }
     }
     return reply.send(storage.openRead(payload.k));
-  });
+  };
+  app.get('/:token', serve);
+  app.get('/:token/:name', serve);
 
   app.put('/:token', { bodyLimit: MAX_UPLOAD }, async (request, reply) => {
     const payload = storage.verifyToken((request.params as { token: string }).token);

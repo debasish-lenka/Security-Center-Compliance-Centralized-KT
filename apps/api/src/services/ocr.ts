@@ -10,21 +10,25 @@ import { getStorageService } from './storage.js';
 const LANG_DIR = resolve(process.cwd(), 'assets', 'tessdata');
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 // words that appear on many screens and prove nothing, and the ends of web addresses
-const COMMON = new Set(['dashboard', 'portal', 'console', 'server', 'panel', 'login', 'system', 'admin', 'manager', 'center', 'centre', 'tool', 'test', 'www', 'http', 'https', 'com', 'net', 'org', 'local', 'html', 'index', 'home', 'main', 'page', 'app', 'web']);
+const COMMON = new Set(['example', 'examples', 'localhost', 'dashboard', 'portal', 'console', 'server', 'panel', 'login', 'system', 'admin', 'manager', 'center', 'centre', 'tool', 'test', 'www', 'http', 'https', 'com', 'net', 'org', 'local', 'html', 'index', 'home', 'main', 'page', 'app', 'web']);
 
 export interface LinkLike { label?: string | null; url?: string | null }
 
-// What would show on screen if the person is in this tool
+// What would show on screen if the person is in this tool. The web address is the proof: it is in the browser's
+// address bar and in no screen of this app. The link's NAME is written all over this app ("Start work in Cisco
+// dashboard"), so it is used only when the address gives nothing to look for (for example a bare IP number).
 export function toolTerms(links: LinkLike[]): string[] {
-  const out = new Set<string>();
+  const fromAddress = new Set<string>();
+  const fromName = new Set<string>();
   for (const l of links) {
-    for (const w of (l.label ?? '').split(/[^A-Za-z0-9]+/)) if (w.length >= 4 && !COMMON.has(w.toLowerCase())) out.add(norm(w));
+    for (const w of (l.label ?? '').split(/[^A-Za-z0-9]+/)) if (w.length >= 4 && !COMMON.has(w.toLowerCase())) fromName.add(norm(w));
     try {
       const host = new URL(l.url ?? '').hostname.replace(/^www\./, '');
-      for (const part of host.split('.')) if (part.length >= 4 && !COMMON.has(part.toLowerCase())) out.add(norm(part));
-      if (/^[\d.]+$/.test(host)) out.add(norm(host)); // an address like 10.0.0.5
+      for (const part of host.split('.')) if (part.length >= 4 && !COMMON.has(part.toLowerCase())) fromAddress.add(norm(part));
+      if (/^[\d.]+$/.test(host)) fromAddress.add(norm(host)); // an address like 10.0.0.5
     } catch { /* not an address */ }
   }
+  const out = fromAddress.size > 0 ? fromAddress : fromName;
   return [...out].filter((t) => t.length >= 4 || /\d/.test(t));
 }
 

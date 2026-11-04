@@ -186,6 +186,11 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
     return true;
   }, [askScreen, attach, postShare]);
 
+  // when the running session's counts change, the table below follows at once (not on its own timer)
+  const liveShots = active?.shots ?? -1;
+  const liveNotes = active?.notes ?? -1;
+  useEffect(() => { if (liveShots >= 0) qc.invalidateQueries({ queryKey: ['work-sessions', projectId] }); }, [liveShots, liveNotes, projectId, qc]);
+
   // a sign of life every minute while a session is open; the clock for the running time
   useEffect(() => {
     if (!activeId) return;
