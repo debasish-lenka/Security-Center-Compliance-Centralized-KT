@@ -26,7 +26,7 @@ interface WorkLink { label: string; url: string }
 export function WorkSessionPanel({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
-  const sessionsQ = useQuery({ queryKey: ['work-sessions', projectId], queryFn: async () => (await workApi.sessions(projectId)).data.data });
+  const sessionsQ = useQuery({ queryKey: ['work-sessions', projectId], queryFn: async () => (await workApi.sessions(projectId)).data.data, refetchInterval: 20_000 }); // the table follows running sessions
   const state = stateQ.data;
   const active = state?.active ?? null;
   const activeId: string | null = active?.id ?? null;
