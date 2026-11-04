@@ -4,6 +4,7 @@ import { createAuditLogger } from '../services/audit-logger.js';
 import { diffFields } from '../services/document-oversight.js';
 import { getReminderSettings, runStalledCheck } from '../services/stalled.js';
 import { getWorkSettings } from './work-sessions.js';
+import { isOcrRunning, pendingPictures, runOcrBatch } from '../services/ocr.js';
 
 const days = z.number().int().min(1).max(90);
 const SettingsSchema = z.object({
@@ -31,13 +32,22 @@ export async function reminderRoutes(app: FastifyInstance) {
   });
 
   // How strictly work is recorded: is sharing the whole screen needed to start work?
-  app.get('/admin/work-settings', { preHandler: admins }, async (_request, reply) => reply.send({ success: true, data: await getWorkSettings(app) }));
-  app.put('/admin/work-settings', { schema: { body: z.object({ requireScreenShare: z.boolean() }) }, preHandler: admins }, async (request, reply) => {
-    const data = request.body as { requireScreenShare: boolean };
+  app.get('/admin/work-settings', { preHandler: admins }, async (_request, reply) => reply.send({ success: true, data: { ...(await getWorkSettings(app)), ocrPending: await pendingPictures(app), ocrRunning: isOcrRunning() } }));
+  app.put('/admin/work-settings', { schema: { body: z.object({ requireScreenShare: z.boolean().optional(), ocrEnabled: z.boolean().optional() }) }, preHandler: admins }, async (request, reply) => {
+    const data = request.body as { requireScreenShare?: boolean; ocrEnabled?: boolean };
     const before = await getWorkSettings(app);
     const settings = await app.prisma.workSettings.update({ where: { id: 'default' }, data });
     await auditLogger.logResource('UPDATE', request.userId!, 'work_settings', 'default', { changes: diffFields(before as Record<string, any>, data) }, request.ip, request.headers['user-agent']);
     return reply.send({ success: true, data: settings });
+  });
+
+  // Reads a batch of unread screenshots now (at night this happens by itself)
+  app.post('/admin/work-ocr/run', { preHandler: admins }, async (request, reply) => {
+    if (isOcrRunning()) return reply.code(409).send({ success: false, error: { code: 'RUNNING', message: 'The screenshot check is already running' } });
+    const r = await runOcrBatch(app, 30);
+    await app.prisma.workSettings.update({ where: { id: 'default' }, data: { ocrLastRunAt: new Date(), ocrLastSummary: `${r.read} screenshot(s) read, the tool was seen on ${r.seen}` } });
+    await auditLogger.logResource('CREATE', request.userId!, 'work_ocr_run', 'manual', { ...r }, request.ip, request.headers['user-agent']);
+    return reply.send({ success: true, data: r });
   });
 
   // Runs the check now (also when the daily check is switched off), so an admin can see what it would do

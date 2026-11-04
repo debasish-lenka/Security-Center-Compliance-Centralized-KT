@@ -28,6 +28,14 @@ const EVIDENCE: Record<string, { label: string; cls: string; hint: string }> = {
   PARTIAL: { label: 'Partial evidence', cls: 'bg-dbi-warning/20 text-dbi-warning', hint: 'Sharing was interrupted, only a window or tab was shared, or no picture was taken' },
   NONE: { label: 'No evidence', cls: 'bg-dbi-critical/20 text-dbi-critical', hint: 'The screen was never shared' },
 };
+const ToolBadge = ({ s }: { s: { toolCheck: string | null; ocrSeen: number; ocrChecked: number } }) => {
+  const n = `${s.ocrSeen} of ${s.ocrChecked} screenshots`;
+  if (s.toolCheck === 'SEEN') return <Badge title={`The tool was seen on ${n}`} className="bg-dbi-success/20 text-dbi-success">Tool seen ({s.ocrSeen}/{s.ocrChecked})</Badge>;
+  if (s.toolCheck === 'LOW') return <Badge title={`The tool was seen on only ${n}`} className="bg-dbi-warning/20 text-dbi-warning">Rarely seen ({s.ocrSeen}/{s.ocrChecked})</Badge>;
+  if (s.toolCheck === 'NOT_SEEN') return <Badge title={`The tool was not seen on any of ${s.ocrChecked} screenshots`} className="bg-dbi-critical/20 text-dbi-critical">Tool NOT seen (0/{s.ocrChecked})</Badge>;
+  if (s.toolCheck === 'NO_LINK') return <Badge variant="secondary" title="No tool address is set for this project, so the screenshots cannot be checked">No tool set</Badge>;
+  return <Badge variant="secondary" title="Screenshots are read at night">Not checked yet</Badge>;
+};
 const EvidenceBadge = ({ level }: { level: string }) => { const e = EVIDENCE[level] ?? EVIDENCE.NONE; return <Badge title={e.hint} className={e.cls}>{e.label}</Badge>; };
 
 export function WorkSessionPanel({ projectId }: { projectId: string }) {
@@ -387,7 +395,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-dbi-border text-left text-xs text-dbi-textSecondary">
-                    <th className="py-2 pr-3">Person</th><th className="pr-3">Started</th><th className="pr-3">Length</th><th className="pr-3">Tool</th><th className="pr-3">Notes</th><th className="pr-3">Pictures</th><th className="pr-3">Evidence</th><th className="pr-3">Status</th><th />
+                    <th className="py-2 pr-3">Person</th><th className="pr-3">Started</th><th className="pr-3">Length</th><th className="pr-3">Tool</th><th className="pr-3">Notes</th><th className="pr-3">Pictures</th><th className="pr-3">Evidence</th><th className="pr-3">Tool on screen</th><th className="pr-3">Status</th><th />
                   </tr>
                 </thead>
                 <tbody>
@@ -400,6 +408,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
                       <td className="pr-3">{s.notes}</td>
                       <td className="pr-3">{s.shots}</td>
                       <td className="pr-3"><EvidenceBadge level={s.evidence} /></td>
+                      <td className="pr-3"><ToolBadge s={s} /></td>
                       <td className="pr-3">
                         {!s.endedAt ? <Badge className="bg-dbi-success/20 text-dbi-success">Running</Badge>
                           : s.endReason === 'IDLE' ? <Badge className="bg-dbi-warning/20 text-dbi-warning">Ended idle</Badge>
@@ -431,7 +440,7 @@ function SessionDialog({ projectId, sessionId, onClose }: { projectId: string; s
         <DialogHeader>
           <DialogTitle>{s ? `${s.userName ?? 'Work session'} - ${formatDateTimeIST(s.startedAt)}` : 'Work session'}</DialogTitle>
           <DialogDescription>{s ? `${mins(s.minutes)}${s.linkLabel ? ` in ${s.linkLabel}` : ''}. Everything recorded in this session, in order.` : 'Loading...'}</DialogDescription>
-          {s && <div><EvidenceBadge level={s.evidence} /></div>}
+          {s && <div className="flex flex-wrap gap-2"><EvidenceBadge level={s.evidence} /><ToolBadge s={s} /></div>}
         </DialogHeader>
         {q.isLoading && <Loader2 className="mx-auto h-6 w-6 animate-spin" />}
         {s && (

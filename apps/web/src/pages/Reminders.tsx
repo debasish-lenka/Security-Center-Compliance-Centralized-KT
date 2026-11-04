@@ -16,7 +16,18 @@ const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went 
 // Admin sets after how many days quiet work is flagged (default 7). The check runs about once a day.
 export function Reminders() {
   const qc = useQueryClient();
-  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean } });
+  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean; ocrEnabled: boolean; ocrPending: number; ocrRunning: boolean; ocrLastRunAt: string | null; ocrLastSummary: string | null }, refetchInterval: (q) => (q.state.data?.ocrRunning ? 3000 : false) });
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const setOcr = async (v: boolean) => {
+    try { await remindersApi.saveWork({ ocrEnabled: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'The screenshot check is on' : 'The screenshot check is off' }); }
+    catch (e) { toast({ title: 'Not saved', description: errMsg(e), variant: 'destructive' }); }
+  };
+  const runOcr = async () => {
+    setOcrBusy(true);
+    try { const r = (await remindersApi.runOcr()).data.data; toast({ title: 'Screenshot check done', description: `${r.read} screenshot(s) read, the tool was seen on ${r.seen}. ${r.left} still waiting.` }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); }
+    catch (e) { toast({ title: 'Check failed', description: errMsg(e), variant: 'destructive' }); }
+    finally { setOcrBusy(false); }
+  };
   const setRequire = async (v: boolean) => {
     try { await remindersApi.saveWork({ requireScreenShare: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'Screen sharing is now required to start work' : 'Screen sharing is now optional' }); }
     catch (e) { toast({ title: 'Not saved', description: errMsg(e), variant: 'destructive' }); }
@@ -87,6 +98,25 @@ export function Reminders() {
           {workQ.data?.requireScreenShare
             ? "Required: nobody can press Start work in a project's Work Log until they share their whole screen (a single window or tab is not accepted). Work without full screen sharing is marked Partial or No evidence in the work sessions table and in the generated KT."
             : 'Optional: people can start work without sharing their screen. Such work is marked No evidence (or Partial if sharing was cut or only a window was shared) in the work sessions table and in the generated KT.'}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Work recording: is the tool really on screen?</CardTitle>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="ocr-enabled" className="text-sm">{workQ.data?.ocrEnabled ? 'On' : 'Off'}</Label>
+            <Switch id="ocr-enabled" checked={!!workQ.data?.ocrEnabled} disabled={!workQ.data} onCheckedChange={setOcr} aria-label="Screenshot check on or off" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-dbi-textSecondary">
+          <p>Every night (10 pm to 6 am IST) the system reads the text on each work screenshot and checks that the tool's name or address (from the project's Work links) is visible. Each session then shows <b>Tool seen</b>, <b>Rarely seen</b> or <b>Tool NOT seen</b> in the work sessions table and in the generated KT. Only "seen: yes or no" is kept for each picture, never the text on the screen. It is a hint for a person to look at, not proof: small or blurred text can be missed.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={runOcr} disabled={ocrBusy || !!workQ.data?.ocrRunning || !workQ.data}>
+              {(ocrBusy || workQ.data?.ocrRunning) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Check screenshots now
+            </Button>
+            <span className="text-xs">{workQ.data ? `${workQ.data.ocrPending} screenshot(s) waiting to be read.` : ''} {workQ.data?.ocrLastRunAt ? `Last check: ${formatDateTimeIST(workQ.data.ocrLastRunAt)}. ${workQ.data.ocrLastSummary ?? ''}.` : 'The check has not run yet.'}</span>
+          </div>
         </CardContent>
       </Card>
 

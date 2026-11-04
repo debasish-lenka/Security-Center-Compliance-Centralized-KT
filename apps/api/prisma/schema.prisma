@@ -244,6 +244,9 @@ model WorkSession {
   shareStarts Int      @default(0) // how many times screen sharing was started in this session
   shareStops  Int      @default(0) // how many times it was stopped or refused
   surface     String?  // what was shared: monitor (whole screen), window or browser (a tab)
+  ocrChecked  Int      @default(0) // screenshots whose text was read
+  ocrSeen     Int      @default(0) // of those, how many showed the tool (its name or address)
+  toolCheck   String?  // SEEN | LOW | NOT_SEEN | NO_LINK, null until checked
   entries     WorkEntry[]
 
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -263,6 +266,8 @@ model WorkEntry {
   size       Int?
   hash       String?
   reason     String?  // why a picture was taken: CHANGE, MANUAL, HEARTBEAT, NOTE, STOP
+  ocrAt      DateTime? // when the picture was read
+  toolSeen   Boolean? // did the picture show the tool? (the text itself is never kept)
   createdAt  DateTime @default(now())
 
   session    WorkSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -1168,6 +1173,9 @@ model ReminderSettings {
 model WorkSettings {
   id                 String   @id @default("default")
   requireScreenShare Boolean  @default(true) // work cannot start without sharing the whole screen
+  ocrEnabled         Boolean  @default(true) // read the screenshots at night and check that the tool is on screen
+  ocrLastRunAt       DateTime?
+  ocrLastSummary     String?
   updatedAt          DateTime @updatedAt
 
   @@map("work_settings")

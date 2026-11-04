@@ -16,7 +16,15 @@ export function evidenceOf(s: { shareStarts: number; shareStops: number; surface
 }
 export const evidenceText = (e: Evidence) => (e === 'FULL' ? 'Full (whole screen shared, pictures taken)' : e === 'PARTIAL' ? 'Partial (sharing was interrupted, not the whole screen, or no pictures)' : 'None (the screen was never shared)');
 
+export const toolText = (check: string | null, seen: number, checked: number) =>
+  check === 'SEEN' ? `Seen on screen (${seen} of ${checked} screenshots show it)`
+  : check === 'LOW' ? `Rarely seen on screen (${seen} of ${checked} screenshots show it)`
+  : check === 'NOT_SEEN' ? `NOT seen on screen (0 of ${checked} screenshots show it)`
+  : check === 'NO_LINK' ? 'Not checked (no tool address was set for this project)'
+  : 'Not checked yet';
+
 export interface KtSession {
+  toolCheck: string | null; ocrSeen: number; ocrChecked: number;
   evidence: Evidence; startedAt: Date; endedAt: Date | null; endReason: string | null; linkLabel: string | null; linkUrl: string | null; entries: KtEntry[];
 }
 
@@ -72,6 +80,8 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
   para(`${notes} note${notes === 1 ? '' : 's'}, ${shots} screenshot${shots === 1 ? '' : 's'}`, 10);
   const weak = opts.sessions.filter((s) => s.evidence !== 'FULL').length;
   if (weak) para(`Screen evidence: ${opts.sessions.length - weak} of ${opts.sessions.length} sessions are fully backed by the screen; ${weak} are not.`, 10, font, red);
+  const notSeen = opts.sessions.filter((s) => s.toolCheck === 'NOT_SEEN').length;
+  if (notSeen) para(`Tool check: in ${notSeen} session(s) the tool was not seen on any screenshot.`, 10, font, red);
   if (shareStops || idle) para(`Note: screen sharing was stopped ${shareStops} time(s); ${idle} session(s) ended because there was no sign of activity.`, 10, font, grey);
 
   for (const [i, s] of opts.sessions.entries()) {
@@ -83,6 +93,7 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
     para(`${formatWhen(s.startedAt)}  to  ${s.endedAt ? formatWhen(s.endedAt) : 'still running'}   (${lengthOf(minutesBetween(s.startedAt, s.endedAt))})`, 10, bold);
     if (s.linkUrl) para(`Tool: ${s.linkLabel ? `${s.linkLabel} - ` : ''}${s.linkUrl}`, 9, font, grey);
     para(`Screen evidence: ${evidenceText(s.evidence)}`, 9, font, s.evidence === 'FULL' ? teal : red);
+    para(`Tool on screen: ${toolText(s.toolCheck, s.ocrSeen, s.ocrChecked)}`, 9, font, s.toolCheck === 'NOT_SEEN' || s.toolCheck === 'LOW' ? red : grey);
     if (s.endReason === 'IDLE') para('This session ended by itself: no sign of activity for a while.', 9, font, red);
     y -= 6;
     if (s.entries.length === 0) para('Nothing was written or captured in this session.', 10, font, grey);

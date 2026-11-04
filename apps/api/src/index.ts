@@ -21,6 +21,7 @@ import { authPlugin } from './plugins/auth.js';
 import { startPurgeJob } from './services/recycle-bin.js';
 import { startWorkShotPurge } from './routes/work-sessions.js';
 import { startStalledJob } from './services/stalled.js';
+import { startOcrJob } from './services/ocr.js';
 import { startBackupJob } from './services/backup.js';
 import { recordProjectActivity } from './services/project-progress.js';
 
@@ -214,6 +215,7 @@ process.on('SIGINT', shutdown);
 
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
+  startOcrJob(app); // at night, reads the screenshots and checks that the tool was on screen
   startStalledJob(app); // reminds people whose work is not moving, tells leads, alerts admins
   startWorkShotPurge(app); // deletes work screenshots after the retention period
   startPurgeJob(app); // removes recycle-bin entries older than 30 days

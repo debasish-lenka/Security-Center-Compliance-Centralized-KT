@@ -52,8 +52,9 @@ export async function workSessionRoutes(app: FastifyInstance) {
     return out;
   };
 
-  const shape = (s: { id: string; userId: string; linkLabel: string | null; linkUrl: string | null; startedAt: Date; endedAt: Date | null; endReason: string | null; lastSeenAt: Date; includedIn: string | null; shareStarts: number; shareStops: number; surface: string | null }, c?: { notes: number; shots: number }, name?: string) => ({
+  const shape = (s: { id: string; userId: string; linkLabel: string | null; linkUrl: string | null; startedAt: Date; endedAt: Date | null; endReason: string | null; lastSeenAt: Date; includedIn: string | null; shareStarts: number; shareStops: number; surface: string | null; toolCheck: string | null; ocrSeen: number; ocrChecked: number }, c?: { notes: number; shots: number }, name?: string) => ({
     shareStarts: s.shareStarts, shareStops: s.shareStops, surface: s.surface, evidence: evidenceOf(s, c?.shots ?? 0),
+    toolCheck: s.toolCheck, ocrSeen: s.ocrSeen, ocrChecked: s.ocrChecked,
     id: s.id, userId: s.userId, userName: name, linkLabel: s.linkLabel, linkUrl: s.linkUrl, startedAt: s.startedAt, endedAt: s.endedAt, endReason: s.endReason,
     lastSeenAt: s.lastSeenAt, minutes: minutesBetween(s.startedAt, s.endedAt), notes: c?.notes ?? 0, shots: c?.shots ?? 0, inKt: !!s.includedIn,
   });
@@ -254,7 +255,7 @@ export async function workSessionRoutes(app: FastifyInstance) {
         }
         entries.push({ kind: e.kind, text: e.text, reason: e.reason, createdAt: e.createdAt, image });
       }
-      ktSessions.push({ evidence: evidenceOf(s, s.entries.filter((e) => e.kind === 'SHOT').length), startedAt: s.startedAt, endedAt: s.endedAt, endReason: s.endReason, linkLabel: s.linkLabel, linkUrl: s.linkUrl, entries });
+      ktSessions.push({ toolCheck: s.toolCheck, ocrSeen: s.ocrSeen, ocrChecked: s.ocrChecked, evidence: evidenceOf(s, s.entries.filter((e) => e.kind === 'SHOT').length), startedAt: s.startedAt, endedAt: s.endedAt, endReason: s.endReason, linkLabel: s.linkLabel, linkUrl: s.linkUrl, entries });
     }
 
     const name = `Work KT - ${project.name} - ${me.fullName}`;

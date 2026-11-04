@@ -1704,5 +1704,6 @@ export const remindersApi = {
   save: (data: { enabled: boolean; stalledAfterDays: number; notStartedAfterDays: number; escalateAfterDays: number }) => api.put('/v1/admin/reminders', data),
   runNow: () => api.post('/v1/admin/reminders/run'),
   getWork: () => api.get('/v1/admin/work-settings'),
-  saveWork: (data: { requireScreenShare: boolean }) => api.put('/v1/admin/work-settings', data),
+  saveWork: (data: { requireScreenShare?: boolean; ocrEnabled?: boolean }) => api.put('/v1/admin/work-settings', data),
+  runOcr: () => api.post('/v1/admin/work-ocr/run'),
 };
