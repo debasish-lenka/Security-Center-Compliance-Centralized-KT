@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownUp, Download, FileText, Loader2, X } from 'lucide-react';
+import { ArrowDownUp, Download, ExternalLink, FileText, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -96,7 +96,10 @@ export function DocumentTimeline({
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">{d.category.replace(/_/g, ' ')}</Badge>
                   <Button variant="ghost" size="sm" asChild>
-                    <a href={`/api/v1/projects/${projectId}/documents/${d.id}/file`} target="_blank" rel="noopener noreferrer"><Download className="mr-1 h-4 w-4" /> Open</a>
+                    <a href={`/api/v1/projects/${projectId}/documents/${d.id}/open`} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-4 w-4" /> Open</a>
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <a href={`/api/v1/projects/${projectId}/documents/${d.id}/file`} download><Download className="mr-1 h-4 w-4" /> Download</a>
                   </Button>
                 </div>
               </div>

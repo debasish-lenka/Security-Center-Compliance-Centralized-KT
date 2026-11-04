@@ -225,7 +225,9 @@ export async function workSessionRoutes(app: FastifyInstance) {
       previewUrl: e.storageKey && (await storage.exists(e.storageKey)) ? await storage.getPreviewUrl(e.storageKey, 600) : null,
     })));
     if (request.userId !== s.userId) await auditLogger.logResource('DOWNLOAD', request.userId!, 'work_session', s.id, { projectId, action: 'viewed', viewedPerson: user?.fullName }, request.ip, request.headers['user-agent']);
-    return { success: true, data: { ...shape(s, undefined, user?.fullName), entries: items } };
+    const shotCount = entries.filter((e) => e.kind === 'SHOT').length;
+    const noteCount = entries.filter((e) => e.kind === 'NOTE').length;
+    return { success: true, data: { ...shape(s, { notes: noteCount, shots: shotCount }, user?.fullName), entries: items } };
   });
 
   // "Generate KT": everything of mine that is not in a KT yet becomes the next version of one document in the vault

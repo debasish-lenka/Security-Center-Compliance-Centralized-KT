@@ -680,6 +680,27 @@ export async function documentRoutes(app: FastifyInstance) {
   });
 
   // Browser-friendly download: same checks and audit as /download, then redirect to the signed link
+  // Open: the browser shows the file itself (PDF, pictures, text) in the tab. Types a browser cannot show
+  // (Word, Excel, ZIP) can only be downloaded. Only the "file" route below counts as a download.
+  app.get('/:projectId/documents/:documentId/open', async (request, reply) => {
+    const userId = request.userId!;
+    const userRole = request.user!.role;
+    const { projectId, documentId } = request.params as { projectId: string; documentId: string };
+
+    if (!(await checkDocumentAccess(app, userId, userRole, documentId))) {
+      return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
+    }
+    const document = await app.prisma.projectDocument.findFirst({ where: { id: documentId, projectId } });
+    if (!document) {
+      return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Document not found' } });
+    }
+    await app.prisma.documentAccessEvent.create({
+      data: { documentId, userId, action: 'PREVIEW', ipAddress: request.ip, userAgent: request.headers['user-agent'] },
+    });
+    const [mark, note] = await marksFor(app, projectId, document);
+    return reply.redirect(await storage.getPreviewUrl(document.storageKey, 60, mark, note, document.originalName)); // the tab and "save as" show the real name
+  });
+
   app.get('/:projectId/documents/:documentId/file', async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;

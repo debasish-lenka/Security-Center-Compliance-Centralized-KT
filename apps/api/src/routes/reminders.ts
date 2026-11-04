@@ -44,10 +44,18 @@ export async function reminderRoutes(app: FastifyInstance) {
   // Reads a batch of unread screenshots now (at night this happens by itself)
   app.post('/admin/work-ocr/run', { preHandler: admins }, async (request, reply) => {
     if (isOcrRunning()) return reply.code(409).send({ success: false, error: { code: 'RUNNING', message: 'The screenshot check is already running' } });
-    const r = await runOcrBatch(app, 30);
-    await app.prisma.workSettings.update({ where: { id: 'default' }, data: { ocrLastRunAt: new Date(), ocrLastSummary: `${r.read} screenshot(s) read, the tool was seen on ${r.seen}` } });
-    await auditLogger.logResource('CREATE', request.userId!, 'work_ocr_run', 'manual', { ...r }, request.ip, request.headers['user-agent']);
-    return reply.send({ success: true, data: r });
+    await auditLogger.logResource('CREATE', request.userId!, 'work_ocr_run', 'manual', {}, request.ip, request.headers['user-agent']);
+    // returns at once; the page watches "running" and the last summary
+    void (async () => {
+      try {
+        const r = await runOcrBatch(app, 60);
+        await app.prisma.workSettings.update({ where: { id: 'default' }, data: { ocrLastRunAt: new Date(), ocrLastSummary: `${r.read} screenshot(s) read, the tool was seen on ${r.seen}${r.left ? `, ${r.left} still waiting` : ''}` } });
+      } catch (e) {
+        app.log.error({ err: e }, 'screenshot check failed');
+        await app.prisma.workSettings.update({ where: { id: 'default' }, data: { ocrLastRunAt: new Date(), ocrLastSummary: `The check failed: ${String((e as Error)?.message ?? e).slice(0, 200)}` } }).catch(() => undefined);
+      }
+    })();
+    return reply.code(202).send({ success: true, data: { started: true } });
   });
 
   // Runs the check now (also when the daily check is switched off), so an admin can see what it would do

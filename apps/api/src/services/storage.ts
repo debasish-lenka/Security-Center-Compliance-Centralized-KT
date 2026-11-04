@@ -75,8 +75,8 @@ export class StorageService {
     return Promise.resolve(this.makeUrl(key, 'download', expiresIn, fileName, watermark, note));
   }
 
-  getPreviewUrl(key: string, expiresIn = 300, watermark?: string, note?: string): Promise<string> {
-    return Promise.resolve(this.makeUrl(key, 'inline', expiresIn, undefined, watermark, note));
+  getPreviewUrl(key: string, expiresIn = 300, watermark?: string, note?: string, name?: string): Promise<string> {
+    return Promise.resolve(this.makeUrl(key, 'inline', expiresIn, name, watermark, note));
   }
 
   getUploadUrl(key: string, expiresIn = 3600): Promise<string> {

@@ -1213,7 +1213,8 @@ const realDocumentsList = async (params?: Record<string, string>) => {
       uploadedBy: d.uploader ?? d.owner,
       project: projects.find((p) => p.id === d.projectId) ?? undefined,
       deleteRequestPending: (d.deleteRequests?.length ?? 0) > 0,
-      url: `/api/v1/projects/${d.projectId}/documents/${d.id}/file`,
+      url: `/api/v1/projects/${d.projectId}/documents/${d.id}/file`, // downloads
+      openUrl: `/api/v1/projects/${d.projectId}/documents/${d.id}/open`, // shows it in the browser
     };
   });
   return { data: { items, total: items.length } };

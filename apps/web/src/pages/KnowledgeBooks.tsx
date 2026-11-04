@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Search, Plus, Download, Edit, Trash2, FileText, Loader2, BookOpen, ArrowDownUp, Shield } from 'lucide-react';
+import { Search, Plus, Download, Edit, Trash2, FileText, Loader2, BookOpen, ArrowDownUp, Shield, ExternalLink } from 'lucide-react';
 import { formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { generateKnowledgeBookPdf, createKnowledgeBookFromProject, KnowledgeBookConfig } from '@/lib/pdfGenerator';
@@ -170,20 +170,30 @@ export function KnowledgeBooks() {
     }
   };
 
-  const handleGeneratePdf = async (book: any) => {
+  // 'open' shows the PDF in a new tab; only 'download' saves it
+  const handleGeneratePdf = async (book: any, mode: 'open' | 'download' = 'open') => {
     setIsGeneratingPdf(true);
+    const tab = mode === 'open' ? window.open('', '_blank') : null; // opened inside the click so the browser allows it
     try {
       const response = await knowledgeBooksApi.generatePdf(book.id);
-      const blob = response instanceof Blob ? response : response.data;
+      const raw = response instanceof Blob ? response : response.data;
+      const blob = new Blob([raw], { type: 'application/pdf' }); // so the browser shows it instead of saving it
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${book.name.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast({ title: 'Success', description: 'PDF generated and downloaded' });
+      if (mode === 'download') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${book.name.replace(/\s+/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(url), 10_000);
+        toast({ title: 'Success', description: 'PDF downloaded' });
+      } else if (tab) {
+        tab.location.href = url;
+        setTimeout(() => window.URL.revokeObjectURL(url), 5 * 60_000);
+      } else {
+        window.open(url, '_blank');
+      }
     } catch {
       toast({ title: 'Error', description: 'Failed to generate PDF', variant: 'destructive' });
     } finally {
@@ -417,7 +427,10 @@ export function KnowledgeBooks() {
                         <TableCell className="text-sm text-dbi-textSecondary">{book.updatedAt ? formatDateTimeIST(book.updatedAt) : 'N/A'}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book)} title="Generate PDF" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
+                            <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book, 'open')} title="Open PDF in a new tab" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book, 'download')} title="Download PDF" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
                               {isGeneratingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => openEditDialog(book)} title="Edit" className="text-dbi-cyan hover:text-dbi-cyan">

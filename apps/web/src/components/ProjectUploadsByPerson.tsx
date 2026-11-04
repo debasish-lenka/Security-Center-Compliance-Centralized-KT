@@ -106,7 +106,7 @@ export function ProjectUploadsByPerson({ projectId, members }: { projectId: stri
                       <p className="mb-2 text-xs font-medium uppercase tracking-wider text-dbi-textSecondary">Documents ({r.docs.length})</p>
                       <div className="space-y-1">
                         {r.docs.map((d) => (
-                          <a key={d.id} href={`/api/v1/projects/${projectId}/documents/${d.id}/file`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-dbi-elevated">
+                          <a key={d.id} href={`/api/v1/projects/${projectId}/documents/${d.id}/open`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-dbi-elevated">
                             <span className="truncate text-sm text-dbi-textPrimary">{d.name}</span>
                             <span className="shrink-0 text-xs text-dbi-textSecondary">{kb(d.size)} · {when(d.createdAt)}</span>
                           </a>

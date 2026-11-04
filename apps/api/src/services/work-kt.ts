@@ -79,7 +79,7 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
   para(`${opts.sessions.length} work session${opts.sessions.length === 1 ? '' : 's'}, ${lengthOf(minutes)} in total`, 10);
   para(`${notes} note${notes === 1 ? '' : 's'}, ${shots} screenshot${shots === 1 ? '' : 's'}`, 10);
   const weak = opts.sessions.filter((s) => s.evidence !== 'FULL').length;
-  if (weak) para(`Screen evidence: ${opts.sessions.length - weak} of ${opts.sessions.length} sessions are fully backed by the screen; ${weak} are not.`, 10, font, red);
+  if (weak) para(`Screen evidence: ${opts.sessions.length - weak} of ${opts.sessions.length} sessions are fully backed by the screen; ${weak} ${weak === 1 ? 'is' : 'are'} not.`, 10, font, red);
   const notSeen = opts.sessions.filter((s) => s.toolCheck === 'NOT_SEEN').length;
   if (notSeen) para(`Tool check: in ${notSeen} session(s) the tool was not seen on any screenshot.`, 10, font, red);
   if (shareStops || idle) para(`Note: screen sharing was stopped ${shareStops} time(s); ${idle} session(s) ended because there was no sign of activity.`, 10, font, grey);

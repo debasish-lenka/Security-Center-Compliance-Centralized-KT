@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellRing, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,8 @@ const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went 
 // Admin sets after how many days quiet work is flagged (default 7). The check runs about once a day.
 export function Reminders() {
   const qc = useQueryClient();
-  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean; ocrEnabled: boolean; ocrPending: number; ocrRunning: boolean; ocrLastRunAt: string | null; ocrLastSummary: string | null }, refetchInterval: (q) => (q.state.data?.ocrRunning ? 3000 : false) });
+  const ocrWaitRef = useRef<string | null | undefined>(undefined); // the last-run time when the button was pressed; set while waiting
+  const workQ = useQuery({ queryKey: ['work-settings'], queryFn: async () => (await remindersApi.getWork()).data.data as { requireScreenShare: boolean; ocrEnabled: boolean; ocrPending: number; ocrRunning: boolean; ocrLastRunAt: string | null; ocrLastSummary: string | null }, refetchInterval: (q) => (q.state.data?.ocrRunning || ocrWaitRef.current ? 2000 : false) });
   const [ocrBusy, setOcrBusy] = useState(false);
   const setOcr = async (v: boolean) => {
     try { await remindersApi.saveWork({ ocrEnabled: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'The screenshot check is on' : 'The screenshot check is off' }); }
@@ -24,10 +25,21 @@ export function Reminders() {
   };
   const runOcr = async () => {
     setOcrBusy(true);
-    try { const r = (await remindersApi.runOcr()).data.data; toast({ title: 'Screenshot check done', description: `${r.read} screenshot(s) read, the tool was seen on ${r.seen}. ${r.left} still waiting.` }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); }
-    catch (e) { toast({ title: 'Check failed', description: errMsg(e), variant: 'destructive' }); }
-    finally { setOcrBusy(false); }
+    ocrWaitRef.current = workQ.data?.ocrLastRunAt ?? null;
+    try { await remindersApi.runOcr(); await qc.invalidateQueries({ queryKey: ['work-settings'] }); }
+    catch (e) { ocrWaitRef.current = undefined; setOcrBusy(false); toast({ title: 'Check not started', description: errMsg(e), variant: 'destructive' }); }
   };
+  // the check runs on the server; when its last-run time changes it is finished
+  useEffect(() => {
+    const d = workQ.data;
+    if (!d || ocrWaitRef.current === undefined || d.ocrRunning) return;
+    if ((d.ocrLastRunAt ?? null) !== ocrWaitRef.current) {
+      ocrWaitRef.current = undefined;
+      setOcrBusy(false);
+      const failed = /^The check failed/.test(d.ocrLastSummary ?? '');
+      toast({ title: failed ? 'Screenshot check failed' : 'Screenshot check done', description: d.ocrLastSummary ?? '', variant: failed ? 'destructive' : undefined });
+    }
+  }, [workQ.data]);
   const setRequire = async (v: boolean) => {
     try { await remindersApi.saveWork({ requireScreenShare: v }); await qc.invalidateQueries({ queryKey: ['work-settings'] }); toast({ title: v ? 'Screen sharing is now required to start work' : 'Screen sharing is now optional' }); }
     catch (e) { toast({ title: 'Not saved', description: errMsg(e), variant: 'destructive' }); }

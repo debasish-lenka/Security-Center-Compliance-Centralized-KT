@@ -272,7 +272,7 @@ export function Documents() {
                             {doc.url && (
                               <>
                                 <Button variant="ghost" size="icon" asChild>
-                                  <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Open">
+                                  <a href={doc.openUrl ?? doc.url} target="_blank" rel="noopener noreferrer" title="Open in a new tab">
                                     <ExternalLink className="h-4 w-4" />
                                   </a>
                                 </Button>
@@ -386,7 +386,7 @@ export function Documents() {
                 {selectedDoc.url && (
                   <>
                     <Button variant="ghost" asChild>
-                      <a href={selectedDoc.url} target="_blank" rel="noopener noreferrer">
+                      <a href={selectedDoc.openUrl ?? selectedDoc.url} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="mr-2 h-4 w-4" />
                         Open
                       </a>
