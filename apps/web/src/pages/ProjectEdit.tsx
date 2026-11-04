@@ -1,3 +1,4 @@
+import { WorkLinksEditor, cleanLinks, type WorkLink } from '@/components/WorkLinksEditor';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -58,9 +59,12 @@ export function ProjectEdit() {
 
   const users = usersData?.data?.items || [];
 
+  const [workLinks, setWorkLinks] = useState<WorkLink[]>([]);
+
   useEffect(() => {
     if (projectData?.data) {
       const p = projectData.data;
+      setWorkLinks(Array.isArray(p.workLinks) ? p.workLinks : []);
       setFormData({
         name: p.name || '',
         description: p.description || '',
@@ -124,6 +128,7 @@ export function ProjectEdit() {
       actualCompletionDate: formData.actualCompletionDate || null,
       progress: parseInt(formData.progress.toString(), 10) || 0,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+      workLinks: cleanLinks(workLinks),
     };
     updateMutation.mutate(payload);
   };
@@ -256,6 +261,8 @@ export function ProjectEdit() {
                   className="mt-1"
                 />
               </div>
+
+              <WorkLinksEditor value={workLinks} onChange={setWorkLinks} />
 
               <div>
                 <Label htmlFor="startDate">Start Date</Label>

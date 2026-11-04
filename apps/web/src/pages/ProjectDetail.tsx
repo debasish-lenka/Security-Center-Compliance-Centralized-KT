@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
 import { Plus, Edit, Trash2, Eye, ArrowLeft, Users, Flag, Calendar, Image as ImageIcon, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
+import { WorkSessionPanel } from '@/components/WorkSessionPanel';
 import { ProjectProgress } from '@/components/ProjectProgress';
 import { ProjectUploadsByPerson } from '@/components/ProjectUploadsByPerson';
 import { progressTone } from '@/lib/progress-style';
@@ -237,6 +238,7 @@ export function ProjectDetail() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="work">Tasks &amp; Milestones</TabsTrigger>
           <TabsTrigger value="team">Team</TabsTrigger>
+          <TabsTrigger value="session">Work Log</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="reports">KT Reports ({reports.length})</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -287,6 +289,10 @@ export function ProjectDetail() {
 
         <TabsContent value="team" className="space-y-4">
           <ProjectTeam projectId={id!} />
+        </TabsContent>
+
+        <TabsContent value="session" className="space-y-4">
+          <WorkSessionPanel projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">

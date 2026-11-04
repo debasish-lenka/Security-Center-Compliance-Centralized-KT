@@ -19,6 +19,7 @@ import { enforceProjectScope } from './middleware/project-scope.js';
 import { AuditLogger } from './services/audit-logger.js';
 import { authPlugin } from './plugins/auth.js';
 import { startPurgeJob } from './services/recycle-bin.js';
+import { startWorkShotPurge } from './routes/work-sessions.js';
 import { startBackupJob } from './services/backup.js';
 import { recordProjectActivity } from './services/project-progress.js';
 
@@ -212,6 +213,7 @@ process.on('SIGINT', shutdown);
 
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
+  startWorkShotPurge(app); // deletes work screenshots after the retention period
   startPurgeJob(app); // removes recycle-bin entries older than 30 days
   startBackupJob(app); // runs the scheduled backup set on the Backups page
   app.log.info(`🚀 DBI Security Center API running on http://${env.HOST}:${env.PORT}`);

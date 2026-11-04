@@ -6,6 +6,7 @@ import { taskRoutes } from './tasks.js';
 import { milestoneRoutes } from './milestones.js';
 import { ktReportRoutes } from './kt-reports.js';
 import { documentRoutes } from './documents.js';
+import { workSessionRoutes } from './work-sessions.js';
 import { userRoutes } from './users.js';
 import { roleRoutes } from './roles.js';
 import { complianceRoutes } from './compliance.js';
@@ -38,6 +39,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(milestoneRoutes, { prefix: '/api/v1/projects' });
   await app.register(ktReportRoutes, { prefix: '/api/v1/projects' });
   await app.register(documentRoutes, { prefix: '/api/v1/projects' });
+  await app.register(workSessionRoutes, { prefix: '/api/v1/projects' });
   await app.register(userRoutes, { prefix: '/api/v1/users' });
   await app.register(roleRoutes, { prefix: '/api/v1/roles' });
   await app.register(complianceRoutes, { prefix: '/api/v1/compliance' });

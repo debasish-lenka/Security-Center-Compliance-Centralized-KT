@@ -69,7 +69,7 @@ const RESOURCE: Record<string, string> = {
 
 // Every successful change under /projects/:id/... is remembered as that person's latest update on the project.
 // (Routes that already write their own activity row, and requests that are not "work", are skipped.)
-const SKIP = /\/(delete-request|start|rollback|upload-url|access-analytics|watermark)/;
+const SKIP = /\/(delete-request|start|rollback|upload-url|access-analytics|watermark|work)/;
 
 export async function recordProjectActivity(app: FastifyInstance, request: FastifyRequest, status: number) {
   try {

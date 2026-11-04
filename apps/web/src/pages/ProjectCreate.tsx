@@ -1,3 +1,4 @@
+import { WorkLinksEditor, cleanLinks, type WorkLink } from '@/components/WorkLinksEditor';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -37,6 +38,7 @@ export function ProjectCreate() {
 
   const users = usersData?.data?.items || [];
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [workLinks, setWorkLinks] = useState<WorkLink[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const toggleMember = (id: string) => setMemberIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   // the owner and the manager are on the project anyway, so they are not listed again as team members
@@ -63,6 +65,7 @@ export function ProjectCreate() {
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
       managerId: formData.managerId !== 'none' ? formData.managerId : null,
       memberIds: memberIds.filter((id) => id !== formData.ownerId && id !== formData.managerId),
+      workLinks: cleanLinks(workLinks),
     };
     createMutation.mutate(payload);
   };
@@ -178,6 +181,8 @@ export function ProjectCreate() {
                 </div>
                 <p className="mt-1 text-xs text-dbi-textSecondary">Choose one or many. You can add or remove people later from the project's Team tab.</p>
               </div>
+
+              <WorkLinksEditor value={workLinks} onChange={setWorkLinks} />
 
               <div>
                 <Label htmlFor="startDate">Start Date</Label>

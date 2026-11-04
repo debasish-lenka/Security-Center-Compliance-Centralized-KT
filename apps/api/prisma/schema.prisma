@@ -220,11 +220,52 @@ model Project {
   activityFeed           ActivityFeed[]
   knowledgeBooks         KnowledgeBook[]
   deleteRequests         DocumentDeleteRequest[]
+  workLinks              Json?         // [{ label, url }] the outside tools (dashboards, consoles) the work is done in
+  workSessions           WorkSession[]
 
   @@index([createdById])
   @@index([ownerId])
   @@index([status])
   @@map("projects")
+}
+
+// One stretch of work on a project, started and stopped by the person doing it
+model WorkSession {
+  id          String   @id @default(uuid())
+  projectId   String
+  userId      String
+  linkLabel   String?
+  linkUrl     String?
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  endReason   String?  // STOPPED, IDLE (no sign of life for a while)
+  lastSeenAt  DateTime @default(now())
+  includedIn  String?  // id of the KT document version that already holds this session's notes and pictures
+  entries     WorkEntry[]
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, userId])
+  @@index([endedAt])
+  @@map("work_sessions")
+}
+
+// A note, a screenshot or an event (screen sharing started / stopped) inside a work session
+model WorkEntry {
+  id         String   @id @default(uuid())
+  sessionId  String
+  kind       String   // NOTE, SHOT, EVENT
+  text       String?
+  storageKey String?
+  size       Int?
+  hash       String?
+  reason     String?  // why a picture was taken: CHANGE, MANUAL, HEARTBEAT, NOTE, STOP
+  createdAt  DateTime @default(now())
+
+  session    WorkSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("work_entries")
 }
 
 enum ProjectPriority {

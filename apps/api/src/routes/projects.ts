@@ -5,6 +5,8 @@ import { diffFields } from '../services/document-oversight.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 
+const WorkLinks = z.array(z.object({ label: z.string().trim().min(1).max(60), url: z.string().trim().max(500).regex(/^https?:\/\/\S+$/i, 'Use a full link starting with http:// or https://') })).max(10);
+
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional().nullable(),
@@ -15,6 +17,7 @@ const CreateProjectSchema = z.object({
   expectedCompletionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
   memberIds: z.array(z.string().uuid()).default([]),
+  workLinks: WorkLinks.optional(), // where the work is done (dashboards, consoles)
 });
 
 const UpdateProjectSchema = z.object({
@@ -28,6 +31,7 @@ const UpdateProjectSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
   status: z.enum(['NOT_STARTED', 'ONGOING', 'ON_HOLD', 'COMPLETED', 'OVERDUE', 'AT_RISK']).optional(),
   progress: z.number().int().min(0).max(100).optional(),
+  workLinks: WorkLinks.optional(),
 });
 
 const AddMemberSchema = z.object({
@@ -202,6 +206,7 @@ export async function projectRoutes(app: FastifyInstance) {
         startDate: true,
         expectedCompletionDate: true,
         actualCompletionDate: true,
+        workLinks: true,
         createdAt: true,
         updatedAt: true,
         creator: { select: { id: true, fullName: true, email: true } },
@@ -342,6 +347,7 @@ export async function projectRoutes(app: FastifyInstance) {
           startDate: data.startDate ? new Date(data.startDate) : null,
           expectedCompletionDate: data.expectedCompletionDate ? new Date(data.expectedCompletionDate) : null,
           priority: data.priority,
+          workLinks: data.workLinks ?? undefined,
           status: 'NOT_STARTED',
         },
       });
