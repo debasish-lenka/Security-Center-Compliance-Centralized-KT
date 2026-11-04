@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { deleteRequestsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 
@@ -80,7 +80,7 @@ export function DeleteApprovalsPanel() {
                       <b>{r.requestedBy?.fullName}</b> asked to delete <b>{r.documentName}</b>
                     </p>
                     <p className="text-xs text-dbi-textSecondary">
-                      {r.project?.name} · {formatDate(r.createdAt, 'relative')}
+                      {r.project?.name} · {formatDateTimeIST(r.createdAt)}
                       {isSuperAdmin && ` · waiting for ${r.pendingWith?.join(', ') || 'no one'}`}
                     </p>
                     {r.escalated && <Badge className="mt-1 bg-dbi-amber/15 text-dbi-amber">Escalated: the requester manages this project</Badge>}
@@ -141,7 +141,7 @@ export function DeleteApprovalsPanel() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-dbi-textPrimary">{r.documentName} <span className="text-dbi-textSecondary">· {r.project?.name}</span></p>
                   <p className="text-xs text-dbi-textSecondary">
-                    Delete pending, waiting for {r.pendingWith?.join(', ') || 'a manager'} · {formatDate(r.createdAt, 'relative')}
+                    Delete pending, waiting for {r.pendingWith?.join(', ') || 'a manager'} · {formatDateTimeIST(r.createdAt)}
                   </p>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => cancel.mutate(r.id)} disabled={cancel.isPending}>Withdraw</Button>

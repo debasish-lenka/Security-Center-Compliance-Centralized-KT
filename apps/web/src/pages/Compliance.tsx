@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Plus, Search, Edit, Trash2, Eye, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { formatDate, getStatusColor, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 const statusOptions = ['ALL', 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'AT_RISK'];
@@ -220,7 +220,7 @@ export function Compliance() {
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">{control.owner?.fullName}</TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">
-                          {control.lastAssessed ? formatDate(control.lastAssessed) : 'Never'}
+                          {control.lastAssessed ? formatDateTimeIST(control.lastAssessed) : 'Never'}
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">
                           {control.nextReviewDate ? formatDate(control.nextReviewDate) : 'Not scheduled'}

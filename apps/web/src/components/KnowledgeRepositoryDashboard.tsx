@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { knowledgeBooksApi, projectsApi } from '@/lib/api';
 import { Search, BookOpen, FileText, TrendingUp, Users, Award, Download, Clock, PieChart } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 interface KnowledgeBook {
@@ -301,9 +301,9 @@ export function KnowledgeRepositoryDashboard() {
                             {book.downloadCount || 0}
                           </TableCell>
                           <TableCell className="text-sm text-dbi-textSecondary">
-                            {book.lastAccessed ? formatRelativeTime(book.lastAccessed) : 'Never'}
+                            {book.lastAccessed ? formatDateTimeIST(book.lastAccessed) : 'Never'}
                           </TableCell>
-                          <TableCell className="text-sm text-dbi-textSecondary">{book.createdAt ? formatDate(book.createdAt) : 'N/A'}</TableCell>
+                          <TableCell className="text-sm text-dbi-textSecondary">{book.createdAt ? formatDateTimeIST(book.createdAt) : 'N/A'}</TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="icon" className="text-dbi-cyan hover:text-dbi-cyan" title="View">

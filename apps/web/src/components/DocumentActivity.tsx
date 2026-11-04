@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Eye } from 'lucide-react';
 import { documentsApi } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 interface Props { documentId: string }
 
@@ -34,7 +34,7 @@ export function DocumentActivity({ documentId }: Props) {
           {data.recentEvents.map((e) => (
             <div key={e.id} className="flex justify-between gap-3 rounded bg-dbi-elevated/60 px-3 py-1.5 text-sm">
               <span className="text-dbi-textPrimary">{e.user?.fullName ?? 'Unknown'} <span className="text-dbi-textSecondary">{e.action.toLowerCase()}</span></span>
-              <span className="text-xs text-dbi-textSecondary">{formatDate(e.createdAt)}{e.ipAddress ? ` · ${e.ipAddress}` : ''}</span>
+              <span className="text-xs text-dbi-textSecondary">{formatDateTimeIST(e.createdAt)}{e.ipAddress ? ` · ${e.ipAddress}` : ''}</span>
             </div>
           ))}
         </div>

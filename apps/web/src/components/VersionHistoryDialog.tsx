@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { documentsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowLeft, RotateCcw, FileText, User, AlertTriangle } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 interface VersionHistoryDialogProps {
   documentId: string;
@@ -130,7 +130,7 @@ export function VersionHistoryDialog({ documentId, documentName, open, onOpenCha
                               v{version.version} {index === 0 && <Badge variant="default" className="ml-1">Current</Badge>}
                             </TableCell>
                             <TableCell className="font-mono text-sm">{formatSize(version.size)}</TableCell>
-                            <TableCell className="text-sm">{formatDate(version.createdAt)}</TableCell>
+                            <TableCell className="text-sm">{formatDateTimeIST(version.createdAt)}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <User className="h-3.5 w-3.5 text-dbi-textSecondary" />

@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Search, Plus, Download, Edit, Trash2, FileText, Loader2, BookOpen, ArrowDownUp, Shield } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { generateKnowledgeBookPdf, createKnowledgeBookFromProject, KnowledgeBookConfig } from '@/lib/pdfGenerator';
 
@@ -413,8 +413,8 @@ export function KnowledgeBooks() {
                             ))}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">{book.createdAt ? formatDate(book.createdAt) : 'N/A'}</TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">{book.updatedAt ? formatDate(book.updatedAt) : 'N/A'}</TableCell>
+                        <TableCell className="text-sm text-dbi-textSecondary">{book.createdAt ? formatDateTimeIST(book.createdAt) : 'N/A'}</TableCell>
+                        <TableCell className="text-sm text-dbi-textSecondary">{book.updatedAt ? formatDateTimeIST(book.updatedAt) : 'N/A'}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book)} title="Generate PDF" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
@@ -618,7 +618,7 @@ export function KnowledgeBooks() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm text-dbi-textPrimary truncate">{doc.name}</p>
-                          <p className="text-xs text-dbi-textSecondary">{doc.type.toUpperCase()} • {formatDate(doc.createdAt)}</p>
+                          <p className="text-xs text-dbi-textSecondary">{doc.type.toUpperCase()} • {formatDateTimeIST(doc.createdAt)}</p>
                         </div>
                         <Badge variant="secondary" className="text-xs">{doc.projectName}</Badge>
                       </label>

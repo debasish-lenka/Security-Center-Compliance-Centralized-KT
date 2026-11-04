@@ -72,10 +72,13 @@ export async function workKtPdf(opts: { project: string; person: string; email: 
   para(`${notes} note${notes === 1 ? '' : 's'}, ${shots} screenshot${shots === 1 ? '' : 's'}`, 10);
   const weak = opts.sessions.filter((s) => s.evidence !== 'FULL').length;
   if (weak) para(`Screen evidence: ${opts.sessions.length - weak} of ${opts.sessions.length} sessions are fully backed by the screen; ${weak} are not.`, 10, font, red);
-  if (shareStops || idle) para(`Attention: screen sharing was stopped ${shareStops} time(s) and ${idle} session(s) ended because there was no sign of activity.`, 10, font, red);
+  if (shareStops || idle) para(`Note: screen sharing was stopped ${shareStops} time(s); ${idle} session(s) ended because there was no sign of activity.`, 10, font, grey);
 
   for (const [i, s] of opts.sessions.entries()) {
-    page = pdf.addPage([W, H]); y = H - 60;
+    ensure(170); // a new page only when the session heading would not fit
+    if (i > 0) y -= 10;
+    page.drawLine({ start: { x: M, y: y + 6 }, end: { x: W - M, y: y + 6 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.85) });
+    y -= 8;
     para(`Session ${i + 1}`, 15, bold, teal);
     para(`${formatWhen(s.startedAt)}  to  ${s.endedAt ? formatWhen(s.endedAt) : 'still running'}   (${lengthOf(minutesBetween(s.startedAt, s.endedAt))})`, 10, bold);
     if (s.linkUrl) para(`Tool: ${s.linkLabel ? `${s.linkLabel} - ` : ''}${s.linkUrl}`, 9, font, grey);

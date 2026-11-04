@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Search, Check, CheckCheck, Trash2, Mail, AlertCircle, Info, RefreshCw } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useNotifications } from '@/hooks/useNotifications';
 
@@ -369,7 +369,7 @@ export function Notifications() {
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">
                           <div>{formatRelativeTime(notification.createdAt)}</div>
-                          <div className="text-xs">{formatDate(notification.createdAt)}</div>
+                          <div className="text-xs">{formatDateTimeIST(notification.createdAt)}</div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">

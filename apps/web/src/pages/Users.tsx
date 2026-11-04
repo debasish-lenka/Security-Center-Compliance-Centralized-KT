@@ -13,7 +13,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Search, Edit, Eye, UserPlus, Loader2, Mail, User, KeyRound, Send, ShieldOff, UserX, UserCheck } from 'lucide-react';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { getStatusColor, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -465,9 +465,9 @@ export function Users() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-dbi-textSecondary">
-                          {user.lastLogin || user.lastActivityAt ? formatDate(user.lastLogin || user.lastActivityAt) : 'Never'}
+                          {user.lastLogin || user.lastActivityAt ? formatDateTimeIST(user.lastLogin || user.lastActivityAt) : 'Never'}
                         </TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">{formatDate(user.createdAt)}</TableCell>
+                        <TableCell className="text-sm text-dbi-textSecondary">{formatDateTimeIST(user.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             {(me?.role === 'SUPER_ADMIN' || !['SUPER_ADMIN', 'ADMIN'].includes(user.role)) && (

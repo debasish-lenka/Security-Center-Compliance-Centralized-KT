@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { documentsApi } from '@/lib/api';
 import { Download, TrendingUp, TrendingDown, AlertTriangle, Users, FileText, Clock, Eye, MousePointer } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 interface AccessEvent {
@@ -274,7 +274,7 @@ export function DocumentAccessAnalytics({ documentId, projectId }: DocumentAcces
                       </TableCell>
                       <TableCell className="text-sm text-dbi-textSecondary">
                         <div>{formatRelativeTime(event.timestamp)}</div>
-                        <div className="text-xs">{formatDate(event.timestamp)}</div>
+                        <div className="text-xs">{formatDateTimeIST(event.timestamp)}</div>
                       </TableCell>
                       <TableCell className="text-sm text-dbi-textSecondary">
                         {event.duration ? `${Math.round(event.duration / 60)}m ${event.duration % 60}s` : 'N/A'}

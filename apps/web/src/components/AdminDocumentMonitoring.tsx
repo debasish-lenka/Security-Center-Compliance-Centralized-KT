@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { documentsApi, auditLogsApi } from '@/lib/api';
 import { AlertTriangle, Eye, Download, Shield, Wifi, WifiOff, TrendingUp, Users, FileText, X, Loader2, Filter } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 interface MonitorEvent {
@@ -127,7 +127,7 @@ export function AdminDocumentMonitoring({ autoRefresh = true, refreshInterval = 
                     <p className="text-xs text-dbi-textSecondary mt-1">
                       {alert.userName} performed <strong>{alert.action}</strong> on "{alert.documentName}"
                     </p>
-                    <p className="text-xs text-dbi-textSecondary">{formatRelativeTime(alert.timestamp)}</p>
+                    <p className="text-xs text-dbi-textSecondary">{formatDateTimeIST(alert.timestamp)}</p>
                     {alert.flags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {alert.flags.map(flag => (
@@ -423,7 +423,7 @@ function MonitoringDashboardContent({
                       </TableCell>
                       <TableCell className="text-sm text-dbi-textSecondary">
                         <div>{formatRelativeTime(event.timestamp)}</div>
-                        <div className="text-xs">{formatDate(event.timestamp)}</div>
+                        <div className="text-xs">{formatDateTimeIST(event.timestamp)}</div>
                       </TableCell>
                       <TableCell className="text-sm text-dbi-textSecondary">
                         {event.location || event.ipAddress || 'Unknown'}

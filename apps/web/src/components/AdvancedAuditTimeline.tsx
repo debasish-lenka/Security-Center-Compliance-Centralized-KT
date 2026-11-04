@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { auditLogsApi } from '@/lib/api';
 import { Shield, Filter, Search, ChevronDown, ChevronUp, FileText, Clock, User, Globe, Database, BookOpen, Bell, Download } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 interface AuditEvent {
@@ -298,7 +298,7 @@ export function AdvancedAuditTimeline({ documentId, projectId, userId }: Advance
                                 </div>
 
                                 <div className="mt-2 text-xs text-dbi-textSecondary">
-                                  {formatRelativeTime(event.timestamp)} • {formatDate(event.timestamp)}
+                                  {formatRelativeTime(event.timestamp)} • {formatDateTimeIST(event.timestamp)}
                                   {event.ipAddress && <span className="ml-2">• {event.ipAddress}</span>}
                                 </div>
 
@@ -436,7 +436,7 @@ export function AdvancedAuditTimeline({ documentId, projectId, userId }: Advance
                           </TableCell>
                           <TableCell className="text-sm text-dbi-textSecondary">
                             <div>{formatRelativeTime(event.timestamp)}</div>
-                            <div className="text-xs">{formatDate(event.timestamp)}</div>
+                            <div className="text-xs">{formatDateTimeIST(event.timestamp)}</div>
                           </TableCell>
                           <TableCell>
                             <Badge variant="secondary" className={getActionColor(event.action)}>
@@ -518,7 +518,7 @@ export function AdvancedAuditTimeline({ documentId, projectId, userId }: Advance
                               </div>
                               <div>
                                 <p className="font-medium text-dbi-textPrimary">{event.resourceName}</p>
-                                <p className="text-sm text-dbi-textSecondary">{event.action} • {formatRelativeTime(event.timestamp)}</p>
+                                <p className="text-sm text-dbi-textSecondary">{event.action} • {formatDateTimeIST(event.timestamp)}</p>
                               </div>
                             </div>
                             <Badge variant="secondary" className={getSeverityColor(event.severity)}>

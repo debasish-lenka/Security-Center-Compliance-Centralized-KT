@@ -11,7 +11,7 @@ import { ProjectWork } from '@/components/ProjectWork';
 import { ProjectTeam } from '@/components/ProjectTeam';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
+import { formatDate, getStatusColor, getPriorityColor, formatDateTimeIST } from '@/lib/utils';
 import { Plus, Edit, Trash2, Eye, ArrowLeft, Users, Flag, Calendar, Image as ImageIcon, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
 import { WorkSessionPanel } from '@/components/WorkSessionPanel';
@@ -205,11 +205,11 @@ export function ProjectDetail() {
             </div>
             <div className="space-y-1">
               <p className="text-sm text-dbi-textSecondary">Created</p>
-              <p className="text-sm text-dbi-textPrimary">{formatDate(project.createdAt)}</p>
+              <p className="text-sm text-dbi-textPrimary">{formatDateTimeIST(project.createdAt)}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-dbi-textSecondary">Updated</p>
-              <p className="text-sm text-dbi-textPrimary">{formatDate(project.updatedAt)}</p>
+              <p className="text-sm text-dbi-textPrimary">{formatDateTimeIST(project.updatedAt)}</p>
             </div>
             <div className="space-y-1 md:col-span-2">
               <p className="text-sm text-dbi-textSecondary">Start Date</p>
@@ -352,7 +352,7 @@ export function ProjectDetail() {
                               {report.status.replace('_', ' ')}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-sm text-dbi-textSecondary">{formatDate(report.createdAt)}</TableCell>
+                          <TableCell className="text-sm text-dbi-textSecondary">{formatDateTimeIST(report.createdAt)}</TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="icon" asChild>
                               <Link to={`/kt-reports/${report.id}`}>
@@ -381,7 +381,7 @@ export function ProjectDetail() {
                   <CheckCircle className="h-5 w-5 text-dbi-success mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-sm text-dbi-textPrimary">Project created</p>
-                    <p className="text-xs text-dbi-textSecondary">{formatDate(project.createdAt)}</p>
+                    <p className="text-xs text-dbi-textSecondary">{formatDateTimeIST(project.createdAt)}</p>
                   </div>
                 </div>
                 {project.milestones && project.milestones.map((m: any, i: number) => m.completed && (
@@ -398,7 +398,7 @@ export function ProjectDetail() {
                     <FileText className="h-5 w-5 text-dbi-indigo mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm text-dbi-textPrimary">Document uploaded: {doc.name}</p>
-                      <p className="text-xs text-dbi-textSecondary">By {doc.uploadedBy?.fullName} • {formatDate(doc.createdAt)}</p>
+                      <p className="text-xs text-dbi-textSecondary">By {doc.uploadedBy?.fullName} • {formatDateTimeIST(doc.createdAt)}</p>
                     </div>
                   </div>
                 ))}
@@ -407,7 +407,7 @@ export function ProjectDetail() {
                     <ClipboardList className="h-5 w-5 text-dbi-cyan mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm text-dbi-textPrimary">KT report submitted: {report.title}</p>
-                      <p className="text-xs text-dbi-textSecondary">By {report.author?.fullName} • {formatDate(report.createdAt)}</p>
+                      <p className="text-xs text-dbi-textSecondary">By {report.author?.fullName} • {formatDateTimeIST(report.createdAt)}</p>
                     </div>
                   </div>
                 ))}

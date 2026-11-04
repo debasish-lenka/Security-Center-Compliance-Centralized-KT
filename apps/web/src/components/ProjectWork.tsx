@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { projectsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTimeIST } from '@/lib/utils';
 import { TaskDialog } from '@/components/TaskDialog';
 
 const STATUSES = [
@@ -151,7 +151,7 @@ export function ProjectWork({ projectId }: { projectId: string }) {
                 <div key={m.id} className="flex items-center gap-3 rounded-lg bg-dbi-elevated/60 p-3">
                   <div className="min-w-0 flex-1">
                     <p className={`font-medium text-dbi-textPrimary ${m.completedAt ? 'line-through opacity-60' : ''}`}>{m.name}</p>
-                    <p className="text-xs text-dbi-textSecondary">Due {formatDate(m.dueDate)}{m.completedAt ? ` · completed ${formatDate(m.completedAt)}` : ''}</p>
+                    <p className="text-xs text-dbi-textSecondary">Due {formatDate(m.dueDate)}{m.completedAt ? ` · completed ${formatDateTimeIST(m.completedAt)}` : ''}</p>
                   </div>
                   {!m.completedAt && (
                     <Button variant="outline" size="sm" onClick={() => completeMilestone.mutate(m.id)}>

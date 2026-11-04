@@ -84,7 +84,9 @@ export function Reminders() {
           </div>
         </CardHeader>
         <CardContent className="text-sm text-dbi-textSecondary">
-          When Required, nobody can press Start work in a project's Work Log until they share their whole screen (a single window or tab is not accepted). Work without full screen sharing is marked Partial or No evidence in the work sessions table and in the generated KT.
+          {workQ.data?.requireScreenShare
+            ? "Required: nobody can press Start work in a project's Work Log until they share their whole screen (a single window or tab is not accepted). Work without full screen sharing is marked Partial or No evidence in the work sessions table and in the generated KT."
+            : 'Optional: people can start work without sharing their screen. Such work is marked No evidence (or Partial if sharing was cut or only a window was shared) in the work sessions table and in the generated KT.'}
         </CardContent>
       </Card>
 

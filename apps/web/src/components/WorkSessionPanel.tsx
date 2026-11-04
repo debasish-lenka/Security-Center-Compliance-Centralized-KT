@@ -43,6 +43,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
   const [sharing, setSharing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [openSession, setOpenSession] = useState<string | null>(null);
+  const [shareProblem, setShareProblem] = useState<string | null>(null); // why sharing did not start; stays until the next try
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -110,8 +111,8 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
 
   const postShare = useCallback((st: 'STARTED' | 'STOPPED' | 'DENIED' | 'REJECTED', surface?: string) => {
     const sid = sessionRef.current;
-    if (sid) workApi.share(projectId, sid, st, surface ?? null).catch(() => undefined);
-  }, [projectId]);
+    if (sid) workApi.share(projectId, sid, st, surface ?? null).then(() => refresh()).catch(() => undefined); // the evidence badge changes at once
+  }, [projectId, refresh]);
 
   const endShare = useCallback((announce: boolean) => {
     if (timerRef.current) window.clearInterval(timerRef.current);
@@ -126,6 +127,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
 
   // Ask the browser for the screen. Only the whole screen is asked for; what the person really chose is checked afterwards.
   const askScreen = useCallback(async (): Promise<{ stream: MediaStream; surface: string } | null> => {
+    setShareProblem(null);
     if (!navigator.mediaDevices?.getDisplayMedia) { toast({ title: 'Screen sharing is not available in this browser', variant: 'destructive' }); return null; }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -136,12 +138,16 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
       return { stream, surface };
     } catch (e: any) {
       const why = e?.name === 'NotAllowedError' ? 'The sharing dialog was cancelled or the browser did not allow it.' : e?.name === 'NotFoundError' ? 'There is no screen to share.' : `The browser said: ${e?.name ?? 'unknown error'}.`;
+      setShareProblem(`Screen sharing did not start. ${why}`);
       toast({ title: 'Screen sharing did not start', description: why, variant: 'destructive' });
       return null;
     }
   }, []);
 
-  const notWholeScreen = () => toast({ title: 'Share the whole screen', description: 'A single window or browser tab is not accepted. In the sharing dialog choose "Entire screen" and press Share.', variant: 'destructive' });
+  const notWholeScreen = () => {
+    setShareProblem('Share the whole screen. A single window or browser tab is not accepted. In the sharing dialog choose "Entire screen" and press Share.');
+    toast({ title: 'Share the whole screen', description: 'A single window or browser tab is not accepted. In the sharing dialog choose "Entire screen" and press Share.', variant: 'destructive' });
+  };
 
   // run the capture on a stream that was already accepted
   const attach = useCallback(async (stream: MediaStream) => {
@@ -168,6 +174,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
     }
     await attach(got.stream);
     postShare('STARTED', got.surface);
+    setShareProblem(null);
     return true;
   }, [askScreen, attach, postShare]);
 
@@ -201,7 +208,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
       sessionRef.current = r.data.data.id; // events and pictures need the id before the page has re-drawn
       await stateQ.refetch(); // show "Running" now, not after the screen-share dialog is answered
       setBusy(null);
-      if (got) await attach(got.stream); else await startShare(false);
+      if (got) { await attach(got.stream); setShareProblem(null); } else await startShare(false);
       refresh();
     } catch (e: any) {
       toast({ title: 'Could not start', description: errText(e, 'Try again'), variant: 'destructive' });
@@ -284,8 +291,11 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
             <>
               <p className="text-sm text-dbi-textSecondary">
                 Start from the tool you work in. Your notes and screenshots are recorded while the work is running, and become the project's KT document.
-                You will be asked to share your screen; the screen is captured only when it changes.
+                {state.requireShare
+                  ? ' Screen sharing is required: you will be asked to share your whole screen, and a screenshot of the whole screen is saved whenever it changes, so close anything private before you start.'
+                  : ' You will be asked to share your screen (optional); the screen is captured only when it changes.'}
               </p>
+              {shareProblem && <p role="alert" className="rounded-md border border-dbi-critical/40 bg-dbi-critical/10 p-2 text-sm text-dbi-critical">{shareProblem}</p>}
               <div className="flex flex-wrap gap-2">
                 {links.map((l) => (
                   <Button key={l.url} onClick={() => start(l)} disabled={busy !== null}>
@@ -310,6 +320,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
                   ? <Badge className="bg-dbi-success/20 text-dbi-success">Screen is being shared</Badge>
                   : <Badge className="bg-dbi-warning/20 text-dbi-warning">Screen is not shared</Badge>}
               </div>
+              {shareProblem && <p role="alert" className="rounded-md border border-dbi-critical/40 bg-dbi-critical/10 p-2 text-sm text-dbi-critical">{shareProblem}</p>}
               {!sharing && (
                 <p className="rounded-md border border-dbi-warning/40 bg-dbi-warning/10 p-2 text-sm text-dbi-warning">
                   Your screen is not being shared, so this work has {active.evidence === 'NONE' ? 'no' : 'only partial'} screen evidence. Press "Share screen" and choose the whole screen.

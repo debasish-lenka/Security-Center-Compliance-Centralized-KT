@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { auditLogsApi, projectsApi, usersApi } from '@/lib/api';
 import { Pause, Play, Search, Download, Loader2, ChevronDown, TrendingUp, FileText, Database, User, Shield, Clock, Bell as BellIcon, BookOpen, Globe, Activity } from 'lucide-react';
-import { formatDate, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 interface ActivityEvent {
@@ -379,7 +379,7 @@ export function ActivityFeed({ projectId, userId, documentId }: ActivityFeedProp
 
                       <div className="mt-1 text-xs text-dbi-textSecondary flex items-center gap-4 flex-wrap">
                         <span>{formatRelativeTime(event.timestamp)}</span>
-                        <span>{formatDate(event.timestamp)}</span>
+                        <span>{formatDateTimeIST(event.timestamp)}</span>
                         {event.ipAddress && <span>• {event.ipAddress}</span>}
                         {event.location && <span>• {event.location}</span>}
                       </div>

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { formatDate, getStatusColor, formatDateTimeIST } from '@/lib/utils';
 import { ArrowLeft, Edit, Trash2, Shield, Calendar, User, Clock, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -181,7 +181,7 @@ export function ComplianceDetail() {
               </div>
               <div>
                 <p className="text-sm text-dbi-textSecondary">Last Assessed</p>
-                <p className="text-xl font-bold text-dbi-textPrimary">{control.lastAssessed ? formatDate(control.lastAssessed) : 'Never'}</p>
+                <p className="text-xl font-bold text-dbi-textPrimary">{control.lastAssessed ? formatDateTimeIST(control.lastAssessed) : 'Never'}</p>
               </div>
             </div>
           </CardContent>
@@ -301,7 +301,7 @@ export function ComplianceDetail() {
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium text-dbi-textSecondary">Last Assessed</p>
-                <p className="text-sm text-dbi-textPrimary">{control.lastAssessed ? formatDate(control.lastAssessed) : 'Never'}</p>
+                <p className="text-sm text-dbi-textPrimary">{control.lastAssessed ? formatDateTimeIST(control.lastAssessed) : 'Never'}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium text-dbi-textSecondary">Next Review</p>
@@ -313,11 +313,11 @@ export function ComplianceDetail() {
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium text-dbi-textSecondary">Created</p>
-                <p className="text-sm text-dbi-textPrimary">{control.createdAt ? formatDate(control.createdAt) : 'Unknown'}</p>
+                <p className="text-sm text-dbi-textPrimary">{control.createdAt ? formatDateTimeIST(control.createdAt) : 'Unknown'}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium text-dbi-textSecondary">Updated</p>
-                <p className="text-sm text-dbi-textPrimary">{control.updatedAt ? formatDate(control.updatedAt) : 'Unknown'}</p>
+                <p className="text-sm text-dbi-textPrimary">{control.updatedAt ? formatDateTimeIST(control.updatedAt) : 'Unknown'}</p>
               </div>
             </CardContent>
           </Card>

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { DeleteApprovalsPanel } from '@/components/DeleteApprovalsPanel';
 import { ProjectDeleteApprovals } from '@/components/ProjectDeleteApprovals';
 import { Progress } from '@/components/ui/progress';
-import { formatDate, getPriorityColor } from '@/lib/utils';
+import { formatDate, getPriorityColor, formatDateTimeIST } from '@/lib/utils';
 import {
   Shield,
   AlertTriangle,
@@ -335,7 +335,7 @@ export function ExecutiveDashboard() {
                         Project: {upcomingDeadlines?.find((d: any) => d.id === alert.projectId)?.name || alert.projectId}
                       </span>
                     )}
-                    <p className="text-xs text-dbi-textMuted mt-1">{formatDate(alert.timestamp, 'relative')}</p>
+                    <p className="text-xs text-dbi-textMuted mt-1">{formatDateTimeIST(alert.timestamp)}</p>
                   </div>
                 </div>
               </div>
@@ -426,7 +426,7 @@ export function ExecutiveDashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-dbi-textPrimary">{activity.action} {activity.resourceType}</p>
-                  <p className="text-xs text-dbi-textSecondary">{activity.projectName} • {formatDate(activity.timestamp, 'relative')}</p>
+                  <p className="text-xs text-dbi-textSecondary">{activity.projectName} • {formatDateTimeIST(activity.timestamp)}</p>
                 </div>
               </div>
             ))}

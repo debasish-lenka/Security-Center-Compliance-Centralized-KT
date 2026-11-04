@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { documentsApi, usersApi } from '@/lib/api';
 import { Search, UserPlus, X, Link2, Clock, Shield } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 interface DocumentSharingDialogProps {
@@ -309,7 +309,7 @@ export function DocumentSharingDialog({ documentId, documentName, open, onOpenCh
                           {share.expiresAt && (
                             <Badge variant="secondary" className="text-xs">
                               <Clock className="mr-1 h-3 w-3" />
-                              Expires {formatDate(share.expiresAt)}
+                              Expires {formatDateTimeIST(share.expiresAt)}
                             </Badge>
                           )}
                           <Button

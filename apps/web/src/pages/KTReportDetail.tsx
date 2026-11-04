@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ktReportsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { formatDate, getStatusColor, formatDateTimeIST } from '@/lib/utils';
 
 const SECTIONS: [string, string][] = [
   ['workCompleted', 'Work completed'],
@@ -109,11 +109,11 @@ export function KTReportDetail() {
       <Card>
         <CardContent className="grid gap-4 p-5 text-sm sm:grid-cols-3">
           <div><p className="text-dbi-textSecondary">Report date</p><p className="font-medium text-dbi-textPrimary">{formatDate(report.reportDate)}</p></div>
-          <div><p className="text-dbi-textSecondary">Submitted</p><p className="font-medium text-dbi-textPrimary">{report.submittedAt ? formatDate(report.submittedAt) : 'Not yet'}</p></div>
+          <div><p className="text-dbi-textSecondary">Submitted</p><p className="font-medium text-dbi-textPrimary">{report.submittedAt ? formatDateTimeIST(report.submittedAt) : 'Not yet'}</p></div>
           <div>
             <p className="text-dbi-textSecondary">Reviewed</p>
             <p className="font-medium text-dbi-textPrimary">
-              {report.approvedAt ? `${formatDate(report.approvedAt)}${report.approver?.fullName ? ` by ${report.approver.fullName}` : ''}` : 'Not yet'}
+              {report.approvedAt ? `${formatDateTimeIST(report.approvedAt)}${report.approver?.fullName ? ` by ${report.approver.fullName}` : ''}` : 'Not yet'}
             </p>
           </div>
         </CardContent>

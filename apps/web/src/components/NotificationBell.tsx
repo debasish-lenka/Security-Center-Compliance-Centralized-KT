@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Button } from '@/components/ui/button';
 import { Bell, Check, CheckCheck, X } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
-import { formatRelativeTime } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 interface Notification {
   id: string;
@@ -148,7 +148,7 @@ export function NotificationBell() {
                     </p>
                     <p className="text-xs text-dbi-textSecondary truncate">{notification.message}</p>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-dbi-textSecondary">{formatRelativeTime(notification.createdAt)}</span>
+                      <span className="text-xs text-dbi-textSecondary">{formatDateTimeIST(notification.createdAt)}</span>
                       <div className="flex items-center gap-1">
                         {!notification.read && (
                           <Button

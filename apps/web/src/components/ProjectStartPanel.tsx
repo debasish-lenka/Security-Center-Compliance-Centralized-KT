@@ -3,7 +3,7 @@ import { CheckCircle2, Loader2, Play, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 export interface StartInfo {
   started: number;
@@ -43,7 +43,7 @@ export function ProjectStartPanel({
   if (!info) return null;
   const mustStart = info.iStarted === false;
   const allStarted = info.total > 0 && info.started === info.total;
-  const lastLine = last ? `Latest update: ${last.by} ${last.text} · ${formatDate(last.at, 'relative')}` : 'No updates yet';
+  const lastLine = last ? `Latest update: ${last.by} ${last.text} · ${formatDateTimeIST(last.at)}` : 'No updates yet';
 
   const noTeam = info.total === 0;
 
@@ -56,7 +56,7 @@ export function ProjectStartPanel({
         {!noTeam && (
           <div className="flex flex-wrap gap-1">
             {info.startedBy.slice(0, 8).map((s) => (
-              <span key={s.userId} title={`Started ${formatDate(s.at, 'relative')}`} className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600">✓ {s.fullName}</span>
+              <span key={s.userId} title={`Started ${formatDateTimeIST(s.at)}`} className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600">✓ {s.fullName}</span>
             ))}
             {info.waiting.slice(0, 8).map((n) => (
               <span key={n} title="Has not started yet" className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600">{n}</span>
@@ -103,7 +103,7 @@ export function ProjectStartPanel({
             <p className="text-xs font-medium uppercase tracking-wider text-dbi-textSecondary">Started</p>
             {info.startedBy.length === 0 && <p className="text-dbi-textSecondary">No one yet</p>}
             {info.startedBy.map((s) => (
-              <p key={s.userId} className="text-dbi-textPrimary">{s.fullName} <span className="text-xs text-dbi-textSecondary">· {formatDate(s.at, 'relative')}</span></p>
+              <p key={s.userId} className="text-dbi-textPrimary">{s.fullName} <span className="text-xs text-dbi-textSecondary">· {formatDateTimeIST(s.at)}</span></p>
             ))}
           </div>
           <div>

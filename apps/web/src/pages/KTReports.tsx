@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination } from '@/components/ui/pagination';
 import { Plus, Search, Edit, Trash2, Eye, FileText } from 'lucide-react';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { getStatusColor, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 
 const statusOptions = ['ALL', 'DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'];
@@ -183,7 +183,7 @@ export function KTReports() {
                             {report.status.replace('_', ' ')}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-dbi-textSecondary">{formatDate(report.createdAt)}</TableCell>
+                        <TableCell className="text-sm text-dbi-textSecondary">{formatDateTimeIST(report.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-2">
                             <Button variant="ghost" size="icon" asChild>

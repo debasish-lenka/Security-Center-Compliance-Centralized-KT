@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { projectDeleteApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 
@@ -67,7 +67,7 @@ export function ProjectDeleteApprovals() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-dbi-textPrimary"><b>{r.requestedBy?.fullName}</b> asked to delete the project <b>{r.projectName}</b></p>
-                    <p className="text-xs text-dbi-textSecondary">{formatDate(r.createdAt, 'relative')}</p>
+                    <p className="text-xs text-dbi-textSecondary">{formatDateTimeIST(r.createdAt)}</p>
                     <p className="mt-2 rounded bg-dbi-background/60 p-2 text-sm text-dbi-textPrimary"><span className="text-dbi-textSecondary">Reason: </span>{r.reason}</p>
                   </div>
                   {rejecting !== r.id && (
@@ -104,7 +104,7 @@ export function ProjectDeleteApprovals() {
               <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-dbi-elevated/60 p-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-dbi-textPrimary">{r.projectName}</p>
-                  <p className="text-xs text-dbi-textSecondary">Delete pending at {r.pendingWith?.join(', ') || 'a super admin'} · {formatDate(r.createdAt, 'relative')}</p>
+                  <p className="text-xs text-dbi-textSecondary">Delete pending at {r.pendingWith?.join(', ') || 'a super admin'} · {formatDateTimeIST(r.createdAt)}</p>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => cancel.mutate(r.id)} disabled={cancel.isPending}>Withdraw</Button>
               </div>

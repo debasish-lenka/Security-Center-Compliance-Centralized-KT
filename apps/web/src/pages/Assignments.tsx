@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Filter, Calendar, AlertTriangle, Clock, FileText, CheckCircle, ChevronRight, Shield, Activity, FolderKanban } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTimeIST } from '@/lib/utils';
 import { assignmentsApi, projectsApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDialog } from '@/components/TaskDialog';
@@ -469,7 +469,7 @@ export function Assignments() {
                 </div>
                 <div className="flex-1 min-w-0 pt-1">
                   <p className="font-medium text-dbi-textPrimary">{item.action} {item.resourceType}: {item.resourceName}</p>
-                  <p className="text-sm text-dbi-textSecondary">{item.projectName} • {formatDate(item.timestamp, 'relative')}</p>
+                  <p className="text-sm text-dbi-textSecondary">{item.projectName} • {formatDateTimeIST(item.timestamp)}</p>
                 </div>
               </div>
             ))}

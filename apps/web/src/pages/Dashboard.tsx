@@ -7,7 +7,7 @@ import { TeamWorkloadChart } from '@/components/charts/TeamWorkloadChart';
 import { KTSubmissionChart } from '@/components/charts/KTSubmissionChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { formatDate, getStatusColor, getPriorityColor } from '@/lib/utils';
+import { formatDate, getStatusColor, getPriorityColor, formatDateTimeIST } from '@/lib/utils';
 import {
   FolderKanban,
   Shield,
@@ -249,7 +249,7 @@ export function Dashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-dbi-textPrimary">{activity.action} {activity.resourceType}</p>
-                    <p className="text-xs text-dbi-textSecondary">{activity.actor?.fullName || 'System'} • {formatDate(activity.createdAt, 'relative')}</p>
+                    <p className="text-xs text-dbi-textSecondary">{activity.actor?.fullName || 'System'} • {formatDateTimeIST(activity.createdAt)}</p>
                   </div>
                 </div>
               ))

@@ -1,3 +1,4 @@
+import { formatDateTimeIST } from './utils';
 import {
   Document,
   Page,
@@ -262,7 +263,7 @@ export function CoverPage({ config }: { config: CoverPageConfig }) {
         {config.author && <Text style={styles.coverMeta}>Author: {config.author}</Text>}
         {config.projectName && <Text style={styles.coverMeta}>Project: {config.projectName}</Text>}
         {config.date && <Text style={styles.coverMeta}>Date: {config.date}</Text>}
-        <Text style={styles.coverMeta}>Generated on {new Date().toLocaleDateString()}</Text>
+        <Text style={styles.coverMeta}>Generated on {formatDateTimeIST(new Date())}</Text>
       </View>
     </Page>
   );
@@ -322,7 +323,7 @@ export function DocumentPage({
         <Text style={styles.documentTitle}>{document.title}</Text>
         <View style={{ flexDirection: 'row', gap: 16 }}>
           {document.author && <Text style={styles.documentMeta}>Author: {document.author}</Text>}
-          <Text style={styles.documentMeta}>Created: {new Date(document.createdAt).toLocaleDateString()}</Text>
+          <Text style={styles.documentMeta}>Created: {formatDateTimeIST(document.createdAt)}</Text>
         </View>
       </View>
 
@@ -427,7 +428,7 @@ export function createKnowledgeBookFromProject(
     watermarkText: config.watermarkText || 'CONFIDENTIAL',
     includeToc: config.includeToc ?? true,
     includePageNumbers: config.includePageNumbers ?? true,
-    footerText: config.footerText || `${projectName} | ${new Date().toLocaleDateString()}`,
+    footerText: config.footerText || `${projectName} | ${formatDateTimeIST(new Date())}`,
     metadata: config.metadata,
   };
 
@@ -436,7 +437,7 @@ export function createKnowledgeBookFromProject(
     subtitle: fullConfig.subtitle,
     author: fullConfig.author,
     projectName: fullConfig.projectName,
-    date: new Date().toLocaleDateString(),
+    date: formatDateTimeIST(new Date()),
     backgroundColor: '#080D18',
     textColor: '#53D8FB',
   };

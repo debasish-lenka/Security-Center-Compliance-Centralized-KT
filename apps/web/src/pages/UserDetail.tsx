@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { accessApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { formatDate, getStatusColor } from '@/lib/utils';
+import { getStatusColor, formatDateTimeIST } from '@/lib/utils';
 
 const ADMIN_LEVEL = ['SUPER_ADMIN', 'ADMIN'];
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
@@ -132,8 +132,8 @@ export function UserDetail() {
               {user.authProvider === 'MICROSOFT' ? 'Handled by Microsoft' : !targetIsAdmin ? 'Not required for this role' : user.totpEnabled ? 'Enabled' : 'Will be set up at next login'}
             </p>
           </div>
-          <div><p className="text-dbi-textSecondary">Created</p><p className="font-medium text-dbi-textPrimary">{formatDate(user.createdAt)}</p></div>
-          <div><p className="text-dbi-textSecondary">Last active</p><p className="font-medium text-dbi-textPrimary">{user.lastActivityAt ? formatDate(user.lastActivityAt, 'relative') : 'Never'}</p></div>
+          <div><p className="text-dbi-textSecondary">Created</p><p className="font-medium text-dbi-textPrimary">{formatDateTimeIST(user.createdAt)}</p></div>
+          <div><p className="text-dbi-textSecondary">Last active</p><p className="font-medium text-dbi-textPrimary">{user.lastActivityAt ? formatDateTimeIST(user.lastActivityAt) : 'Never'}</p></div>
         </CardContent>
       </Card>
 

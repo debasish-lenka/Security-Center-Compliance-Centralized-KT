@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { recycleBinApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
+import { formatDateTimeIST } from '@/lib/utils';
 
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`;
@@ -55,7 +55,7 @@ export function RecycleBin() {
                     {e.projectName ?? 'Project deleted'} · {kb(e.size)} · {e.versions} version{e.versions === 1 ? '' : 's'}
                   </p>
                   <p className="text-xs text-dbi-textSecondary">
-                    Deleted {formatDate(e.deletedAt)} by {e.deletedBy}
+                    Deleted {formatDateTimeIST(e.deletedAt)} by {e.deletedBy}
                     {e.requestedBy ? ` · requested by ${e.requestedBy}` : ''}
                   </p>
                   {e.reason && <p className="text-sm text-dbi-textPrimary"><span className="text-dbi-textSecondary">Reason: </span>{e.reason}</p>}
