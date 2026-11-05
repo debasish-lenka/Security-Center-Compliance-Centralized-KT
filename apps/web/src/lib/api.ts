@@ -1718,3 +1718,13 @@ export const taskFlowApi = {
   unblock: (projectId: string, taskId: string) => api.post(`/v1/projects/${projectId}/tasks/${taskId}/unblock`, {}),
   reviews: (projectId: string, taskId: string) => api.get(`/v1/projects/${projectId}/tasks/${taskId}/reviews`),
 };
+
+// Needs attention (for owners, leads and admins), and handing over a leaving person's work
+export const attentionApi = {
+  list: () => api.get('/v1/attention'),
+  nudge: (body: { userId: string; projectId: string; taskId?: string | null }) => api.post('/v1/attention/nudge', body),
+};
+export const handoverApi = {
+  preview: (userId: string) => api.get(`/v1/users/${userId}/handover-preview`),
+  handOver: (userId: string, body: { toUserId: string; includeProjects: boolean }) => api.post(`/v1/users/${userId}/handover`, body),
+};

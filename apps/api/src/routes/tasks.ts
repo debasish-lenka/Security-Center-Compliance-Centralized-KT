@@ -49,6 +49,7 @@ function canDo(request: FastifyRequest, t: { status: string; assigneeId: string 
     block: open && (mine || lead),
     unblock: t.status === 'BLOCKED' && (mine || lead),
     move: open && (mine || lead), // To do <-> In progress
+    reassign: lead && (open || t.status === 'BLOCKED'), // give it to someone else
   };
 }
 
@@ -274,7 +275,19 @@ export async function taskRoutes(app: FastifyInstance) {
       }
     }
 
+    // Giving a task to someone else is for the owner / leads / admins, and not for a task that is waiting or done
+    const reassigning = data.assigneeId !== undefined && (data.assigneeId ?? null) !== existingTask.assigneeId;
+    if (reassigning) {
+      if (existingTask.status === 'REVIEW' || existingTask.status === 'DONE') {
+        return reply.code(409).send({ success: false, error: { code: 'CANNOT_REASSIGN', message: 'A task that is waiting for verification or already done cannot be given to someone else' } });
+      }
+      if (!canDo(request, existingTask).reassign) {
+        return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Only the project owner, a lead or an admin can give a task to someone else' } });
+      }
+    }
+
     const updateData: any = { ...data };
+    if (reassigning && existingTask.status === 'BLOCKED') { updateData.status = 'TODO'; updateData.blockedReason = null; } // a new person starts afresh
     if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
     if (data.status === 'DONE' && existingTask.status !== 'DONE') {
       updateData.completedAt = new Date();
@@ -286,6 +299,17 @@ export async function taskRoutes(app: FastifyInstance) {
       where: { id: taskId },
       data: updateData,
     });
+
+    if (reassigning) {
+      const names = new Map((await app.prisma.profile.findMany({ where: { id: { in: [existingTask.assigneeId, data.assigneeId, userId].filter(Boolean) as string[] } }, select: { id: true, fullName: true } })).map((p) => [p.id, p.fullName]));
+      const fromName = existingTask.assigneeId ? names.get(existingTask.assigneeId) ?? 'someone' : 'nobody';
+      const toName = data.assigneeId ? names.get(data.assigneeId) ?? 'someone' : 'nobody';
+      await app.prisma.taskReview.create({ data: { taskId, kind: 'REASSIGNED', actorId: userId, note: `Given from ${fromName} to ${toName}` } });
+      await app.prisma.activityFeed.create({ data: { actorId: userId, action: 'UPDATE', resourceType: 'task', projectId, details: { text: `gave "${existingTask.title}" to ${toName}` }, ipAddress: request.ip, userAgent: request.headers['user-agent'] } });
+      const by = names.get(userId) ?? 'Someone';
+      if (data.assigneeId && data.assigneeId !== userId) await notify.create({ userId: data.assigneeId, type: 'TASK_REASSIGNED', title: 'A task was given to you', message: `${by} gave you "${existingTask.title}".`.slice(0, 500), resourceType: 'project', resourceId: projectId });
+      if (existingTask.assigneeId && existingTask.assigneeId !== userId) await notify.create({ userId: existingTask.assigneeId, type: 'TASK_REASSIGNED', title: 'A task was moved to someone else', message: `${by} gave "${existingTask.title}" to ${toName}.`.slice(0, 500), resourceType: 'project', resourceId: projectId });
+    }
 
     // what changed, from -> to, so the log tells the whole story
     const { completedAt: _c, ...fields } = updateData;

@@ -17,6 +17,7 @@ import {
   BellRing,
   BookOpen,
   Shield,
+  AlertTriangle,
 } from 'lucide-react';
 
 export type UserRole =
@@ -56,6 +57,7 @@ export const navigationSections: NavSection[] = [
     label: 'WORKSPACE',
     items: [
       { name: 'My Assignments', href: '/assignments', icon: UserCheck },
+      { name: 'Needs attention', href: '/attention', icon: AlertTriangle, roles: ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER'] },
       { name: 'Projects', href: '/projects', icon: FolderKanban },
       { name: 'KT Reports', href: '/kt-reports', icon: ClipboardList },
       { name: 'Document Vault', href: '/documents', icon: FolderOpen },

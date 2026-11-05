@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Edit, KeyRound, Loader2, Send, ShieldOff, UserCheck, UserX } from 'lucide-react';
+import { ArrowLeft, Edit, KeyRound, Loader2, Send, ShieldOff, UserCheck, UserCog, UserX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { accessApi, usersApi } from '@/lib/api';
+import { HandoverDialog } from '@/components/HandoverDialog';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { getStatusColor, formatDateTimeIST } from '@/lib/utils';
@@ -22,6 +23,7 @@ export function UserDetail() {
   const queryClient = useQueryClient();
   const { user: me } = useAuth();
   const [pwOpen, setPwOpen] = useState(false);
+  const [handoverOpen, setHandoverOpen] = useState(false);
   const [password, setPassword] = useState('');
 
   const { data: user, isLoading } = useQuery({
@@ -104,6 +106,7 @@ export function UserDetail() {
               <ShieldOff className="mr-2 h-4 w-4" /> Reset 2FA
             </Button>
           )}
+          <Button variant="outline" onClick={() => setHandoverOpen(true)}><UserCog className="mr-2 h-4 w-4" /> Hand over work</Button>
           {user.status === 'ACTIVE' ? (
             <Button
               variant="ghost"
@@ -176,6 +179,7 @@ export function UserDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {user && <HandoverDialog user={{ id: user.id, fullName: user.fullName }} open={handoverOpen} onOpenChange={setHandoverOpen} onDone={() => { refresh(); queryClient.invalidateQueries({ queryKey: ['user-projects', id] }); }} />}
     </div>
   );
 }

@@ -24,6 +24,7 @@ import { documentDeleteRequestRoutes } from './document-delete-requests.js';
 import { recycleBinRoutes } from './recycle-bin.js';
 import { backupRoutes } from './backups.js';
 import { reminderRoutes } from './reminders.js';
+import { attentionRoutes } from './attention.js';
 import { projectDeleteRoutes } from './project-delete-requests.js';
 import { knowledgeBookFlatRoutes } from './knowledge-books-flat.js';
 import { ktReportFlatRoutes } from './kt-reports-flat.js';
@@ -63,6 +64,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(recycleBinRoutes, { prefix: '/api/v1' });
   await app.register(backupRoutes, { prefix: '/api/v1' });
   await app.register(reminderRoutes, { prefix: '/api/v1' });
+  await app.register(attentionRoutes, { prefix: '/api/v1' });
   await app.register(projectDeleteRoutes, { prefix: '/api/v1' });
   await app.register(fileRoutes, { prefix: '/api/v1/files' });
 }

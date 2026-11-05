@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Check, History, Loader2, Pencil, Plus, Send, ShieldCheck, Trash2 } from 'lucide-react';
+import { Ban, Check, History, Loader2, Pencil, Plus, Send, ShieldCheck, Trash2, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { projectsApi, taskFlowApi } from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { formatDate, formatDateTimeIST } from '@/lib/utils';
 import { TaskDialog } from '@/components/TaskDialog';
+import { ReassignTaskDialog } from '@/components/ReassignTaskDialog';
 import { BlockTaskDialog, SubmitTaskDialog, TaskHistoryDialog, VerifyTaskDialog } from '@/components/TaskReviewDialogs';
 
 const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
@@ -37,6 +38,7 @@ export function ProjectWork({ projectId }: { projectId: string }) {
   const [verifying, setVerifying] = useState<any | null>(null);
   const [blocking, setBlocking] = useState<any | null>(null);
   const [history, setHistory] = useState<any | null>(null);
+  const [reassigning, setReassigning] = useState<any | null>(null);
   const [msName, setMsName] = useState('');
   const [msDue, setMsDue] = useState('');
 
@@ -141,6 +143,7 @@ export function ProjectWork({ projectId }: { projectId: string }) {
                     {t.can?.submit && <Button size="sm" onClick={() => setSubmitting(t)}><Send className="mr-1 h-4 w-4" />Submit for review</Button>}
                     {t.can?.verify && <Button size="sm" onClick={() => setVerifying(t)}><ShieldCheck className="mr-1 h-4 w-4" />Verify</Button>}
                     {t.can?.block && <Button size="sm" variant="outline" onClick={() => setBlocking(t)}><Ban className="mr-1 h-4 w-4" />Blocked?</Button>}
+                    {t.can?.reassign && <Button variant="ghost" size="icon" aria-label={`Give ${t.title} to someone else`} title="Give to someone else" onClick={() => setReassigning(t)}><UserCog className="h-4 w-4" /></Button>}
                     {t.can?.unblock && <Button size="sm" variant="outline" onClick={() => unblock.mutate(t.id)}>Unblock</Button>}
                     <Button variant="ghost" size="icon" aria-label={`History of ${t.title}`} title="History" onClick={() => setHistory(t)}>
                       <History className="h-4 w-4" />
@@ -212,6 +215,7 @@ export function ProjectWork({ projectId }: { projectId: string }) {
       <SubmitTaskDialog projectId={projectId} task={submitting} open={!!submitting} onOpenChange={(o) => { if (!o) setSubmitting(null); }} onDone={refreshTasks} />
       <VerifyTaskDialog projectId={projectId} task={verifying} open={!!verifying} onOpenChange={(o) => { if (!o) setVerifying(null); }} onDone={refreshTasks} />
       <BlockTaskDialog projectId={projectId} task={blocking} open={!!blocking} onOpenChange={(o) => { if (!o) setBlocking(null); }} onDone={refreshTasks} />
+      <ReassignTaskDialog projectId={projectId} task={reassigning} open={!!reassigning} onOpenChange={(o) => { if (!o) setReassigning(null); }} onDone={refreshTasks} />
       <TaskHistoryDialog projectId={projectId} task={history} open={!!history} onOpenChange={(o) => { if (!o) setHistory(null); }} />
       <TaskDialog open={taskOpen} onOpenChange={setTaskOpen} fixedProjectId={projectId} onCreated={refreshTasks} />
       <TaskDialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }} fixedProjectId={projectId} task={editing} onCreated={refreshTasks} />

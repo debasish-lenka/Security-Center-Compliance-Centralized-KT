@@ -204,7 +204,7 @@ export function BlockTaskDialog({ projectId, task, open, onOpenChange, onDone }:
 }
 
 // ---- everything that happened to the task ----
-const KIND: Record<string, string> = { SUBMITTED: 'Submitted for verification', APPROVED: 'Verified: done', CHANGES_REQUESTED: 'Sent back for changes', BLOCKED: 'Marked as blocked', UNBLOCKED: 'Unblocked' };
+const KIND: Record<string, string> = { SUBMITTED: 'Submitted for verification', APPROVED: 'Verified: done', CHANGES_REQUESTED: 'Sent back for changes', BLOCKED: 'Marked as blocked', UNBLOCKED: 'Unblocked', REASSIGNED: 'Given to someone else' };
 export function TaskHistoryDialog({ projectId, task, open, onOpenChange }: { projectId: string; task: any | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   const q = useQuery({ queryKey: ['task-reviews', projectId, task?.id], enabled: open && !!task, staleTime: 0, refetchOnMount: 'always', queryFn: async () => (await taskFlowApi.reviews(projectId, task.id)).data.data.items as any[] });
   return (

@@ -30,6 +30,7 @@ const Assignments = lazy(() => import('@/pages/Assignments').then((m) => ({ defa
 const Activate = lazy(() => import('@/pages/Activate').then((m) => ({ default: m.Activate })));
 const UserDetail = lazy(() => import('@/pages/UserDetail').then((m) => ({ default: m.UserDetail })));
 const UserEdit = lazy(() => import('@/pages/UserEdit').then((m) => ({ default: m.UserEdit })));
+const Attention = lazy(() => import('@/pages/Attention').then((m) => ({ default: m.Attention })));
 const Backups = lazy(() => import('@/pages/Backups').then((m) => ({ default: m.Backups })));
 const Reminders = lazy(() => import('@/pages/Reminders').then((m) => ({ default: m.Reminders })));
 const RecycleBin = lazy(() => import('@/pages/RecycleBin').then((m) => ({ default: m.RecycleBin })));
@@ -133,6 +134,7 @@ function AppRoutes() {
 
           {/* WORKSPACE - My Assignments for individual contributors */}
           <Route path="/assignments" element={<Assignments />} />
+          <Route path="/attention" element={<Attention />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/new" element={<ProjectCreate />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />

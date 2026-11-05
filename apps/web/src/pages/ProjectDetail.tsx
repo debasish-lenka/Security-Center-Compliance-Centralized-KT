@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi, documentsApi, ktReportsApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,8 @@ import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const startTab = searchParams.get('tab') === 'work' ? 'work' : searchParams.get('tab') === 'team' ? 'team' : 'overview';
 
   const { data: projectData, isLoading: projectLoading } = useQuery({
     queryKey: ['project', id],
@@ -233,7 +235,7 @@ export function ProjectDetail() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue={startTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="work">Tasks &amp; Milestones</TabsTrigger>

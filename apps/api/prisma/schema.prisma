@@ -870,6 +870,8 @@ model Notification {
 }
 
 enum NotificationType {
+  TASK_REASSIGNED
+  WORK_NUDGE
   TASK_SUBMITTED
   TASK_VERIFIED
   TASK_REJECTED

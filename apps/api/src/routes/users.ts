@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { inviteAndEmail } from '../services/invites.js';
 import { getSsoSettings, isSsoReady } from '../services/sso.js';
 import { getMailSettings, isMailConfigured } from '../services/mail.js';
+import { handOver, previewHandover } from '../services/handover.js';
 
 const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'SECURITY_ADMIN', 'SECURITY_ANALYST', 'COMPLIANCE_OFFICER', 'MANAGER', 'USER', 'VIEWER'] as const;
 type AppUserRole = (typeof USER_ROLES)[number];
@@ -227,6 +228,32 @@ export async function userRoutes(app: FastifyInstance) {
     await app.prisma.profile.update({ where: { id: userId }, data: { totpEnabled: false, totpSecretEnc: null, recoveryCodeHashes: [], sessionsValidFrom: new Date() } });
     await auditLogger.logResource('UPDATE', request.userId!, 'user', userId, { action: 'reset_mfa' }, request.ip, request.headers['user-agent']);
     return reply.send({ success: true, data: null });
+  });
+
+  // What would move if this person's work were handed over (so the admin sees it before pressing the button)
+  app.get('/:userId/handover-preview', { preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN', 'ADMIN'])] }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    if (!(await app.prisma.profile.findUnique({ where: { id: userId }, select: { id: true } }))) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    return reply.send({ success: true, data: await previewHandover(app, userId) });
+  });
+
+  // Hand over a person's open work to somebody else: open tasks, and (if asked) the projects they own or lead
+  app.post('/:userId/handover', {
+    schema: { body: z.object({ toUserId: z.string().uuid(), includeProjects: z.boolean().default(true) }) },
+    preHandler: [app.authenticate, app.requireRole(['SUPER_ADMIN', 'ADMIN'])],
+  }, async (request, reply) => {
+    const { userId } = request.params as { userId: string };
+    const { toUserId, includeProjects } = request.body as { toUserId: string; includeProjects: boolean };
+    if (userId === toUserId) return reply.code(400).send({ success: false, error: { code: 'SAME_USER', message: 'Choose somebody else to hand the work to' } });
+    const [from, to] = await Promise.all([
+      app.prisma.profile.findUnique({ where: { id: userId }, select: { id: true, role: true } }),
+      app.prisma.profile.findUnique({ where: { id: toUserId }, select: { id: true, status: true, role: true } }),
+    ]);
+    if (!from) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } });
+    if (!to || to.status !== 'ACTIVE' || to.role === 'VIEWER') return reply.code(400).send({ success: false, error: { code: 'BAD_TARGET', message: 'The work can only go to an active person who is not a viewer' } });
+    const done = await handOver(app, { fromId: userId, toId: toUserId, actorId: request.userId!, includeProjects });
+    await auditLogger.logResource('UPDATE', request.userId!, 'user', userId, { action: 'handover', to: done.to, tasks: done.tasks, ownedProjects: done.ownedProjects, ledProjects: done.ledProjects }, request.ip, request.headers['user-agent']);
+    return reply.send({ success: true, data: done });
   });
 
   // Names for pickers (project owner, assignee...). Any signed-in person may use it; it returns only
