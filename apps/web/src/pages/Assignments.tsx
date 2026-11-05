@@ -220,10 +220,10 @@ export function Assignments() {
 
       {/* Task Board */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Task Board</CardTitle>
-          <div className="flex items-center gap-2">
-            <Input placeholder="Filter tasks..." className="w-64 bg-dbi-elevated border-dbi-border" />
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Input placeholder="Filter tasks..." className="min-w-0 flex-1 bg-dbi-elevated border-dbi-border sm:w-64 sm:flex-none" />
             <Button variant="outline" size="icon">
               <Filter className="h-4 w-4" />
             </Button>

@@ -46,7 +46,7 @@ export function Pagination({ totalPages, currentPage, onPageChange, className }:
     <nav
       role="navigation"
       aria-label="Pagination"
-      className={cn('flex items-center gap-1', className)}
+      className={cn('flex flex-wrap items-center justify-center gap-1', className)}
     >
       <Button
         variant="outline"

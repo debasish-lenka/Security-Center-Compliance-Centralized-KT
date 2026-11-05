@@ -297,7 +297,7 @@ export function KnowledgeBooks() {
           <h1 className="text-3xl font-bold text-dbi-textPrimary">Knowledge Books</h1>
           <p className="text-dbi-textSecondary">Create and manage compiled knowledge books with PDF export</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" onClick={() => { setSelectedProject(null); setSelectedDocIds([]); setIsGenerateFromProjectOpen(true); }}>
             <BookOpen className="mr-2 h-4 w-4" />
             Generate from Project
@@ -349,7 +349,7 @@ export function KnowledgeBooks() {
                 <FileText className="h-16 w-16" />
               </div>
               <p className="mt-4 text-dbi-textSecondary">No knowledge books found</p>
-              <div className="mt-4 flex gap-3 justify-center">
+              <div className="mt-4 flex flex-wrap gap-3 justify-center">
                 <Button onClick={() => { setFormData({ projectId: '', name: '', description: '', tags: [], status: 'COMPLETED' }); setIsCreateOpen(true); }}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create First Knowledge Book

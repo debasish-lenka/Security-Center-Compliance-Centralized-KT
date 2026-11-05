@@ -32,6 +32,7 @@ const TESTS = [
   ['uploads', 'uploads per person and all uploads', true],
   ['dt-check', 'every time shows date and time (IST)', true],
   ['edit-links', 'editing a project\'s work links', true],
+  ['phone-layout', 'on a phone-sized screen no page scrolls sideways or sticks out', true],
 ];
 
 const args = process.argv.slice(2);
