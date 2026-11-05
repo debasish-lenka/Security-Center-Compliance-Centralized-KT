@@ -7,7 +7,6 @@ Needs: Docker + Docker Compose plugin, git. Opens one host port (WEB_PORT); noth
 sudo ss -tlnp                      # pick a free port for WEB_PORT
 git clone <REPO_URL> /opt/dbi-security && cd /opt/dbi-security
 cp .env.example .env && nano .env  # fill in passwords, secrets, UBUNTU_IP, WEB_PORT
-chmod +x update.sh
 docker compose up -d --build
 docker compose exec -e NODE_ENV=development api node dist/db/seed.js   # creates admin@dbi.example.com
 ```
@@ -20,14 +19,28 @@ Log in with `admin@dbi.example.com` and `SEED_ADMIN_PASSWORD`. Admin accounts mu
 3. If email fails, a super admin sees the link on screen to pass on. **Resend invite** is available for pending users; **Reset 2FA** (super admin) for a lost phone.
 
 ## Getting new changes
-On your laptop: `git push`. On Ubuntu: `./update.sh` (pulls, rebuilds, restarts only if changed).
+On your laptop: `git push`. On Ubuntu: `./update.sh`. It is a **safe update**:
 
-Automatic (checks every 5 minutes):
+1. checks that docker works, `.env` exists, there are no local edits in tracked files, and at least 3 GB of disk is free;
+2. looks at what is new; if nothing is new it stops quietly;
+3. runs `./backup.sh` first. **If the backup fails the update is cancelled and nothing changes;**
+4. keeps the running images as `:previous`, takes the new code, builds and starts it;
+5. waits (up to 3 minutes) until the API and the website really answer. **If they do not, it puts the old code and the old images back by itself** and exits with an error. That broken version is not tried again by cron; fix it and push, or run `./update.sh --force`.
+
+```bash
+./update.sh                 # update only if something is new
+./update.sh --force         # rebuild and restart even if nothing is new
+./update.sh --skip-backup   # no backup first (only if you know why)
+```
+Everything it does is written to `logs/update.log`. The backup it took is named in the last line (`UPDATED ... Backup: backups/<date>`); if you ever need to go back to the data of that moment: `./restore.sh backups/<date>`.
+Run long updates inside `tmux` so a dropped SSH connection cannot interrupt them.
+
+Automatic (checks every 5 minutes; safe, it only does something when there is something new, and never two at once):
 ```bash
 crontab -e
 */5 * * * * cd /opt/dbi-security && ./update.sh >> /var/log/dbi-update.log 2>&1
 ```
-Database and uploaded files survive updates (`dbi_pgdata` volume and `./Documents`).
+Database and uploaded files survive updates (`dbi_pgdata` volume and `./Documents`). Database changes made by a new version are only additions, so an automatic rollback of the code does not need the data to be restored.
 
 ## Useful commands
 ```bash
