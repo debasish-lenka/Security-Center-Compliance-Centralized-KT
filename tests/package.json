@@ -1,0 +1,15 @@
+{
+  "name": "@dbi/tests",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests for DBI Security Center (not part of the app or its Docker images)",
+  "scripts": {
+    "test": "node e2e/run.mjs --all",
+    "test:api": "node e2e/run.mjs --api",
+    "list": "node e2e/run.mjs --list",
+    "test:update-sh": "bash update-sh.test.sh"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.16.0"
+  }
+}

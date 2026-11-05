@@ -1,0 +1,97 @@
+// End-to-end test. Needs the local API, web app and database (see tests/README.md). Run with: node e2e/run.mjs <name>
+import { API_URL, WEB_URL, API_ORIGIN, CHROME, DB_URL, API_PKG, ADMIN_EMAIL, ADMIN_PASSWORD, TMP, ROOT } from './config.mjs';
+import { join as joinPath } from 'path';
+import puppeteer from 'puppeteer-core';
+import { createHmac } from 'crypto';
+import { createRequire } from 'module';
+const req = createRequire(API_PKG);
+const Jimp = req('jimp');
+const { PrismaClient } = req('@prisma/client');
+const db = new PrismaClient({ datasources: { db: { url: DB_URL } } });
+const API = API_URL;
+const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const b32 = (s) => { let bits = 0, v = 0; const o = []; for (const c of s) { v = (v << 5) | A.indexOf(c); bits += 5; if (bits >= 8) { o.push((v >>> (bits - 8)) & 255); bits -= 8; } } return Buffer.from(o); };
+const totp = (secret) => { const m = Buffer.alloc(8); m.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000))); const h = createHmac('sha1', b32(secret)).update(m).digest(); const o = h[h.length - 1] & 15; return String((((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6).padStart(6, '0'); };
+const call = async (m, p, b, t) => { const r = await fetch(API + p, { method: m, headers: { ...(b ? { 'content-type': 'application/json' } : {}), ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
+const res = []; const ok = (n, c, x = '') => { res.push(c); console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
+const login = async (email, pw) => {
+  const l = await call('POST', '/auth/login', { email, password: pw });
+  if (l.body.data?.token) return l.body.data;
+  const mt = l.body.data.mfaToken; const sec = (await call('POST', '/auth/mfa/setup', { mfaToken: mt })).body.data.secret;
+  return (await call('POST', '/auth/mfa/confirm', { mfaToken: mt, code: totp(sec) })).body.data;
+};
+const old = (await db.profile.findMany({ where: { email: { endsWith: '@test.local' } }, select: { id: true } })).map((u) => u.id);
+await db.workSession.deleteMany({ where: { userId: { in: old } } });
+await db.project.deleteMany({ where: { OR: [{ createdById: { in: old } }, { ownerId: { in: old } }] } }); await db.profile.deleteMany({ where: { id: { in: old } } });
+await db.workEntry.deleteMany({ where: { ocrAt: null, kind: 'SHOT' } });
+await db.profile.updateMany({ where: { email: ADMIN_EMAIL }, data: { totpEnabled: false, totpSecretEnc: null, recoveryCodeHashes: [] } });
+await db.workSettings.deleteMany({});
+const sa = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
+const PW = 'Ocr-Test-Pass-2026';
+const ids = {};
+for (const k of ['lead', 'a']) ids[k] = (await call('POST', '/users', { email: `${k}@test.local`, fullName: `Person ${k}`, role: 'USER', authType: 'PASSWORD', password: PW }, sa.token)).body.data.id;
+const S = {}; for (const k of Object.keys(ids)) S[k] = await login(`${k}@test.local`, PW);
+const p1 = (await call('POST', '/projects', { name: 'OCR project', ownerId: ids.lead, priority: 'LOW', memberIds: [ids.a], workLinks: [{ label: 'Cisco dashboard', url: 'https://dnac.example.com/dna' }] }, S.lead.token)).body.data.id;
+const p2 = (await call('POST', '/projects', { name: 'OCR project no link', ownerId: ids.lead, priority: 'LOW', memberIds: [ids.a] }, S.lead.token)).body.data.id;
+const wait0 = (ms) => new Promise((x) => setTimeout(x, ms));
+const runAndWait = async (token) => {
+  const before = (await call('GET', '/admin/work-settings', null, token)).body.data.ocrLastRunAt;
+  const r = await call('POST', '/admin/work-ocr/run', null, token);
+  if (r.status !== 202) return { status: r.status };
+  for (let i = 0; i < 120; i++) { await wait0(1000); const d = (await call('GET', '/admin/work-settings', null, token)).body.data; if (!d.ocrRunning && d.ocrLastRunAt !== before) return { status: 202, summary: d.ocrLastSummary, pending: d.ocrPending }; }
+  return { status: 202, timeout: true };
+};
+const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+let n = 0;
+const pic = async (l1, l2 = '') => { const j = new Jimp(1280, 720, 0xffffffff); j.print(font, 60, 100, l1); if (l2) j.print(font, 60, 220, l2); j.print(font, 60, 600, `frame number ${++n}`); return (await j.getBufferAsync(Jimp.MIME_JPEG)).toString('base64'); };
+const session = async (pid, body, texts) => {
+  const s = (await call('POST', `/projects/${pid}/work/start`, { surface: 'monitor', ...body }, S.a.token)).body.data.id;
+  for (const t of texts) await call('POST', `/projects/${pid}/work/${s}/shot`, { image: await pic(...t), reason: 'CHANGE' }, S.a.token);
+  await call('POST', `/projects/${pid}/work/${s}/stop`, null, S.a.token);
+  return s;
+};
+const link = { linkUrl: 'https://dnac.example.com/dna', linkLabel: 'Cisco dashboard' };
+const sSeen = await session(p1, link, [['https://dnac.example.com/dna', 'Site health 87 percent'], ['dnac.example.com Network devices'], ['Assurance dashboard https://dnac.example.com']]);
+const sNot = await session(p1, link, [['Funny cat videos'], ['Start work in Cisco dashboard'], ['Note: for example checked the 12 site health scores']]);
+
+
+const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+const run = await runAndWait(sa.token);
+ok('the check read the 6 pictures', /^6 screenshot\(s\) read/.test(run.summary ?? ''), JSON.stringify(run));
+const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
+const mk = async (sess) => { const ctx = await browser.createBrowserContext(); const p = await ctx.newPage(); await p.setViewport({ width: 1500, height: 1000 }); const errs = []; p.on('pageerror', (e) => errs.push(e.message.slice(0, 100))); await p.goto(`${WEB_URL}/login`, { waitUntil: 'domcontentloaded' }); await p.evaluate((t, u) => { localStorage.setItem('dbi_auth_token', t); localStorage.setItem('dbi_user', JSON.stringify(u)); }, sess.token, sess.user); return { p, errs }; };
+const clickText = async (p, re, sel = 'button') => { const h = await p.evaluateHandle((s, r) => [...document.querySelectorAll(s)].find((b) => new RegExp(r, 'i').test(b.textContent.trim())), sel, re.source); const el = h.asElement(); if (!el) return false; await el.evaluate((e) => e.scrollIntoView({ block: 'center' })); await wait(150); const bb = await el.boundingBox(); await p.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2); return true; };
+const text = (p) => p.evaluate(() => document.body.innerText);
+const L = await mk(S.lead);
+await L.p.goto(`${WEB_URL}/projects/${p1}`, { waitUntil: 'load' }); await wait(2500);
+await clickText(L.p, /^Work Log$/, 'button[role=tab]'); await wait(2000);
+let t = await text(L.p);
+ok('the table has a "Tool on screen" column', /Tool on screen/.test(t));
+ok('one session says Tool seen (3/3)', /Tool seen \(3\/3\)/.test(t), '');
+ok('the other says Tool NOT seen (0/3)', /Tool NOT seen \(0\/3\)/.test(t));
+await clickText(L.p, /^View$/); await wait(1800);
+t = await text(L.p);
+ok('the session dialog shows the tool badge too', /Tool (seen|NOT seen)/.test(t));
+await L.p.keyboard.press('Escape'); await wait(400);
+const AD = await mk(sa);
+await AD.p.goto(`${WEB_URL}/reminders`, { waitUntil: 'load' }); await wait(2500);
+t = await text(AD.p);
+ok('the admin page has the screenshot-check card with a status line', /is the tool really on screen/.test(t) && /Last check:/.test(t) && /0 screenshot\(s\) waiting/.test(t));
+await AD.p.click('#ocr-enabled'); await wait(1500);
+ok('the switch turns the night check off', (await call('GET', '/admin/work-settings', null, sa.token)).body.data.ocrEnabled === false);
+await AD.p.click('#ocr-enabled'); await wait(1500);
+ok('and on again', (await call('GET', '/admin/work-settings', null, sa.token)).body.data.ocrEnabled === true);
+await clickText(AD.p, /Check screenshots now/); await wait(2500);
+t = await text(AD.p);
+ok('"Check screenshots now" starts the check and reports what it did', /Screenshot check done/.test(t) && /0 screenshot\(s\) read/.test(t), t.slice(t.indexOf('Screenshot check'), t.indexOf('Screenshot check') + 80).replace(/\n/g, ' '));
+ok('no page crashes', L.errs.length === 0 && AD.errs.length === 0, [...L.errs, ...AD.errs].join());
+await browser.close();
+for (const pid of [p1, p2]) await call('DELETE', `/projects/${pid}`, null, sa.token);
+const us = (await db.profile.findMany({ where: { email: { endsWith: '@test.local' } }, select: { id: true } })).map((u) => u.id);
+await db.workSession.deleteMany({ where: { userId: { in: us } } });
+await db.project.deleteMany({ where: { OR: [{ createdById: { in: us } }, { ownerId: { in: us } }] } });
+await db.profile.deleteMany({ where: { id: { in: us } } });
+await db.workSettings.deleteMany({});
+await db.$disconnect();
+console.log(`
+${res.filter(Boolean).length}/${res.length} passed`);
