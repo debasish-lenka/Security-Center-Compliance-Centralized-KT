@@ -83,8 +83,8 @@ export class StorageService {
     return Promise.resolve(this.makeUrl(key, 'upload', expiresIn));
   }
 
-  openRead(key: string): Readable {
-    return createReadStream(this.pathFor(key));
+  openRead(key: string, range?: { start: number; end: number }): Readable {
+    return createReadStream(this.pathFor(key), range);
   }
 
   async getMetadata(key: string): Promise<{ size: number; contentType: string; lastModified: Date } | null> {

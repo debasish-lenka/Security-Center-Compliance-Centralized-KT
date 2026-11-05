@@ -1728,3 +1728,8 @@ export const handoverApi = {
   preview: (userId: string) => api.get(`/v1/users/${userId}/handover-preview`),
   handOver: (userId: string, body: { toUserId: string; includeProjects: boolean }) => api.post(`/v1/users/${userId}/handover`, body),
 };
+
+// What may be uploaded (the server checks the same rules on every upload)
+export const uploadPolicyApi = {
+  get: () => api.get('/v1/upload-policy'),
+};

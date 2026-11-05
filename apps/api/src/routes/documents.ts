@@ -7,6 +7,7 @@ import { createNotificationService } from '../services/notifications.js';
 import { formatWhen } from '../services/watermark.js';
 import { documentsPdf, groupOf, imagesPdf, zipBundle, type Group, type Source } from '../services/kt-pack.js';
 import { adminReasonError, describeChanges, diffFields, tellSuperAdmins } from '../services/document-oversight.js';
+import { checkContent, checkName, checkSize, extensionOf } from '../services/upload-policy.js';
 
 const UploadDocumentSchema = z.object({
   name: z.string().min(1).max(500),
@@ -506,6 +507,9 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
     }
 
+    const refusedName = checkName(name);
+    if (refusedName) return reply.code(400).send({ success: false, error: { code: 'UNSUPPORTED_TYPE', message: refusedName } });
+
     // Verify ktReportId belongs to this project if provided
     if (ktReportId) {
       const report = await app.prisma.dailyKTReport.findFirst({
@@ -532,7 +536,7 @@ export async function documentRoutes(app: FastifyInstance) {
     const userId = request.userId!;
     const userRole = request.user!.role;
     const { projectId } = request.params as { projectId: string };
-    const { name, category, ktReportId, storageKey, size, mimeType, ownerId, coAuthorIds, tags, watermarkConfig, metadata,
+    const { name, category, ktReportId, storageKey, mimeType, ownerId, coAuthorIds, tags, watermarkConfig, metadata,
       visibility, visibleToTeamIds, visibleToDeptIds, visibleToUserIds } = request.body as any;
 
     const hasAccess = await checkProjectAccess(app, userId, userRole, projectId);
@@ -540,11 +544,32 @@ export async function documentRoutes(app: FastifyInstance) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Access denied' } });
     }
 
+    // The key must be one this server handed out for THIS project (so a document can never point at another
+    // project's file, a work screenshot or a version file) and must not belong to another document already.
+    if (!new RegExp(`^${projectId}/\\d{10,}-[0-9a-f]{8}\\.[a-z0-9]{1,10}$`).test(storageKey)) {
+      return reply.code(400).send({ success: false, error: { code: 'INVALID_STORAGE_KEY', message: 'This file was not uploaded to this project' } });
+    }
+    if (await app.prisma.projectDocument.findFirst({ where: { storageKey }, select: { id: true } })) {
+      return reply.code(409).send({ success: false, error: { code: 'ALREADY_USED', message: 'This uploaded file is already attached to a document' } });
+    }
+
     // Verify file exists in storage
     const exists = await storage.exists(storageKey);
     if (!exists) {
       return reply.code(400).send({ success: false, error: { code: 'FILE_NOT_FOUND', message: 'File not found in storage' } });
     }
+
+    // Look at what is really stored (not what the browser said): its type, content and size
+    const stored = await storage.getMetadata(storageKey);
+    const headChunks: Buffer[] = [];
+    let headLen = 0;
+    for await (const c of storage.openRead(storageKey, { start: 0, end: 8191 })) { headChunks.push(c as Buffer); headLen += (c as Buffer).length; if (headLen >= 8192) break; }
+    const refusedFile = checkName(storageKey) ?? checkSize(stored?.size ?? 0) ?? checkContent(extensionOf(storageKey), Buffer.concat(headChunks), stored?.size ?? 0);
+    if (refusedFile) {
+      await storage.delete(storageKey).catch(() => undefined); // an unwanted file does not stay on the disk
+      return reply.code(415).send({ success: false, error: { code: 'UNSUPPORTED_TYPE', message: refusedFile } });
+    }
+    const size = stored?.size ?? 0; // the real size on disk, not what the browser said
 
     // Default owner to uploader if not specified
     const finalOwnerId = ownerId || userId;

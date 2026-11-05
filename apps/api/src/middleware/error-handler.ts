@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import { MAX_UPLOAD_MB } from '../services/upload-policy.js';
 
 export function errorHandler(
   error: FastifyError,
@@ -64,6 +65,11 @@ export function errorHandler(
         details: error.validation,
       },
     });
+  }
+
+  // A request body above the limit (a file that is too large)
+  if (error.statusCode === 413) {
+    return reply.code(413).send({ success: false, error: { code: 'TOO_LARGE', message: `The file is larger than ${MAX_UPLOAD_MB} MB.` } });
   }
 
   // Unauthorized

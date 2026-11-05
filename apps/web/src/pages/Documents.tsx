@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { documentsApi, projectsApi } from '@/lib/api';
+import { documentsApi, projectsApi, uploadPolicyApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { DocumentTimeline } from '@/components/DocumentTimeline';
 import { CreateKtDialog } from '@/components/CreateKtDialog';
@@ -51,6 +51,7 @@ export function Documents() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProject, setUploadProject] = useState('');
   const [uploadCategory, setUploadCategory] = useState('OTHER');
+  const { data: policy } = useQuery({ queryKey: ['upload-policy'], staleTime: 60 * 60_000, queryFn: async () => (await uploadPolicyApi.get()).data.data as { maxMb: number; extensions: string[]; accept: string; groups: { label: string; extensions: string[] }[] } });
   const [versionHistoryDoc, setVersionHistoryDoc] = useState<{ id: string; name: string } | null>(null);
   const [reviewDialogDoc, setReviewDialogDoc] = useState<{ id: string; name: string; projectId: string; reviewStatus: string | null; reviewerId?: string } | null>(null);
 
@@ -433,6 +434,16 @@ export function Documents() {
                 toast({ title: 'Choose a project', description: 'Documents are stored inside a project', variant: 'destructive' });
                 return;
               }
+              // the same rules the server applies (it checks again, including what is really inside the file)
+              const ending = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
+              if (policy && !policy.extensions.includes(ending)) {
+                toast({ title: 'This type of file is not allowed', description: ending ? `.${ending} files cannot be uploaded. See the list under the file box.` : 'The file has no ending (like .pdf).', variant: 'destructive' });
+                return;
+              }
+              if (policy && file.size > policy.maxMb * 1024 * 1024) {
+                toast({ title: 'The file is too large', description: `The limit is ${policy.maxMb} MB.`, variant: 'destructive' });
+                return;
+              }
               setIsUploading(true);
               try {
                 await documentsApi.upload({ file, projectId, name: file.name, description: '', type: file.type || 'OTHER', category: uploadCategory });
@@ -486,10 +497,13 @@ export function Documents() {
                 type="file"
                 name="file"
                 required
+                accept={policy?.accept}
                 className="mt-1 block w-full text-sm text-dbi-textPrimary bg-dbi-elevated border-dbi-border rounded-lg p-2"
                 disabled={isUploading}
               />
-              <p className="mt-1 text-xs text-dbi-textSecondary">Up to 50 MB.</p>
+              <p className="mt-1 text-xs text-dbi-textSecondary">
+                Up to {policy?.maxMb ?? 50} MB. Allowed: {policy ? policy.groups.map((g: any) => `${g.label} (${g.extensions.map((e: string) => `.${e}`).join(' ')})`).join('; ') : '...'}. Programs, scripts and web pages are not accepted.
+              </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)} disabled={isUploading}>

@@ -2,8 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { extname } from 'path';
 import { getStorageService } from '../services/storage.js';
 import { watermarkPdf } from '../services/watermark.js';
-
-const MAX_UPLOAD = 50 * 1024 * 1024;
+import { MAX_UPLOAD_BYTES as MAX_UPLOAD, checkContent, checkName, checkSize, extensionOf } from '../services/upload-policy.js';
 
 const SAFE_INLINE: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -67,7 +66,13 @@ export async function fileRoutes(app: FastifyInstance) {
       return reply.code(403).send({ success: false, error: { code: 'FORBIDDEN', message: 'Invalid or expired link' } });
     }
     if (!Buffer.isBuffer(request.body)) {
-      return reply.code(400).send({ success: false, error: { code: 'BAD_REQUEST', message: 'Expected file body' } });
+      return reply.code(400).send({ success: false, error: { code: 'BAD_REQUEST', message: 'The file is empty or could not be read.' } });
+    }
+    // refuse what is not allowed before anything is written to disk
+    const refused = checkName(payload.k) ?? checkSize(request.body.length) ?? checkContent(extensionOf(payload.k), request.body.subarray(0, 8192), request.body.length);
+    if (refused) {
+      const tooBig = request.body.length > MAX_UPLOAD;
+      return reply.code(tooBig ? 413 : 415).send({ success: false, error: { code: tooBig ? 'TOO_LARGE' : 'UNSUPPORTED_TYPE', message: refused } });
     }
     await storage.upload(payload.k, request.body);
     return reply.send({ success: true });
