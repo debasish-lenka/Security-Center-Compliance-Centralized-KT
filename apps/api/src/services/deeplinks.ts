@@ -35,7 +35,7 @@ export async function resolveLinks(prisma: PrismaClient, refs: Ref[]): Promise<{
     switch (type) {
       case 'project': return `/projects/${id}`;
       case 'kt_report': return `/kt-reports/${id}`;
-      case 'task': return pid ? `/projects/${pid}?tab=work&task=${id}` : null;
+      case 'task': return pid ? `/projects/${pid}?tab=work&task=${id}&view=history` : null;
       case 'document': return pid ? `/documents?projectId=${pid}&doc=${id}` : null;
       case 'document_version': return pid ? `/documents?projectId=${pid}&doc=${doc.get(`document_version:${id}`)}` : null;
       case 'work_session': return pid ? `/projects/${pid}?tab=session` : null;

@@ -30,7 +30,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 
 // Tasks and milestones of one project (the "Work" tab)
-export function ProjectWork({ projectId, focusTaskId = null }: { projectId: string; focusTaskId?: string | null }) {
+export function ProjectWork({ projectId, focusTaskId = null, openHistory = false }: { projectId: string; focusTaskId?: string | null; openHistory?: boolean }) {
   const queryClient = useQueryClient();
   const [taskOpen, setTaskOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -49,14 +49,14 @@ export function ProjectWork({ projectId, focusTaskId = null }: { projectId: stri
     queryKey: tasksKey,
     queryFn: async () => ((await projectsApi.getTasks(projectId, { limit: '100' })).data?.items ?? []) as any[],
   });
-  // arrived from a link to one task (an activity, a notification): mark it, scroll to it and open its history, once
+  // arrived from a link to one task: mark it and scroll to it; from an activity or a notification (view=history) also open its history, once
   const focused = useRef<string | null>(null);
   useEffect(() => {
     if (!focusTaskId || focused.current === focusTaskId || tasksLoading) return;
     const t = tasks.find((x: any) => x.id === focusTaskId);
     if (!t) return;
     focused.current = focusTaskId;
-    setHistory(t);
+    if (openHistory) setHistory(t);
     setTimeout(() => document.getElementById(`task-${focusTaskId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
   }, [focusTaskId, tasks, tasksLoading]);
 

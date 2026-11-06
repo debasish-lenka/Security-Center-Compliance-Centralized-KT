@@ -287,7 +287,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="work" className="space-y-4">
-          <ProjectWork focusTaskId={searchParams.get('task')} projectId={id!} />
+          <ProjectWork focusTaskId={searchParams.get('task')} openHistory={searchParams.get('view') === 'history'} projectId={id!} />
         </TabsContent>
 
         <TabsContent value="team" className="space-y-4">
