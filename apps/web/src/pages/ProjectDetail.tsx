@@ -298,7 +298,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
-          <ProjectUploadsByPerson projectId={id!} members={project.members ?? []} />
+          <ProjectUploadsByPerson projectId={id!} projectName={project.name} members={project.members ?? []} />
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-4">

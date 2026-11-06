@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, Image as ImageIcon, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { documentsApi } from '@/lib/api';
 import { formatDateTimeIST } from '@/lib/utils';
 import { CreateKtDialog } from '@/components/CreateKtDialog';
+import { ProjectUploadDialog } from '@/components/ProjectUploadDialog';
 
 interface Item {
   id: string; name: string; mimeType: string; size: number; createdAt: string; isImage: boolean; previewUrl: string | null;
@@ -18,10 +19,11 @@ const kb = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${M
 
 // The project's uploads grouped by the person who made them: how many images and documents each one added,
 // and a click opens that person's own files.
-export function ProjectUploadsByPerson({ projectId, members }: { projectId: string; members: { userId: string; role: string; user?: { fullName: string } }[] }) {
+export function ProjectUploadsByPerson({ projectId, projectName = 'This project', members }: { projectId: string; projectName?: string; members: { userId: string; role: string; user?: { fullName: string } }[] }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState<string | null>(null);
   const [ktOpen, setKtOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['documents-timeline', projectId],
@@ -52,8 +54,9 @@ export function ProjectUploadsByPerson({ projectId, members }: { projectId: stri
           <p className="mt-1 text-sm text-dbi-textSecondary">{totalImages} images · {totalDocs} documents from {rows.filter((r) => r.images.length + r.docs.length > 0).length} people</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setUploadOpen(true)}><Upload className="mr-2 h-4 w-4" />Upload Document</Button>
           <Button variant="outline" onClick={() => setKtOpen(true)}>Create KT</Button>
-          <Button onClick={() => navigate(`/projects/${projectId}/uploads`)} disabled={items.length === 0}>Show all images and documents</Button>
+          <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/uploads`)} disabled={items.length === 0}>Show all images and documents</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -120,7 +123,8 @@ export function ProjectUploadsByPerson({ projectId, members }: { projectId: stri
           );
         })}
       </CardContent>
-      <CreateKtDialog open={ktOpen} onOpenChange={setKtOpen} projects={[{ id: projectId, name: 'This project' }]} initialProjectId={projectId} />
+      <ProjectUploadDialog projectId={projectId} projectName={projectName} open={uploadOpen} onOpenChange={setUploadOpen} />
+      <CreateKtDialog open={ktOpen} onOpenChange={setKtOpen} projects={[{ id: projectId, name: projectName }]} initialProjectId={projectId} />
     </Card>
   );
 }

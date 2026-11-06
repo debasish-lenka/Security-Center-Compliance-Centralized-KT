@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
 import { PriorityLegend } from '@/components/PriorityLegend';
@@ -48,6 +48,7 @@ export function ExecutiveDashboard() {
   });
 
   const { user: me } = useAuth(); // hooks stay above every early return
+  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -115,24 +116,28 @@ export function ExecutiveDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Organization Health"
+          onClick={() => navigate('/reports')}
           value={`${m?.organizationHealthScore || 0}%`}
           icon={metricIcons.organizationHealth}
           accentColor="cyan"
         />
         <MetricCard
           title="Compliance Score"
+          onClick={() => navigate('/compliance')}
           value={`${m?.complianceScore || 0}%`}
           icon={metricIcons.complianceScore}
           accentColor="emerald"
         />
         <MetricCard
           title="Open Risks"
+          onClick={() => navigate('/compliance')}
           value={m?.openRisks || 0}
           icon={metricIcons.openRisks}
           accentColor="rose"
         />
         <MetricCard
           title="Team Utilization"
+          onClick={() => navigate('/reports')}
           value={`${m?.teamUtilization || 0}%`}
           icon={metricIcons.teamUtilization}
           accentColor="indigo"
@@ -142,24 +147,28 @@ export function ExecutiveDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Active Projects"
+          onClick={() => navigate('/projects')}
           value={m?.activeProjects || 0}
           icon={metricIcons.totalProjects}
           accentColor="cyan"
         />
         <MetricCard
           title="Pending KT Reports"
+          onClick={() => navigate('/kt-reports')}
           value={m?.pendingKTReports || 0}
           icon={metricIcons.pendingKTReports}
           accentColor="amber"
         />
         <MetricCard
           title="Overdue Projects"
+          onClick={() => navigate('/projects')}
           value={m?.overdueProjects || 0}
           icon={metricIcons.openRisks}
           accentColor="red"
         />
         <MetricCard
           title="Avg Project Health"
+          onClick={() => navigate('/reports')}
           value={`${m?.avgProjectHealth || 0}%`}
           icon={metricIcons.avgProjectHealth}
           accentColor="emerald"
@@ -172,7 +181,7 @@ export function ExecutiveDashboard() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-dbi-critical" />
-              Risk Heatmap by Category
+              <Link to="/compliance" className="hover:text-dbi-cyan">Risk Heatmap by Category</Link>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -219,7 +228,7 @@ export function ExecutiveDashboard() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="h-5 w-5 text-dbi-emerald" />
-              Compliance Posture
+              <Link to="/compliance" className="hover:text-dbi-cyan">Compliance Posture</Link>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -292,9 +301,11 @@ export function ExecutiveDashboard() {
           <CardContent>
             <div className="space-y-3">
               {charts?.resourceAllocation?.map((res: any) => (
-                <div key={res.project} className="space-y-1">
+                <div key={res.projectId ?? res.project} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-dbi-textPrimary truncate pr-2">{res.project}</span>
+                    {res.projectId
+                      ? <Link to={`/projects/${res.projectId}`} className="font-medium text-dbi-textPrimary truncate pr-2 hover:text-dbi-cyan">{res.project}</Link>
+                      : <span className="font-medium text-dbi-textPrimary truncate pr-2">{res.project}</span>}
                     <span className="text-dbi-textSecondary">{res.utilized}/{res.allocated} FTEs</span>
                   </div>
                   <Progress value={(res.utilized / (res.allocated || 1)) * 100} className="h-2" />
@@ -320,7 +331,7 @@ export function ExecutiveDashboard() {
           </CardHeader>
           <CardContent className="space-y-3">
             {alerts?.slice(0, 5).map((alert: any) => (
-              <div key={alert.id} className={`p-3 rounded-lg border-l-4 ${alert.type === 'CRITICAL' ? 'bg-dbi-critical/10 border-dbi-critical' : alert.type === 'WARNING' ? 'bg-dbi-amber/10 border-dbi-amber' : 'bg-dbi-cyan/10 border-dbi-cyan'}`}>
+              <Link key={alert.id} to={alert.projectId ? `/projects/${alert.projectId}` : alert.id === 'controls-overdue' ? '/compliance' : '/projects'} className={`block p-3 rounded-lg border-l-4 transition hover:brightness-110 ${alert.type === 'CRITICAL' ? 'bg-dbi-critical/10 border-dbi-critical' : alert.type === 'WARNING' ? 'bg-dbi-amber/10 border-dbi-amber' : 'bg-dbi-cyan/10 border-dbi-cyan'}`}>
                 <div className="flex items-start gap-3">
                   <div className={`flex-shrink-0 p-1.5 rounded ${alert.type === 'CRITICAL' ? 'bg-dbi-critical/20 text-dbi-critical' : alert.type === 'WARNING' ? 'bg-dbi-amber/20 text-dbi-amber' : 'bg-dbi-cyan/20 text-dbi-cyan'}`}>
                     {alert.type === 'CRITICAL' && <AlertTriangle className="h-4 w-4" />}
@@ -338,7 +349,7 @@ export function ExecutiveDashboard() {
                     <p className="text-xs text-dbi-textMuted mt-1">{formatDateTimeIST(alert.timestamp)}</p>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
             {(!alerts || alerts.length === 0) && (
               <p className="text-dbi-textSecondary text-center py-4">No executive alerts</p>
@@ -362,7 +373,11 @@ export function ExecutiveDashboard() {
           {[...myProjects].sort((x: any, y: any) => priorityRank(x.priority) - priorityRank(y.priority)).map((project: any) => {
             const sty = priorityStyle(project.priority);
             return (
-              <div key={project.id} className={`rounded-lg p-3 ${sty.card}`}>
+              <div
+                key={project.id}
+                className={`cursor-pointer rounded-lg p-3 transition hover:brightness-110 ${sty.card}`}
+                onClick={(e) => { if (!(e.target as HTMLElement).closest('a,button,input,select,textarea,[role=button]')) navigate(`/projects/${project.id}`); }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link to={`/projects/${project.id}`} className="block truncate font-medium text-dbi-textPrimary hover:text-dbi-cyan">{project.name}</Link>
@@ -381,7 +396,7 @@ export function ExecutiveDashboard() {
       </Card>
 
       {/* Upcoming Deadlines & Recent Activity */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
@@ -391,7 +406,7 @@ export function ExecutiveDashboard() {
           </CardHeader>
           <CardContent className="space-y-3">
             {upcomingDeadlines?.slice(0, 5).map((project: any) => (
-              <div key={project.id} className="p-3 rounded-lg border border-dbi-border hover:bg-dbi-elevated/50 transition-colors">
+              <Link key={project.id} to={`/projects/${project.id}`} className="block p-3 rounded-lg border border-dbi-border hover:bg-dbi-elevated/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-dbi-textPrimary">{project.name}</p>
@@ -403,7 +418,7 @@ export function ExecutiveDashboard() {
                   </div>
                 </div>
                 <Progress value={project.health || 0} className="h-1.5 mt-2" />
-              </div>
+              </Link>
             ))}
             {(!upcomingDeadlines || upcomingDeadlines.length === 0) && (
               <p className="text-dbi-textSecondary text-center py-4">No upcoming deadlines</p>
@@ -419,17 +434,23 @@ export function ExecutiveDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {recentActivity?.slice(0, 5).map((activity: any) => (
-              <div key={activity.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-dbi-elevated/50 transition-colors">
-                <div className="p-2 rounded-lg bg-dbi-cyan/10">
-                  <ChevronRight className="h-4 w-4 text-dbi-cyan" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-dbi-textPrimary">{activity.action} {activity.resourceType}</p>
-                  <p className="text-xs text-dbi-textSecondary">{activity.projectName} • {formatDateTimeIST(activity.timestamp)}</p>
-                </div>
-              </div>
-            ))}
+            {recentActivity?.slice(0, 5).map((activity: any) => {
+              const body = (
+                <>
+                  <div className="p-2 rounded-lg bg-dbi-cyan/10">
+                    <ChevronRight className="h-4 w-4 text-dbi-cyan" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dbi-textPrimary truncate">{activity.action} {activity.resourceType}{activity.itemName ? `: ${activity.itemName}` : ''}</p>
+                    <p className="text-xs text-dbi-textSecondary truncate">{activity.actor?.fullName}{activity.projectName ? ` • ${activity.projectName}` : ''} • {formatDateTimeIST(activity.timestamp)}</p>
+                  </div>
+                </>
+              );
+              const cls = 'flex items-center gap-3 p-3 rounded-lg hover:bg-dbi-elevated/50 transition-colors';
+              return activity.link
+                ? <Link key={activity.id} to={activity.link} className={cls}>{body}</Link>
+                : <div key={activity.id} className={cls}>{body}</div>;
+            })}
             {(!recentActivity || recentActivity.length === 0) && (
               <p className="text-dbi-textSecondary text-center py-4">No recent activity</p>
             )}
@@ -446,7 +467,7 @@ export function ExecutiveDashboard() {
           <CardContent>
             <div className="space-y-3">
               {upcomingDeadlines?.slice(0, 6).map((project: any) => (
-                <div key={project.id} className="space-y-1">
+                <Link key={project.id} to={`/projects/${project.id}`} className="block space-y-1 rounded hover:bg-dbi-elevated/50">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-dbi-textPrimary truncate pr-2">{project.name}</span>
                     <Badge className={getPriorityColor(project.priority)}>{project.priority}</Badge>
@@ -455,7 +476,7 @@ export function ExecutiveDashboard() {
                     <Progress value={project.health || 0} className="flex-1 h-2" />
                     <span className="text-xs font-medium text-dbi-textPrimary w-10 text-right">{project.health || 0}%</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>

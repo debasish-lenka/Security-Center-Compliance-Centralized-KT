@@ -72,6 +72,18 @@ export async function overviewRoutes(app: FastifyInstance) {
       }),
     ]);
 
+    // which project does each activity belong to (tasks and documents only carry their own id in the log)
+    const activityProject = new Map<string, string>();
+    const idsOf = (type: string) => audit.filter((a) => a.resourceType === type && a.resourceId).map((a) => a.resourceId!);
+    const [actTasks, actDocs] = await Promise.all([
+      idsOf('task').length ? app.prisma.task.findMany({ where: { id: { in: idsOf('task') } }, select: { id: true, projectId: true } }) : [],
+      idsOf('document').length ? app.prisma.projectDocument.findMany({ where: { id: { in: idsOf('document') } }, select: { id: true, projectId: true } }) : [],
+    ]);
+    for (const t of actTasks) activityProject.set(t.id, t.projectId);
+    for (const d of actDocs) activityProject.set(d.id, d.projectId);
+    const activityLink = (type: string, pid: string | null): string | null =>
+      type === 'kt_report' ? '/kt-reports' : type === 'document' || type === 'file' ? (pid ? `/projects/${pid}` : '/documents') : pid ? `/projects/${pid}` : null;
+
     const byStatus = (s: ProjectStatus) => projects.filter((p) => p.status === s).length;
     const healths = projects.map(projectHealth);
     const avgHealth = healths.length ? Math.round(healths.reduce((a, b) => a + b, 0) / healths.length) : 0;
@@ -111,6 +123,7 @@ export async function overviewRoutes(app: FastifyInstance) {
       .sort((a, b) => b.members.length - a.members.length)
       .slice(0, 6)
       .map((p) => ({
+        projectId: p.id,
         project: p.name,
         allocated: p.members.length,
         utilized: new Set(openTasks.filter((t) => t.projectId === p.id && t.assigneeId).map((t) => t.assigneeId)).size,
@@ -169,14 +182,21 @@ export async function overviewRoutes(app: FastifyInstance) {
         upcomingDeadlines,
         // every project in scope (a manager's own ones), newest activity first, whether or not it has a deadline
         myProjects: myProjectRows,
-        recentActivity: audit.map((a) => ({
-          id: a.id,
-          action: ACTION_LABELS[a.action] ?? a.action,
-          resourceType: resourceLabel(a.resourceType),
-          actor: { fullName: a.actor?.fullName ?? 'System' },
-          projectName: detailName(a.details),
-          timestamp: a.createdAt,
-        })),
+        recentActivity: audit.map((a) => {
+          const pid = a.resourceType === 'project' ? a.resourceId : a.resourceId ? activityProject.get(a.resourceId) ?? null : null;
+          const pname = pid ? projects.find((p) => p.id === pid)?.name ?? '' : '';
+          return {
+            id: a.id,
+            action: ACTION_LABELS[a.action] ?? a.action,
+            resourceType: resourceLabel(a.resourceType),
+            actor: { fullName: a.actor?.fullName ?? 'System' },
+            itemName: detailName(a.details),        // the task, document or project the entry is about
+            projectId: pid,
+            projectName: pname,                      // the project it belongs to (empty when it is gone or not visible)
+            link: activityLink(a.resourceType, pid),
+            timestamp: a.createdAt,
+          };
+        }),
       },
     });
   });

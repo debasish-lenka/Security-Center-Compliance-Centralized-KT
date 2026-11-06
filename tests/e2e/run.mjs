@@ -32,6 +32,7 @@ const TESTS = [
   ['uploads', 'uploads per person and all uploads', true],
   ['dt-check', 'every time shows date and time (IST)', true],
   ['edit-links', 'editing a project\'s work links', true],
+  ['dashboard-links', 'dashboard items open what they name; upload from a project reaches the Document Vault', true],
   ['virus-scan', 'upload virus scan: clean saved, infected refused and logged, scanner down refuses (stand-in scanner)', false],
   ['session-renewal', 'short logins: 8 h token, renewed while working, expired/tampered/signed-out refused', false],
   ['phone-layout', 'on a phone-sized screen no page scrolls sideways or sticks out', true],

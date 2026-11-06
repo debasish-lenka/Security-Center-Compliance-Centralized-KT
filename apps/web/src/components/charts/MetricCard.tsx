@@ -27,7 +27,10 @@ export function MetricCard({ title, value, icon, trend, accentColor = 'cyan', on
   const trendColors = { [accentColor]: accent.text } as Record<string, string>;
 
   return (
-    <Card className={cn('relative overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg', onClick && 'cursor-pointer')} onClick={onClick}>
+    <Card className={cn('relative overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg', onClick && 'cursor-pointer')}
+      onClick={onClick}
+      {...(onClick ? { role: 'link', tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } } : {})}
+    >
       <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r to-transparent', accent.bar)} />
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
