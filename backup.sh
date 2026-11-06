@@ -30,6 +30,15 @@ touch "$dest/OK"
 echo "Backup written to $dest ($(du -sh "$dest" | cut -f1))"
 
 # keep only the newest $KEEP complete backups
+# (a backup made from the dashboard is written by the api container, so its files belong to root and this user cannot delete them:
+#  then the api container, which can see the same folder, removes it)
 ls -1d backups/*/ 2>/dev/null | sort | head -n -"$KEEP" | while read -r old; do
-  [ -f "${old}OK" ] && rm -rf "$old" && echo "Removed old backup $old"
+  [ -f "${old}OK" ] || continue
+  if rm -rf "$old" 2>/dev/null; then
+    echo "Removed old backup $old"
+  elif docker compose run --rm --no-deps -T --entrypoint rm api -rf "/data/backups/$(basename "$old")" >/dev/null 2>&1 && [ ! -e "$old" ]; then
+    echo "Removed old backup $old (made by the dashboard)"
+  else
+    echo "Could not remove old backup $old. Remove it by hand:  sudo rm -rf ${old%/}" >&2
+  fi
 done || true
