@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { extname } from 'path';
 import { getStorageService } from '../services/storage.js';
 import { watermarkPdf } from '../services/watermark.js';
+import { createAuditLogger } from '../services/audit-logger.js';
+import { VIRUS_SCAN_ENABLED, scanUpload } from '../services/virus-scan.js';
 import { MAX_UPLOAD_BYTES as MAX_UPLOAD, checkContent, checkName, checkSize, extensionOf } from '../services/upload-policy.js';
 
 const SAFE_INLINE: Record<string, string> = {
@@ -17,6 +19,7 @@ const SAFE_INLINE: Record<string, string> = {
 // Serves/accepts files for signed links created by StorageService. The signed token is the credential.
 export async function fileRoutes(app: FastifyInstance) {
   const storage = getStorageService();
+  const audit = createAuditLogger(app);
 
   // Uploads arrive as raw bytes whatever their type. Drop the built-in JSON/text parsers (they would
   // turn a .txt or .json file into a string) so the catch-all below handles every content type here.
@@ -73,6 +76,19 @@ export async function fileRoutes(app: FastifyInstance) {
     if (refused) {
       const tooBig = request.body.length > MAX_UPLOAD;
       return reply.code(tooBig ? 413 : 415).send({ success: false, error: { code: tooBig ? 'TOO_LARGE' : 'UNSUPPORTED_TYPE', message: refused } });
+    }
+    // virus scan (ClamAV) before anything is kept; if the scanner cannot answer the file is refused, never let through unscanned
+    if (VIRUS_SCAN_ENABLED) {
+      const scan = await scanUpload(request.body);
+      if (scan.status === 'infected') {
+        await audit.log({ action: 'UPLOAD', resourceType: 'file', resourceId: payload.k, details: { virus: scan.signature, size: request.body.length }, ipAddress: request.ip, userAgent: request.headers['user-agent'], outcome: 'FAILURE', errorMessage: `Virus found: ${scan.signature}` });
+        request.log.warn({ key: payload.k, virus: scan.signature }, 'upload refused: virus found');
+        return reply.code(422).send({ success: false, error: { code: 'VIRUS_FOUND', message: `A virus was found in this file (${scan.signature}), so it was not saved. Tell your security team.` } });
+      }
+      if (scan.status === 'unavailable') {
+        request.log.error({ key: payload.k, reason: scan.reason }, 'upload refused: virus scanner unavailable');
+        return reply.code(503).send({ success: false, error: { code: 'SCANNER_UNAVAILABLE', message: 'The file could not be checked for viruses right now (the scanner is starting or stopped), so it was not saved. Try again in a minute.' } });
+      }
     }
     await storage.upload(payload.k, request.body);
     return reply.send({ success: true });

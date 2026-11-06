@@ -51,7 +51,7 @@ export function Documents() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProject, setUploadProject] = useState('');
   const [uploadCategory, setUploadCategory] = useState('OTHER');
-  const { data: policy } = useQuery({ queryKey: ['upload-policy'], staleTime: 60 * 60_000, queryFn: async () => (await uploadPolicyApi.get()).data.data as { maxMb: number; extensions: string[]; accept: string; groups: { label: string; extensions: string[] }[] } });
+  const { data: policy } = useQuery({ queryKey: ['upload-policy'], staleTime: 60 * 60_000, queryFn: async () => (await uploadPolicyApi.get()).data.data as { maxMb: number; extensions: string[]; accept: string; groups: { label: string; extensions: string[] }[]; virusScan?: boolean } });
   const [versionHistoryDoc, setVersionHistoryDoc] = useState<{ id: string; name: string } | null>(null);
   const [reviewDialogDoc, setReviewDialogDoc] = useState<{ id: string; name: string; projectId: string; reviewStatus: string | null; reviewerId?: string } | null>(null);
 
@@ -502,7 +502,7 @@ export function Documents() {
                 disabled={isUploading}
               />
               <p className="mt-1 text-xs text-dbi-textSecondary">
-                Up to {policy?.maxMb ?? 50} MB. Allowed: {policy ? policy.groups.map((g: any) => `${g.label} (${g.extensions.map((e: string) => `.${e}`).join(' ')})`).join('; ') : '...'}. Programs, scripts and web pages are not accepted.
+                Up to {policy?.maxMb ?? 50} MB. Allowed: {policy ? policy.groups.map((g: any) => `${g.label} (${g.extensions.map((e: string) => `.${e}`).join(' ')})`).join('; ') : '...'}. Programs, scripts and web pages are not accepted.{policy?.virusScan ? ' Every file is checked for viruses before it is saved.' : ''}
               </p>
             </div>
             <DialogFooter>

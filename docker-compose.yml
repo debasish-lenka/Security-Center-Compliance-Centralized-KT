@@ -17,6 +17,18 @@ services:
       retries: 10
     # no published ports: only reachable from inside this stack
 
+  clamav:
+    image: clamav/clamav:1.4   # offline antivirus; the api sends every uploaded file here before saving it
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_FRESHCLAMD: ${CLAMAV_NO_FRESHCLAMD:-false}   # true = never fetch virus definitions from the internet (update by pulling a newer image)
+      CLAMD_CONF_StreamMaxLength: 64M     # uploads can be up to 50 MB (the clamd default would refuse above 25 MB)
+      CLAMD_CONF_MaxFileSize: 64M
+      CLAMD_CONF_MaxScanSize: 256M
+    volumes:
+      - dbi_clamdb:/var/lib/clamav        # virus definitions survive restarts
+    # no published ports: only the api can reach it
+
   api:
     build:
       context: .
@@ -25,8 +37,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      clamav:
+        condition: service_started   # not "healthy": the scanner needs a minute or two to load; until then uploads are refused with a clear message
     environment:
       NODE_ENV: production
+      VIRUS_SCAN: ${VIRUS_SCAN:-on}   # every uploaded file is scanned by ClamAV before it is saved; off = no scan
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
       HOST: 0.0.0.0
       PORT: 3001
       DATABASE_URL: postgresql://dbi:${POSTGRES_PASSWORD}@db:5432/dbi_security?schema=public
@@ -63,3 +80,4 @@ services:
 volumes:
   dbi_pgdata:
   dbi_certs:
+  dbi_clamdb:

@@ -68,6 +68,10 @@ docker compose exec -T api node dist/scripts/e2e-world.js clean
 ```
 It is not part of `npm test`.
 
+### Virus scan and the real ClamAV
+
+`virus-scan` uses a stand-in scanner (same protocol) and a second API on :3101, so it needs no ClamAV. The real one is checked on the server with the EICAR file, see "Virus scan of uploads" in README-DEPLOY.md.
+
 ## The `update.sh` test
 ```bash
 bash tests/update-sh.test.sh

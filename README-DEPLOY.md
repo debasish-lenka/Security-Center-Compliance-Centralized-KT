@@ -42,6 +42,21 @@ crontab -e
 ```
 Database and uploaded files survive updates (`dbi_pgdata` volume and `./Documents`). Database changes made by a new version are only additions, so an automatic rollback of the code does not need the data to be restored.
 
+## Virus scan of uploads (ClamAV)
+
+Every uploaded file is sent to a `clamav` container (offline antivirus, part of docker-compose) before it is saved. An infected file is refused, the person sees which virus was found, and the refusal is written to the audit log (action UPLOAD, outcome FAILURE). If the scanner is not ready or is stopped, uploads are **refused** ("try again in a minute"), never let through unscanned. After a restart the scanner needs one to two minutes to load.
+
+- Needs about 1 GB of extra memory.
+- **Check that it works** (on the server, after an update): save the standard harmless test string as a file and upload it in the Document Vault, it must be refused with "Eicar-Test-Signature":
+  `printf '%s' 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`
+- **Virus definitions** are fetched from the internet every few hours (`freshclam`). On a server with no internet set `CLAMAV_NO_FRESHCLAMD=true` in `.env`, and update the definitions by pulling a newer image on a computer with internet (`docker compose pull clamav`, then `./update.sh --force`).
+- **Look at it:** `docker compose logs clamav --tail 30` and `docker compose ps` (clamav should be "healthy").
+- **Switch off** (not recommended): `VIRUS_SCAN=off` in `.env`.
+
+## Login length
+
+A login lasts 8 hours without activity (`JWT_EXPIRES_IN`, default `8h`). Someone who keeps working is renewed automatically, so only people who stop are signed out. Set `JWT_EXPIRES_IN=30m` for stricter, `12h` for looser.
+
 ## Useful commands
 ```bash
 docker compose ps

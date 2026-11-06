@@ -216,11 +216,13 @@ process.on('SIGINT', shutdown);
 
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
-  startOcrJob(app); // at night, reads the screenshots and checks that the tool was on screen
-  startStalledJob(app); // reminds people whose work is not moving, tells leads, alerts admins
-  startWorkShotPurge(app); // deletes work screenshots after the retention period
-  startPurgeJob(app); // removes recycle-bin entries older than 30 days
-  startBackupJob(app); // runs the scheduled backup set on the Backups page
+  if (process.env.BACKGROUND_JOBS !== 'off') { // 'off' is only for a second, throw-away API that a test starts next to the real one
+    startOcrJob(app); // at night, reads the screenshots and checks that the tool was on screen
+    startStalledJob(app); // reminds people whose work is not moving, tells leads, alerts admins
+    startWorkShotPurge(app); // deletes work screenshots after the retention period
+    startPurgeJob(app); // removes recycle-bin entries older than 30 days
+    startBackupJob(app); // runs the scheduled backup set on the Backups page
+  }
   app.log.info(`🚀 DBI Security Center API running on http://${env.HOST}:${env.PORT}`);
   app.log.info(`📚 API Documentation available at http://${env.HOST}:${env.PORT}/docs`);
 } catch (err) {
