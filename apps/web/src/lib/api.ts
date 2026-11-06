@@ -1177,13 +1177,16 @@ export const notificationsApi = MOCK_MODE ? mockNotificationsApi : {
   delete: (id: string) => api.delete(`/v1/notifications/${id}`),
 };
 
-export const auditLogsApi = MOCK_MODE ? mockAuditLogsApi : {
+export const auditLogsApi: any = MOCK_MODE ? mockAuditLogsApi : {
   list: (params?: Record<string, string>) => api.get('/v1/audit-logs', { params }),
   getStats: () => api.get('/v1/audit-logs/stats'),
   export: (params?: Record<string, string>) => api.get('/v1/audit-logs/export', { params, responseType: 'blob' }),
   getActivityFeed: (params?: Record<string, string>) => api.get('/v1/audit-logs/activity-feed', { params }),
   getActions: () => api.get('/v1/audit-logs/actions'),
   getResourceTypes: () => api.get('/v1/audit-logs/resource-types'),
+  summary: (params?: Record<string, string>) => api.get('/v1/audit-logs/summary', { params }),
+  actors: () => api.get('/v1/audit-logs/actors'),
+  facets: () => api.get('/v1/audit-logs/facets'),
 };
 
 // Real-mode documents live under /v1/projects/:projectId/documents; the pages work with flat document ids,
