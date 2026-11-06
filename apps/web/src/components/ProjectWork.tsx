@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Check, History, Loader2, Pencil, Plus, Send, ShieldCheck, Trash2, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 
 // Tasks and milestones of one project (the "Work" tab)
-export function ProjectWork({ projectId }: { projectId: string }) {
+export function ProjectWork({ projectId, focusTaskId = null }: { projectId: string; focusTaskId?: string | null }) {
   const queryClient = useQueryClient();
   const [taskOpen, setTaskOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -49,6 +49,17 @@ export function ProjectWork({ projectId }: { projectId: string }) {
     queryKey: tasksKey,
     queryFn: async () => ((await projectsApi.getTasks(projectId, { limit: '100' })).data?.items ?? []) as any[],
   });
+  // arrived from a link to one task (an activity, a notification): mark it, scroll to it and open its history, once
+  const focused = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusTaskId || focused.current === focusTaskId || tasksLoading) return;
+    const t = tasks.find((x: any) => x.id === focusTaskId);
+    if (!t) return;
+    focused.current = focusTaskId;
+    setHistory(t);
+    setTimeout(() => document.getElementById(`task-${focusTaskId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+  }, [focusTaskId, tasks, tasksLoading]);
+
   const { data: milestones = [] } = useQuery({
     queryKey: msKey,
     queryFn: async () => ((await projectsApi.getMilestones(projectId)).data?.data ?? []) as any[],
@@ -115,7 +126,7 @@ export function ProjectWork({ projectId }: { projectId: string }) {
                 const st = STATUS_STYLE[t.status] ?? STATUS_STYLE.TODO;
                 const back = t.status === 'IN_PROGRESS' && t.latestReview?.kind === 'CHANGES_REQUESTED';
                 return (
-                  <div key={t.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-dbi-elevated/60 p-3">
+                  <div key={t.id} id={`task-${t.id}`} className={`flex flex-wrap items-center gap-3 rounded-lg bg-dbi-elevated/60 p-3 ${t.id === focusTaskId ? 'ring-2 ring-dbi-cyan' : ''}`}>
                     <div className="min-w-0 flex-1">
                       <p className={`font-medium text-dbi-textPrimary ${t.status === 'DONE' ? 'opacity-70' : ''}`}>{t.title}</p>
                       <p className="text-xs text-dbi-textSecondary">

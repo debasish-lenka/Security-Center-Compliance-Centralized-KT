@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma, ProjectStatus } from '@prisma/client';
+import { resolveLinks } from '../services/deeplinks.js';
 import { z } from 'zod';
 import { TEAM_ROLES, latestUpdates, startInfo } from '../services/project-progress.js';
 
@@ -65,24 +66,15 @@ export async function overviewRoutes(app: FastifyInstance) {
       app.prisma.dailyKTReport.count({ where: { status: 'SUBMITTED', project: projectWhere } }),
       app.prisma.profile.count({ where: { status: 'ACTIVE' } }),
       app.prisma.auditLog.findMany({
-        where: { action: { notIn: NOISE as any }, ...(orgWide ? {} : { actorId: userId }) },
+        where: { action: { notIn: NOISE as any }, NOT: { resourceType: 'file', outcome: 'SUCCESS' }, ...(orgWide ? {} : { actorId: userId }) },
         orderBy: { createdAt: 'desc' },
         take: 8,
         include: { actor: { select: { fullName: true } } },
       }),
     ]);
 
-    // which project does each activity belong to (tasks and documents only carry their own id in the log)
-    const activityProject = new Map<string, string>();
-    const idsOf = (type: string) => audit.filter((a) => a.resourceType === type && a.resourceId).map((a) => a.resourceId!);
-    const [actTasks, actDocs] = await Promise.all([
-      idsOf('task').length ? app.prisma.task.findMany({ where: { id: { in: idsOf('task') } }, select: { id: true, projectId: true } }) : [],
-      idsOf('document').length ? app.prisma.projectDocument.findMany({ where: { id: { in: idsOf('document') } }, select: { id: true, projectId: true } }) : [],
-    ]);
-    for (const t of actTasks) activityProject.set(t.id, t.projectId);
-    for (const d of actDocs) activityProject.set(d.id, d.projectId);
-    const activityLink = (type: string, pid: string | null): string | null =>
-      type === 'kt_report' ? '/kt-reports' : type === 'document' || type === 'file' ? (pid ? `/projects/${pid}` : '/documents') : pid ? `/projects/${pid}` : null;
+    // where a click on each activity should go (the thing itself), and which project it belongs to
+    const links = await resolveLinks(app.prisma, audit.map((a) => ({ type: a.resourceType, id: a.resourceId })));
 
     const byStatus = (s: ProjectStatus) => projects.filter((p) => p.status === s).length;
     const healths = projects.map(projectHealth);
@@ -183,8 +175,7 @@ export async function overviewRoutes(app: FastifyInstance) {
         // every project in scope (a manager's own ones), newest activity first, whether or not it has a deadline
         myProjects: myProjectRows,
         recentActivity: audit.map((a) => {
-          const pid = a.resourceType === 'project' ? a.resourceId : a.resourceId ? activityProject.get(a.resourceId) ?? null : null;
-          const pname = pid ? projects.find((p) => p.id === pid)?.name ?? '' : '';
+          const pid = links.projectOf(a.resourceType, a.resourceId);
           return {
             id: a.id,
             action: ACTION_LABELS[a.action] ?? a.action,
@@ -192,8 +183,8 @@ export async function overviewRoutes(app: FastifyInstance) {
             actor: { fullName: a.actor?.fullName ?? 'System' },
             itemName: detailName(a.details),        // the task, document or project the entry is about
             projectId: pid,
-            projectName: pname,                      // the project it belongs to (empty when it is gone or not visible)
-            link: activityLink(a.resourceType, pid),
+            projectName: pid ? projects.find((p) => p.id === pid)?.name ?? '' : '',   // the project it belongs to
+            link: links.link(a.resourceType, a.resourceId),
             timestamp: a.createdAt,
           };
         }),

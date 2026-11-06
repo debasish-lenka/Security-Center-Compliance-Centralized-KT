@@ -79,7 +79,7 @@ export function Attention() {
                         </p>
                         {it.detail && <p className="mt-1 text-xs text-dbi-critical">{it.detail}</p>}
                       </div>
-                      {it.canVerify && <Button size="sm" asChild><Link to={`/projects/${it.projectId}?tab=work`}><ShieldCheck className="mr-1 h-4 w-4" />Verify</Link></Button>}
+                      {it.canVerify && <Button size="sm" asChild><Link to={`/projects/${it.projectId}?tab=work${it.taskId ? `&task=${it.taskId}` : ''}`}><ShieldCheck className="mr-1 h-4 w-4" />Verify</Link></Button>}
                       {it.canNudge && (
                         <Button size="sm" variant="outline" onClick={() => nudge(it)} disabled={busy === key}>
                           {busy === key ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <BellRing className="mr-1 h-4 w-4" />}Remind
@@ -90,7 +90,7 @@ export function Attention() {
                           <UserCog className="mr-1 h-4 w-4" />Give to someone else
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" asChild><Link to={`/projects/${it.projectId}${it.taskId ? '?tab=work' : '?tab=team'}`}><Send className="mr-1 h-4 w-4" />Open</Link></Button>
+                      <Button size="sm" variant="ghost" asChild><Link to={`/projects/${it.projectId}${it.taskId ? `?tab=work&task=${it.taskId}` : '?tab=team'}`}><Send className="mr-1 h-4 w-4" />Open</Link></Button>
                     </div>
                   );
                 })}

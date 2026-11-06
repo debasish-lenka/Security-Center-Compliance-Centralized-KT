@@ -30,7 +30,7 @@ const dash = (await call('GET', '/executive/dashboard/metrics', null, sa.token))
 const act = (dash?.recentActivity ?? []).find((a) => a.itemName === 'Link test task');
 ok('the recent activity names the task', !!act, JSON.stringify((dash?.recentActivity ?? []).slice(0, 2)).slice(0, 200));
 ok('it names the project the task is in (not the task again)', act?.projectName === PNAME && act?.projectId === pid, `${act?.projectName}`);
-ok('it carries a link to that project', act?.link === `/projects/${pid}`, `${act?.link}`);
+ok('it carries a link to that very task', act?.link === `/projects/${pid}?tab=work&task=${tk.id}`, `${act?.link}`);
 ok('resource allocation rows carry the project id', (dash?.charts?.resourceAllocation ?? []).every((r) => r.projectId));
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
@@ -66,9 +66,12 @@ await openDash();
 const deadlineHref = await p.evaluate((n) => [...document.querySelectorAll('a')].filter((a) => a.textContent.includes(n)).map((a) => a.getAttribute('href')), PNAME);
 ok('the project is a link in Upcoming Deadlines and Project Health (and in Projects)', deadlineHref.filter((h) => h === `/projects/${pid}`).length >= 2, JSON.stringify(deadlineHref));
 const actHref = await p.evaluate(() => [...document.querySelectorAll('a')].filter((a) => /Link test task/.test(a.textContent)).map((a) => ({ href: a.getAttribute('href'), text: a.textContent.replace(/\s+/g, ' ').slice(0, 120) })));
-ok('Recent Activity entries are links showing the task and the project', actHref.length > 0 && actHref[0].href === `/projects/${pid}` && actHref[0].text.includes(PNAME), JSON.stringify(actHref[0]));
+ok('Recent Activity entries are links showing the task and the project', actHref.length > 0 && actHref[0].href === `/projects/${pid}?tab=work&task=${tk.id}` && actHref[0].text.includes(PNAME), JSON.stringify(actHref[0]));
 await p.evaluate(() => [...document.querySelectorAll('a')].find((a) => /Link test task/.test(a.textContent))?.click()); await wait(1500);
 ok('clicking a Recent Activity entry opens the project', path() === `/projects/${pid}`, `(${path()})`);
+await wait(2500);
+const taskView = await p.evaluate(() => ({ dlg: document.querySelector('[role=dialog]')?.innerText ?? '', ring: !!document.querySelector('[id^=task-].ring-2') }));
+ok('...on the Tasks tab, with that task marked and its history open', /Link test task/.test(taskView.dlg) && taskView.ring, JSON.stringify(taskView).slice(0, 160));
 
 // ---- upload from the project's Documents tab ----
 const openDocsTab = async () => {
@@ -93,6 +96,13 @@ ok('the document is saved in that project', !!row);
 await p.goto(WEB_URL + '/documents', { waitUntil: 'load' }); await wait(3000);
 ok('the Document Vault lists it', (await p.evaluate(() => document.body.innerText)).includes(name));
 ok('the project tab lists it under its uploader', (await (async () => { await openDocsTab(); return p.evaluate(() => document.body.innerText); })()).includes('1 documents'));
+// the upload shows in the activity as a link to that very document, and opens its details
+await openDash();
+const docLink = await p.evaluate((n) => [...document.querySelectorAll('a')].filter((a) => a.textContent.includes(n)).map((a) => a.getAttribute('href')), name);
+ok('the upload is in Recent Activity as a link to that document', docLink.length > 0 && docLink[0] === `/documents?projectId=${pid}&doc=${row?.id}`, JSON.stringify(docLink));
+await p.evaluate((n) => [...document.querySelectorAll('a')].find((a) => a.textContent.includes(n))?.click(), name); await wait(3500);
+const docDlg = await p.evaluate(() => document.querySelector('[role=dialog]')?.innerText ?? '');
+ok('clicking it opens the details of that document, not the whole vault', path() === '/documents' && docDlg.includes(name) && /Document details/.test(docDlg), docDlg.slice(0, 80));
 ok('no page crashes', errs.length === 0, errs.join(' ; '));
 await browser.close();
 

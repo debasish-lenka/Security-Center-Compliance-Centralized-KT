@@ -24,7 +24,8 @@ export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const startTab = searchParams.get('tab') === 'work' ? 'work' : searchParams.get('tab') === 'team' ? 'team' : 'overview';
+  const TABS = ['overview', 'work', 'team', 'session', 'documents', 'reports', 'activity'];
+  const startTab = TABS.includes(searchParams.get('tab') ?? '') ? searchParams.get('tab')! : 'overview';
 
   const { data: projectData, isLoading: projectLoading } = useQuery({
     queryKey: ['project', id],
@@ -235,7 +236,7 @@ export function ProjectDetail() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue={startTab} className="space-y-4">
+      <Tabs key={`${startTab}-${searchParams.get('task') ?? ''}`} defaultValue={startTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="work">Tasks &amp; Milestones</TabsTrigger>
@@ -286,7 +287,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="work" className="space-y-4">
-          <ProjectWork projectId={id!} />
+          <ProjectWork focusTaskId={searchParams.get('task')} projectId={id!} />
         </TabsContent>
 
         <TabsContent value="team" className="space-y-4">

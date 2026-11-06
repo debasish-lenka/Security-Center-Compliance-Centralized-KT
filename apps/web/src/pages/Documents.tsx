@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, projectsApi, uploadPolicyApi } from '@/lib/api';
@@ -39,6 +39,7 @@ export function Documents() {
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get('projectId');
   const urlSearch = searchParams.get('search') || '';
+  const focusDocId = searchParams.get('doc') || searchParams.get('documentId');
   const [search, setSearch] = useState(urlSearch);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
@@ -73,6 +74,14 @@ export function Documents() {
   });
 
   const documents = data?.data?.items || [];
+  // arrived from a link to one document: open its details once the list is here
+  const focusedDoc = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusDocId || focusedDoc.current === focusDocId || isLoading) return;
+    const d = documents.find((x: any) => x.id === focusDocId);
+    if (d) { focusedDoc.current = focusDocId; setSelectedDoc(d); }
+    else if (data) { focusedDoc.current = focusDocId; toast({ title: 'That document is no longer here', description: 'It may have been deleted or moved to the recycle bin.' }); }
+  }, [focusDocId, documents, isLoading, data]);
   const totalItems = data?.data?.total || documents.length;
   const totalPages = Math.ceil(totalItems / pageSize);
   const projects = projectsData?.data?.items || [];

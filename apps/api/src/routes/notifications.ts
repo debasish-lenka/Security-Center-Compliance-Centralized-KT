@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuditLogger } from '../services/audit-logger.js';
+import { resolveLinks } from '../services/deeplinks.js';
 
 // Where a notification should take the user when clicked
 function linkFor(n: { type: string; resourceType: string | null; resourceId: string | null }): string | null {
   if (n.type === 'DOCUMENT_DELETE_REQUESTED' || n.type === 'PROJECT_DELETE_REQUESTED') return '/assignments'; // the approvals card sits there and on the dashboard
-  if (n.resourceType === 'document_delete_request' || n.resourceType === 'document') return '/documents';
+  if (n.resourceType === 'document_delete_request') return '/documents';
   if (n.resourceType === 'project' && n.resourceId) return `/projects/${n.resourceId}`;
   if (n.resourceType === 'kt_report' && n.resourceId) return `/kt-reports/${n.resourceId}`;
   return null;
@@ -53,9 +54,10 @@ export async function notificationRoutes(app: FastifyInstance) {
       app.prisma.notification.count({ where: { userId, isRead: false } }),
     ]);
 
+    const links = await resolveLinks(app.prisma, notifications.map((n) => ({ type: n.resourceType, id: n.resourceId })));
     return reply.send({
       success: true,
-      data: { items: notifications.map((n) => ({ ...n, read: n.isRead, link: linkFor(n) })), total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
+      data: { items: notifications.map((n) => ({ ...n, read: n.isRead, link: links.link(n.resourceType, n.resourceId) ?? linkFor(n) })), total, page, limit, totalPages: Math.ceil(total / limit), unreadCount },
     });
   });
 
