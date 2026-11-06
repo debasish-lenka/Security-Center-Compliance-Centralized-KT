@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createAuthService } from '../services/auth.js';
 import { env } from '../utils/env.js';
+import { sessionCookie } from '../utils/session.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { encryptSecret, decryptSecret } from '../services/crypto.js';
 import { generateRecoveryCodes, generateTotpSecret, requiresMfa, totpEnrollment, verifyTotp } from '../services/mfa.js';
@@ -46,14 +47,7 @@ export async function authRoutes(app: FastifyInstance) {
   const authService = createAuthService(app);
   const auditLogger = createAuditLogger(app);
 
-  const startSession = (reply: any, token: string) =>
-    reply.setCookie('auth_token', token, {
-      httpOnly: true,
-      secure: env.COOKIE_SECURE,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-    });
+  const startSession = (reply: any, token: string) => reply.setCookie('auth_token', token, sessionCookie);
 
   // Login
   app.post('/login', {
@@ -105,13 +99,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const result = await authService.register(data);
 
-    reply.setCookie('auth_token', result.token, {
-      httpOnly: true,
-      secure: env.COOKIE_SECURE,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-    });
+    reply.setCookie('auth_token', result.token, sessionCookie);
 
     return reply.code(201).send({
       success: true,
@@ -205,7 +193,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     // Every other session just ended; give this one a fresh token so the person stays signed in
     const fresh = app.jwt.sign({ sub: request.userId, email: request.user!.email, role: request.user!.role });
-    reply.setCookie('auth_token', fresh, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+    reply.setCookie('auth_token', fresh, sessionCookie);
     return reply.send({ success: true, data: { token: fresh } });
   });
 
@@ -248,13 +236,7 @@ export async function authRoutes(app: FastifyInstance) {
       role: user.role,
     });
 
-    reply.setCookie('auth_token', token, {
-      httpOnly: true,
-      secure: env.COOKIE_SECURE,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-    });
+    reply.setCookie('auth_token', token, sessionCookie);
 
     return reply.send({ success: true, data: { token } });
   });

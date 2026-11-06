@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { env } from '../utils/env.js';
+import { sessionCookie } from '../utils/session.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { createAuthService } from '../services/auth.js';
 import { encryptSecret } from '../services/crypto.js';
@@ -104,7 +105,7 @@ export async function ssoAuthRoutes(app: FastifyInstance) {
     usedCodes.set(payload.jti, now + 120_000);
 
     const session = await authService.issueSession(payload.sub, request.ip, request.headers['user-agent']);
-    reply.setCookie('auth_token', session.token, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'lax', path: '/', maxAge: 7 * 24 * 60 * 60 });
+    reply.setCookie('auth_token', session.token, sessionCookie);
     return reply.send({ success: true, data: session });
   });
 }

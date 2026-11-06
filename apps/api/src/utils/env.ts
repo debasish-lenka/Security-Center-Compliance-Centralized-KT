@@ -9,7 +9,8 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
 
   JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  // how long a login lasts without activity; an active person is renewed automatically (see utils/session.ts)
+  JWT_EXPIRES_IN: z.string().default('8h'),
 
   SESSION_SECRET: z.string().min(32),
 

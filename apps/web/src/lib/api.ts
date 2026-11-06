@@ -1,5 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { getAuthToken, clearAuth } from './auth';
+import { getAuthToken, setAuthToken, clearAuth } from './auth';
 
 // Mock mode flag - enable when API is not available (default true for development)
 const MOCK_MODE = import.meta.env.VITE_MOCK_MODE !== 'false';
@@ -1576,6 +1576,9 @@ let redirectingToLogin = false;
 
 api.interceptors.response.use(
   (response) => {
+    // The server hands a fresh login token to someone who is still working (logins are short, see the API's session.ts)
+    const renewed = response.headers?.['x-session-token'];
+    if (typeof renewed === 'string' && renewed) setAuthToken(renewed);
     // The API wraps payloads as { success, data }, while list pages read response.data.items.
     // For paginated lists expose both shapes (response.data.items and response.data.data.items).
     const body = response.data;

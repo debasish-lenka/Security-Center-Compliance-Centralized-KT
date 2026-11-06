@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
-import { env } from '../utils/env.js';
+import { RENEW_AFTER_SECONDS, sessionCookie } from '../utils/session.js';
 
 const PUBLIC_PATHS = [
   '/health',
@@ -81,6 +81,15 @@ export async function authMiddleware(
     // Attach user to request
     request.user = { ...publicUser, department: user.department?.name ?? null };
     request.userId = user.id;
+
+    // A person who keeps working is given a fresh token now and then, so a short login never cuts them off;
+    // someone who stops working is signed out when the token runs out
+    const age = Math.floor(Date.now() / 1000) - (payload.iat ?? 0);
+    if (age >= RENEW_AFTER_SECONDS) {
+      const fresh = request.server.jwt.sign({ sub: user.id, email: user.email, role: user.role });
+      reply.setCookie('auth_token', fresh, sessionCookie);
+      reply.header('X-Session-Token', fresh);
+    }
 
     // Update last activity (async, don't await)
     prisma.profile.update({

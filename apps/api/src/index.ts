@@ -83,6 +83,7 @@ await app.register(fastifyCors, {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['X-Session-Token'],
 });
 
 await app.register(fastifyCookie, {
