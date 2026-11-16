@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, ExternalLink, FileText, Loader2, MonitorUp, Play, Square, StopCircle } from 'lucide-react';
+import { Camera, ExternalLink, FileText, Loader2, MonitorUp, Square, StopCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,9 +38,12 @@ const ToolBadge = ({ s }: { s: { toolCheck: string | null; ocrSeen: number; ocrC
 };
 const EvidenceBadge = ({ level }: { level: string }) => { const e = EVIDENCE[level] ?? EVIDENCE.NONE; return <Badge title={e.hint} className={e.cls}>{e.label}</Badge>; };
 
-export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { projectId: string; autoStart?: boolean; onAutoStarted?: () => void }) {
+// Two views of one piece of work. part="controls" is mounted once for the whole project page (so sharing keeps going when you change tab):
+// it shows nothing while idle (the project's Details card has the Start/Stop buttons) and the running card (notes, screenshots, sharing) while working.
+// part="log" is the Work Log tab: the Work KT card and the table of sessions.
+export interface WorkPanelHandle { start: (link?: WorkLink) => void; stop: () => void }
+export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string; part: 'controls' | 'log' }>(function WorkSessionPanel({ projectId, part }, handle) {
   const qc = useQueryClient();
-  const autoRef = useRef(false);
   const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
   const sessionsQ = useQuery({ queryKey: ['work-sessions', projectId], queryFn: async () => (await workApi.sessions(projectId)).data.data, refetchInterval: 20_000 }); // the table follows running sessions
   const state = stateQ.data;
@@ -194,7 +197,7 @@ export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { proj
 
   // a sign of life every minute while a session is open; the clock for the running time
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || part === 'log') return;
     const beat = window.setInterval(() => workApi.heartbeat(projectId, activeId).catch(() => refresh()), 60_000);
     const tick = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => { window.clearInterval(beat); window.clearInterval(tick); };
@@ -229,15 +232,6 @@ export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { proj
       toast({ title: 'Could not start', description: errText(e, 'Try again'), variant: 'destructive' });
     } finally { setBusy(null); }
   };
-
-  // "Start work" pressed on the project's Details card: begin here, once, as soon as the state is known
-  useEffect(() => {
-    if (!autoStart || autoRef.current || !state) return;
-    autoRef.current = true;
-    onAutoStarted?.();
-    if (!activeId) void start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, state, activeId]);
 
   const stop = async () => {
     if (!activeId) return;
@@ -293,6 +287,9 @@ export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { proj
     } finally { setBusy(null); }
   };
 
+  useImperativeHandle(handle, () => ({ start: (l) => { void start(l); }, stop: () => { void stop(); } }));
+  const hiddenVideo = <video ref={videoRef} muted playsInline className="hidden" data-testid="capture-video" />;
+  if (part === 'controls' && (stateQ.isLoading || stateQ.isError || !stateQ.data)) return hiddenVideo;
   if (stateQ.isLoading) return <div className="h-40 animate-pulse rounded-lg bg-dbi-elevated" />;
   if (stateQ.isError || !state) return <p className="text-sm text-dbi-textSecondary">The work log could not be loaded.</p>;
 
@@ -303,36 +300,16 @@ export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { proj
 
   return (
     <div className="space-y-4">
-      <video ref={videoRef} muted playsInline className="hidden" data-testid="capture-video" />
+      {part === 'controls' && hiddenVideo}
 
+      {part === 'controls' && (active || shareProblem) && (
       <Card>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">Work on this project</CardTitle>
           {active ? <Badge className="bg-dbi-success/20 text-dbi-success">Running · {mins(elapsed)}</Badge> : <Badge variant="secondary">Not working</Badge>}
         </CardHeader>
         <CardContent className="space-y-4">
-          {!active && (
-            <>
-              <p className="text-sm text-dbi-textSecondary">
-                Start from the tool you work in. Your notes and screenshots are recorded while the work is running, and become the project's KT document.
-                {state.requireShare
-                  ? ' Screen sharing is required: you will be asked to share your whole screen, and a screenshot of the whole screen is saved whenever it changes, so close anything private before you start.'
-                  : ' You will be asked to share your screen (optional); the screen is captured only when it changes.'}
-              </p>
-              {shareProblem && <p role="alert" className="rounded-md border border-dbi-critical/40 bg-dbi-critical/10 p-2 text-sm text-dbi-critical">{shareProblem}</p>}
-              <div className="flex flex-wrap gap-2">
-                {links.map((l) => (
-                  <Button key={l.url} onClick={() => start(l)} disabled={busy !== null}>
-                    {busy === 'start' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}Start work in {l.label}
-                  </Button>
-                ))}
-                <Button variant={links.length ? 'outline' : 'default'} onClick={() => start()} disabled={busy !== null}>
-                  {busy === 'start' && !links.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}Start work{links.length ? ' without a tool' : ''}
-                </Button>
-              </div>
-              {links.length === 0 && <p className="text-xs text-dbi-textSecondary">No work link was set for this project. The project owner can add the tools in Edit Project.</p>}
-            </>
-          )}
+          {!active && shareProblem && <p role="alert" className="rounded-md border border-dbi-critical/40 bg-dbi-critical/10 p-2 text-sm text-dbi-critical">{shareProblem}</p>}
 
           {active && (
             <>
@@ -383,7 +360,9 @@ export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { proj
           )}
         </CardContent>
       </Card>
+      )}
 
+      {part === 'log' && (<>
       <Card>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">Work KT</CardTitle>
@@ -444,9 +423,10 @@ export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { proj
       </Card>
 
       <SessionDialog projectId={projectId} sessionId={openSession} onClose={() => setOpenSession(null)} />
+      </>)}
     </div>
   );
-}
+});
 
 function SessionDialog({ projectId, sessionId, onClose }: { projectId: string; sessionId: string | null; onClose: () => void }) {
   const q = useQuery({ queryKey: ['work-session', projectId, sessionId], enabled: !!sessionId, queryFn: async () => (await workApi.session(projectId, sessionId!)).data.data });

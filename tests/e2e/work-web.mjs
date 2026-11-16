@@ -76,15 +76,19 @@ ok('Edit Project shows the saved links', editVals.join('|') === `Cisco dashboard
 // ---- member a works ----
 const U = await mk(S.a);
 await U.p.goto(WEB + `/projects/${pid}`, { waitUntil: 'load' }); await wait(2500);
-await clickText(U.p, /^Work Log$/, 'button[role=tab]'); await wait(1500);
 let t = await text(U.p);
-ok('Work Log tab: a start button for each tool, nothing running', /Start work in Cisco dashboard/.test(t) && /Start work in ManageEngine/.test(t) && /Not working/.test(t));
+ok('Project Details: a start button for each tool and a plain Start work, nothing running', /Start work in Cisco dashboard/.test(t) && /Start work in ManageEngine/.test(t) && /Start work/.test(t) && !/Work is running/.test(t));
+await clickText(U.p, /^Work Log$/, 'button[role=tab]'); await wait(1500);
+t = await text(U.p);
+ok('Work Log tab holds only the log: no start button, no running card', !/Start work/.test(t) && !/Work on this project/.test(t) && /Work sessions|My work sessions/.test(t));
 ok('Generate KT is off with nothing to generate', await U.p.evaluate(() => [...document.querySelectorAll('button')].find((b) => /Generate KT/.test(b.textContent))?.disabled));
 U.p.on('console', (m) => { if (['error', 'warning'].includes(m.type())) console.log('   [console]', m.text().slice(0, 160)); });
 U.p.on('response', (r) => { if (/\/work\//.test(r.url()) && r.request().method() !== 'GET') console.log('   [api]', r.request().method(), r.url().split('/work/')[1], r.status()); });
 const popups = []; browser.on('targetcreated', (tg) => popups.push(tg.url()));
+await clickText(U.p, /^Overview$/, 'button[role=tab]'); await wait(800);
 await clickText(U.p, /Start work in Cisco dashboard/); await wait(5000);
 t = await text(U.p);
+ok('Start work turns into Stop work beside it, and the running card appears by itself', /Work is running/.test(t) && /Work on this project/.test(t) && !/Start work in Cisco/.test(t));
 ok('a session is running', /Running/.test(t), t.slice(t.indexOf('Work on this project'), t.indexOf('Work on this project') + 120).replace(/\n/g, ' '));
 ok('the tool opened in a new tab', popups.some((u) => u === `${WEB_URL}/login`), popups.join(','));
 const shareOn = /Screen is being shared/.test(t);
@@ -115,11 +119,12 @@ if (!shareOn) {
 await clickText(U.p, /Open ManageEngine/); await wait(800);
 const ev = (await call('GET', `/projects/${pid}/work/sessions/${state.active.id}`, null, S.a.token)).body.data.entries;
 ok('opening another tool is written down', ev.some((e) => /Opened ManageEngine/.test(e.text ?? '')));
-// generate is blocked while running
+// generate is blocked while running (it lives in the Work Log tab, while the running card stays on every tab)
+await clickText(U.p, /^Work Log$/, 'button[role=tab]'); await wait(1200);
 ok('Generate KT is off while work is running', await U.p.evaluate(() => [...document.querySelectorAll('button')].find((b) => /Generate KT/.test(b.textContent))?.disabled));
 await clickText(U.p, /^Stop work$/); await wait(3000);
 t = await text(U.p);
-ok('stopped: back to Not working, one finished session waiting for a KT', /Not working/.test(t) && /1 finished session/.test(t), '');
+ok('stopped: the running card is gone, one finished session waiting for a KT', !/Work is running/.test(t) && !/Work on this project/.test(t) && /1 finished session/.test(t), '');
 await clickText(U.p, /^Generate KT$/); await wait(3500);
 t = await text(U.p);
 ok('Generate KT saves version 1 in the vault', /Work KT version 1 saved/.test(t) || /Nothing new/.test(t));

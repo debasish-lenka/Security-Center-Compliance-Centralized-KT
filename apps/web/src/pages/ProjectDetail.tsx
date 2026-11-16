@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { projectsApi, documentsApi, ktReportsApi } from '@/lib/api';
+import { projectsApi, documentsApi, ktReportsApi, workApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress';
 import { formatDate, getStatusColor, getPriorityColor, formatDateTimeIST } from '@/lib/utils';
 import { Plus, Edit, Trash2, Eye, ArrowLeft, Users, Flag, Calendar, Image as ImageIcon, FileText, ClipboardList, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ProjectStartPanel } from '@/components/ProjectStartPanel';
-import { WorkSessionPanel } from '@/components/WorkSessionPanel';
+import { WorkSessionPanel, type WorkPanelHandle } from '@/components/WorkSessionPanel';
 import { ProjectProgress } from '@/components/ProjectProgress';
 import { ProjectUploadsByPerson } from '@/components/ProjectUploadsByPerson';
 import { progressTone } from '@/lib/progress-style';
@@ -23,7 +23,12 @@ import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const workRef = useRef<WorkPanelHandle>(null);
+  // same query the panel uses: tells the Details card whether work is running
+  const workState = useQuery({ queryKey: ['work-state', id], queryFn: async () => (await workApi.state(id!)).data.data, enabled: !!id, refetchInterval: 30_000 });
+  const working = !!workState.data?.active;
+  const workLinks: { label: string; url: string }[] = workState.data?.links ?? [];
   const TABS = ['overview', 'work', 'team', 'session', 'documents', 'reports', 'activity'];
   const startTab = TABS.includes(searchParams.get('tab') ?? '') ? searchParams.get('tab')! : 'overview';
 
@@ -226,7 +231,17 @@ export function ProjectDetail() {
             </div>
             {project.status !== 'COMPLETED' && (
               <div className="flex items-end justify-end md:col-span-2">
-                <Button onClick={() => setSearchParams({ tab: 'session', autostart: '1' })}>Start work</Button>
+                {working ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Badge className="bg-dbi-success/20 text-dbi-success">Work is running</Badge>
+                    <Button variant="destructive" onClick={() => workRef.current?.stop()}>Stop work</Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {workLinks.map((l) => <Button key={l.url} variant="outline" onClick={() => workRef.current?.start(l)}>Start work in {l.label}</Button>)}
+                    <Button onClick={() => workRef.current?.start()}>Start work</Button>
+                  </div>
+                )}
               </div>
             )}
             <div className="space-y-1 md:col-span-2">
@@ -240,6 +255,9 @@ export function ProjectDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* mounted once for the whole page, so screen sharing keeps going when the tab changes; shows nothing while idle */}
+      <WorkSessionPanel ref={workRef} part="controls" projectId={project.id} />
 
       <Tabs key={`${startTab}-${searchParams.get('task') ?? ''}`} defaultValue={startTab} className="space-y-4">
         <TabsList>
@@ -300,7 +318,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="session" className="space-y-4">
-          <WorkSessionPanel projectId={project.id} autoStart={searchParams.get('autostart') === '1'} onAutoStarted={() => setSearchParams((p) => { p.delete('autostart'); return p; }, { replace: true })} />
+          <WorkSessionPanel part="log" projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
