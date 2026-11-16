@@ -82,6 +82,14 @@ export async function knowledgeBookFlatRoutes(app: FastifyInstance) {
     return forward(request, reply, 'DELETE', `/api/v1/projects/${projectId}/knowledge-books/${id}`);
   });
 
+  // builds the PDF again from the project's documents as they are now
+  app.post('/:id/regenerate', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const projectId = await projectOf(id);
+    if (!projectId) return notFound(reply);
+    return forward(request, reply, 'POST', `/api/v1/projects/${projectId}/knowledge-books/${id}/regenerate`);
+  });
+
   // { downloadUrl } for the book's PDF
   app.get('/:id/download', async (request, reply) => {
     const { id } = request.params as { id: string };

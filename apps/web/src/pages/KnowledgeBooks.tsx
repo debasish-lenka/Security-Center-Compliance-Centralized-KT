@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Search, Plus, Download, Edit, Trash2, FileText, Loader2, BookOpen, ArrowDownUp, Shield, ExternalLink } from 'lucide-react';
+import { Search, Plus, Download, Edit, Trash2, FileText, Loader2, BookOpen, ArrowDownUp, Shield, ExternalLink, RefreshCw } from 'lucide-react';
 import { formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { generateKnowledgeBookPdf, createKnowledgeBookFromProject, KnowledgeBookConfig } from '@/lib/pdfGenerator';
@@ -171,6 +171,24 @@ export function KnowledgeBooks() {
   };
 
   // 'open' shows the PDF in a new tab; only 'download' saves it
+  // build the PDF again from the project's documents as they are now, wait for it, then show the list
+  const handleRefreshPdf = async (book: any) => {
+    setIsGeneratingPdf(true);
+    try {
+      await knowledgeBooksApi.regenerate(book.id);
+      toast({ title: 'Refreshing the PDF', description: 'It is being built again from the project documents.' });
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const r = await refetch();
+        const now = (r.data?.data?.items ?? []).find((b: any) => b.id === book.id);
+        if (now && now.status !== 'GENERATING') break;
+      }
+      toast({ title: 'PDF refreshed', description: 'Open it again to see the documents.' });
+    } catch {
+      toast({ title: 'Error', description: 'Could not refresh the PDF', variant: 'destructive' });
+    } finally { setIsGeneratingPdf(false); }
+  };
+
   const handleGeneratePdf = async (book: any, mode: 'open' | 'download' = 'open') => {
     setIsGeneratingPdf(true);
     const tab = mode === 'open' ? window.open('', '_blank') : null; // opened inside the click so the browser allows it
@@ -429,6 +447,9 @@ export function KnowledgeBooks() {
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book, 'open')} title="Open PDF in a new tab" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
                               <ExternalLink className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleRefreshPdf(book)} title="Refresh PDF: build it again with the project's current documents" aria-label="Refresh PDF" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
+                              <RefreshCw className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => handleGeneratePdf(book, 'download')} title="Download PDF" className="text-dbi-cyan hover:text-dbi-cyan" disabled={isGeneratingPdf}>
                               {isGeneratingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}

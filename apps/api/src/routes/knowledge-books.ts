@@ -142,18 +142,8 @@ export async function knowledgeBookRoutes(app: FastifyInstance) {
     }
 
     // Determine which documents to include
-    let documentIds = data.includeDocumentIds;
-    if (documentIds.length === 0) {
-      // Include all approved/published documents by default
-      const documents = await app.prisma.projectDocument.findMany({
-        where: {
-          projectId,
-          status: { in: ['APPROVED', 'PUBLISHED'] },
-        },
-        select: { id: true },
-      });
-      documentIds = documents.map(d => d.id);
-    }
+    // nothing chosen = every document of the project that is still in use (not rejected, not archived)
+    const documentIds = data.includeDocumentIds.length ? data.includeDocumentIds : await defaultDocumentIds(app, projectId);
 
     // Create knowledge book record
     const book = await app.prisma.knowledgeBook.create({
@@ -163,7 +153,7 @@ export async function knowledgeBookRoutes(app: FastifyInstance) {
         description: data.description,
         status: 'GENERATING',
         generatedById: userId,
-        includesDocuments: documentIds,
+        includesDocuments: data.includeDocumentIds, // empty = "everything", so Refresh picks up documents added later
         coverConfig: data.coverConfig as any,
         tocConfig: data.tocConfig as any,
         pageNumbering: data.pageNumbering,
@@ -309,7 +299,7 @@ export async function knowledgeBookRoutes(app: FastifyInstance) {
     });
 
     // Start async generation
-    generateKnowledgeBookAsync(app, storage, bookId, project, book.includesDocuments, {
+    generateKnowledgeBookAsync(app, storage, bookId, project, book.includesDocuments.length ? book.includesDocuments : await defaultDocumentIds(app, projectId), {
       title: book.title,
       description: book.description,
       coverConfig: book.coverConfig as any,
@@ -323,6 +313,14 @@ export async function knowledgeBookRoutes(app: FastifyInstance) {
 
     return reply.send({ success: true, data: { status: 'GENERATING' } });
   });
+}
+
+async function defaultDocumentIds(app: FastifyInstance, projectId: string): Promise<string[]> {
+  const docs = await app.prisma.projectDocument.findMany({
+    where: { projectId, status: { in: ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'PUBLISHED'] } },
+    select: { id: true },
+  });
+  return docs.map((d) => d.id);
 }
 
 async function generateKnowledgeBookAsync(
@@ -458,7 +456,7 @@ async function generatePDF(project: any, documents: any[], config: any, storage:
   doc.fillColor('#0f172a').fontSize(20).font('Helvetica-Bold').text('Contents');
   doc.moveDown(0.8).fontSize(11).font('Helvetica').fillColor('#0f172a');
   if (documents.length === 0) {
-    doc.fillColor(grey).text('No approved or published documents were available when this book was generated.');
+    doc.fillColor(grey).text('This project had no documents when this book was generated. Upload documents in the project, then press Refresh PDF on the Knowledge Books page.');
   }
   documents.forEach((d, i) => {
     doc.text(`${i + 1}.  ${d.name}`, { continued: true }).fillColor(grey).text(`   ${d.category.replace(/_/g, ' ')}  ·  v${d.version}`).fillColor('#0f172a');

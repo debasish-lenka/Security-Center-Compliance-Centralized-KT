@@ -1026,6 +1026,7 @@ const mockKnowledgeBooksApi = {
     return createMockResponse({ data: mockKnowledgeBooks[index] });
   },
   delete: async (_id: string) => createMockResponse({ data: { success: true } }),
+  regenerate: async (_id: string) => createMockResponse({ data: { status: 'GENERATING' } }),
   generatePdf: async (id: string) => {
     // Generate a simple PDF blob for mock mode
     const book = mockKnowledgeBooks.find(b => b.id === id);
@@ -1311,6 +1312,7 @@ export const knowledgeBooksApi = MOCK_MODE ? mockKnowledgeBooksApi : {
     if (!file.ok) throw new Error('PDF not available');
     return { data: await file.blob() };
   },
+  regenerate: (id: string) => api.post(`/v1/knowledge-books/${id}/regenerate`),
   getStats: () => api.get('/v1/knowledge-books/stats'),
   exportReport: (params: { format: string }) => api.get('/v1/knowledge-books/export', { params, responseType: 'blob' }),
 };
