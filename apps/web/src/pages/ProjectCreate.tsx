@@ -41,8 +41,8 @@ export function ProjectCreate() {
   const [workLinks, setWorkLinks] = useState<WorkLink[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const toggleMember = (id: string) => setMemberIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
-  // the owner and the manager are on the project anyway, so they are not listed again as team members
-  const pickable = users.filter((u: any) => u.id !== formData.ownerId && u.id !== formData.managerId && `${u.fullName} ${u.email}`.toLowerCase().includes(memberSearch.toLowerCase()));
+  // everyone is listed; the owner and the manager are on the project anyway, so they show ticked and locked
+  const pickable = users.filter((u: any) => `${u.fullName} ${u.email}`.toLowerCase().includes(memberSearch.toLowerCase()));
 
   const createMutation = useMutation({
     mutationFn: (data: any) => projectsApi.create(data),
@@ -174,8 +174,8 @@ export function ProjectCreate() {
                   {pickable.length === 0 && <p className="p-2 text-sm text-dbi-textSecondary">No one to add.</p>}
                   {pickable.map((u: any) => (
                     <label key={u.id} className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5 hover:bg-dbi-elevated">
-                      <input type="checkbox" className="h-4 w-4" checked={memberIds.includes(u.id)} onChange={() => toggleMember(u.id)} />
-                      <span className="text-sm text-dbi-textPrimary">{u.fullName} <span className="text-dbi-textSecondary">({u.email})</span></span>
+                      <input type="checkbox" className="h-4 w-4" checked={memberIds.includes(u.id) || u.id === formData.ownerId || u.id === formData.managerId} disabled={u.id === formData.ownerId || u.id === formData.managerId} onChange={() => toggleMember(u.id)} />
+                      <span className="text-sm text-dbi-textPrimary">{u.fullName} <span className="text-dbi-textSecondary">({u.email})</span>{u.id === formData.ownerId && <span className="ml-2 text-xs text-dbi-cyan">Owner</span>}{u.id === formData.managerId && <span className="ml-2 text-xs text-dbi-cyan">Manager</span>}</span>
                     </label>
                   ))}
                 </div>
