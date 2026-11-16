@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { NumberedList } from '@/components/NumberedList';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 export interface KTReportValues {
@@ -101,7 +102,9 @@ export function KTReportForm({
           {SECTIONS.map((s) => (
             <div key={s.key} className="space-y-2">
               <Label htmlFor={`kt-${s.key}`}>{s.label}</Label>
-              <Textarea id={`kt-${s.key}`} rows={s.rows} placeholder={s.hint} value={v[s.key]} onChange={(e) => set(s.key, e.target.value)} disabled={saving} />
+              {s.key === 'completedTasks' || s.key === 'pendingTasks'
+                ? <NumberedList id={`kt-${s.key}`} value={v[s.key]} onChange={(t) => set(s.key, t)} disabled={saving} placeholder={s.key === 'completedTasks' ? 'A task you completed' : 'A task still open'} addLabel={s.key === 'completedTasks' ? 'Add completed task' : 'Add pending task'} />
+                : <Textarea id={`kt-${s.key}`} rows={s.rows} placeholder={s.hint} value={v[s.key]} onChange={(e) => set(s.key, e.target.value)} disabled={saving} />}
             </div>
           ))}
         </CardContent>
