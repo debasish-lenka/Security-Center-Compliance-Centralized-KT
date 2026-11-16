@@ -18,7 +18,7 @@ found="$(psql -c "select count(*) from profiles where lower(email)=lower('$safe'
 isadmin="$(psql -c "select role from profiles where lower(email)=lower('$safe')")"
 case "$isadmin" in SUPER_ADMIN|ADMIN) ;; *) echo "$ADMIN is a $isadmin, not an admin. Nothing was changed." >&2; exit 1;; esac
 
-KEEP_TABLES="profiles roles permissions user_roles permission_overrides mail_settings sso_settings backup_settings reminder_settings work_settings"
+KEEP_TABLES="profiles roles permissions _PermissionToRole user_roles permission_overrides mail_settings sso_settings backup_settings reminder_settings work_settings"
 tables="$(psql -c "select tablename from pg_tables where schemaname='public' order by 1")"
 echo "Keeps admin: $ADMIN ($isadmin). Keeps tables: $KEEP_TABLES"
 echo "Will be emptied:"
