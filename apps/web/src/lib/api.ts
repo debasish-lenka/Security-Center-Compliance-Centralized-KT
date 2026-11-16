@@ -1142,12 +1142,11 @@ const toControlPayload = (d: any) => {
 };
 
 const realControlsList = async (params?: Record<string, string>): Promise<any> => {
-  const { framework, search, ...rest } = params ?? {};
+  // search, page and size are answered by the server, so every page of a long list can be reached
+  const { framework, ...rest } = params ?? {};
   const res = await api.get('/v1/compliance/controls', { params: { ...rest, ...(framework && framework !== 'ALL' ? { category: framework } : {}) } });
-  const q = search?.toLowerCase();
-  let items = (res.data?.items ?? []).map(mapControl);
-  if (q) items = items.filter((c: any) => [c.name, c.controlId, c.framework].some((v) => String(v ?? '').toLowerCase().includes(q)));
-  return { ...res, data: { ...res.data, items, total: q ? items.length : res.data?.total } };
+  const items = (res.data?.items ?? []).map(mapControl);
+  return { ...res, data: { ...res.data, items, total: res.data?.total } };
 };
 
 export const complianceApi = MOCK_MODE ? mockComplianceApi : {

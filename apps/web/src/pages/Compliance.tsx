@@ -12,12 +12,15 @@ import { Pagination } from '@/components/ui/pagination';
 import { Plus, Search, Edit, Trash2, Eye, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 import { formatDate, getStatusColor, formatDateTimeIST } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 const statusOptions = ['ALL', 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'AT_RISK'];
 const frameworkOptions = ['ALL', 'NIST_CSF', 'ISO_27001', 'SOC2', 'PCI_DSS', 'GDPR', 'HIPAA', 'FEDRAMP', 'CIS_CONTROLS', 'MITRE_ATTACK', 'CUSTOM'];
 
 export function Compliance() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canWrite = !!user && ['SUPER_ADMIN', 'ADMIN', 'COMPLIANCE_OFFICER'].includes(user.role);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [frameworkFilter, setFrameworkFilter] = useState('ALL');
@@ -28,7 +31,7 @@ export function Compliance() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['compliance', search, statusFilter, frameworkFilter, currentPage, pageSize],
     queryFn: () => {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { page: String(currentPage), limit: String(pageSize) };
       if (search) params.search = search;
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (frameworkFilter !== 'ALL') params.framework = frameworkFilter;
@@ -100,10 +103,12 @@ export function Compliance() {
           <h1 className="text-3xl font-bold text-dbi-textPrimary">Compliance Center</h1>
           <p className="text-dbi-textSecondary">Track and manage compliance controls across frameworks</p>
         </div>
-        <Button onClick={() => navigate('/compliance/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Control
-        </Button>
+        {canWrite && (
+          <Button onClick={() => navigate('/compliance/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Control
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -154,10 +159,14 @@ export function Compliance() {
                 <Shield className="h-16 w-16" />
               </div>
               <p className="mt-4 text-dbi-textSecondary">No compliance controls found</p>
-              <Button onClick={() => navigate('/compliance/new')} className="mt-4">
-                <Plus className="mr-2 h-4 w-4" />
-                Add First Control
-              </Button>
+              {canWrite
+                ? (
+                  <Button onClick={() => navigate('/compliance/new')} className="mt-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add First Control
+                  </Button>
+                )
+                : <p className="mt-1 text-sm text-dbi-textSecondary">Controls are added by an admin or a compliance officer. You see the ones assigned to you.</p>}
             </div>
           ) : (
             <>
@@ -232,14 +241,18 @@ export function Compliance() {
                                 <Eye className="h-4 w-4" />
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="icon" asChild>
-                              <Link to={`/compliance/${control.id}/edit`}>
-                                <Edit className="h-4 w-4" />
-                              </Link>
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDelete(control.id)} className="text-dbi-critical hover:text-dbi-critical">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {(canWrite || control.ownerId === user?.id) && (
+                              <Button variant="ghost" size="icon" asChild aria-label="Edit control">
+                                <Link to={`/compliance/${control.id}/edit`}>
+                                  <Edit className="h-4 w-4" />
+                                </Link>
+                              </Button>
+                            )}
+                            {user?.role === 'SUPER_ADMIN' && (
+                              <Button variant="ghost" size="icon" aria-label="Delete control" onClick={() => handleDelete(control.id)} className="text-dbi-critical hover:text-dbi-critical">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

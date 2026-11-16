@@ -58,14 +58,20 @@ export async function complianceRoutes(app: FastifyInstance) {
         status: z.string().optional(),
         projectId: z.string().uuid().optional(),
         ownerId: z.string().uuid().optional(),
+        search: z.string().trim().max(100).optional(),
       }),
     },
   }, async (request, reply) => {
     const userId = request.userId!;
     const userRole = request.user!.role;
-    const { page, limit, category, status, projectId, ownerId } = request.query as any;
+    const { page, limit, category, status, projectId, ownerId, search } = request.query as any;
 
     const where: any = {};
+    if (search) where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      { controlId: { contains: search, mode: 'insensitive' } },
+      { category: { contains: search, mode: 'insensitive' } },
+    ];
     if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN' && userRole !== 'COMPLIANCE_OFFICER') {
       where.ownerId = userId;
     }
