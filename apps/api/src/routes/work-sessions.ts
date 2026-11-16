@@ -100,6 +100,9 @@ export async function workSessionRoutes(app: FastifyInstance) {
     const open = await app.prisma.workSession.findFirst({ where: { projectId, userId, endedAt: null } });
     if (open) return bad(reply, 409, 'ALREADY_RUNNING', 'You already have a work session running on this project');
     const session = await app.prisma.workSession.create({ data: { projectId, userId, linkUrl: linkUrl ?? null, linkLabel: linkLabel ?? null, surface: surface ?? null, shareStarts: surface ? 1 : 0 } });
+    // the first work on a project that was "Not started" makes it "In progress"
+    const began = await app.prisma.project.updateMany({ where: { id: projectId, status: 'NOT_STARTED' }, data: { status: 'ONGOING' } });
+    if (began.count) await auditLogger.logResource('UPDATE', userId, 'project', projectId, { status: 'NOT_STARTED -> ONGOING', reason: 'work started' }, request.ip, request.headers['user-agent']);
     await app.prisma.workEntry.create({ data: { sessionId: session.id, kind: 'EVENT', text: linkUrl ? `Started work, opened ${linkLabel ? `${linkLabel} (${linkUrl})` : linkUrl}` : 'Started work' } });
     if (surface) await app.prisma.workEntry.create({ data: { sessionId: session.id, kind: 'EVENT', text: `Started sharing ${surfaceName(surface)}` } });
     await app.prisma.activityFeed.create({ data: { actorId: userId, action: 'CREATE', resourceType: 'work_session', projectId, details: { text: 'started a work session' }, ipAddress: request.ip, userAgent: request.headers['user-agent'] } });

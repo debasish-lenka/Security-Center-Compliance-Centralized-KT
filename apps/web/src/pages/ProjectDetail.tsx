@@ -23,7 +23,7 @@ import { ProjectDeleteDialog } from '@/components/ProjectDeleteDialog';
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const TABS = ['overview', 'work', 'team', 'session', 'documents', 'reports', 'activity'];
   const startTab = TABS.includes(searchParams.get('tab') ?? '') ? searchParams.get('tab')! : 'overview';
 
@@ -224,6 +224,11 @@ export function ProjectDetail() {
                 {project.actualCompletionDate ? formatDate(project.actualCompletionDate) : 'In Progress'}
               </p>
             </div>
+            {project.status !== 'COMPLETED' && (
+              <div className="flex items-end justify-end md:col-span-2">
+                <Button onClick={() => setSearchParams({ tab: 'session', autostart: '1' })}>Start work</Button>
+              </div>
+            )}
             <div className="space-y-1 md:col-span-2">
               <p className="text-sm text-dbi-textSecondary">Tags</p>
               <div className="flex flex-wrap gap-1">
@@ -295,7 +300,7 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="session" className="space-y-4">
-          <WorkSessionPanel projectId={project.id} />
+          <WorkSessionPanel projectId={project.id} autoStart={searchParams.get('autostart') === '1'} onAutoStarted={() => setSearchParams((p) => { p.delete('autostart'); return p; }, { replace: true })} />
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">

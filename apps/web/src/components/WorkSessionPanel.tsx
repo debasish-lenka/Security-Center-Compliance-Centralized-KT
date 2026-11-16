@@ -38,8 +38,9 @@ const ToolBadge = ({ s }: { s: { toolCheck: string | null; ocrSeen: number; ocrC
 };
 const EvidenceBadge = ({ level }: { level: string }) => { const e = EVIDENCE[level] ?? EVIDENCE.NONE; return <Badge title={e.hint} className={e.cls}>{e.label}</Badge>; };
 
-export function WorkSessionPanel({ projectId }: { projectId: string }) {
+export function WorkSessionPanel({ projectId, autoStart, onAutoStarted }: { projectId: string; autoStart?: boolean; onAutoStarted?: () => void }) {
   const qc = useQueryClient();
+  const autoRef = useRef(false);
   const stateQ = useQuery({ queryKey: ['work-state', projectId], queryFn: async () => (await workApi.state(projectId)).data.data, staleTime: 0, refetchOnMount: 'always', refetchOnWindowFocus: true, refetchInterval: (q) => (q.state.data?.active ? 15_000 : false) }); // counters follow the running session
   const sessionsQ = useQuery({ queryKey: ['work-sessions', projectId], queryFn: async () => (await workApi.sessions(projectId)).data.data, refetchInterval: 20_000 }); // the table follows running sessions
   const state = stateQ.data;
@@ -219,6 +220,7 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
       }
       const r = await workApi.start(projectId, { linkUrl: link?.url ?? null, linkLabel: link?.label ?? null, surface: got?.surface ?? null });
       sessionRef.current = r.data.data.id; // events and pictures need the id before the page has re-drawn
+      qc.invalidateQueries({ queryKey: ['project', projectId] }); // the project may have just become "In progress"
       await stateQ.refetch(); // show "Running" now, not after the screen-share dialog is answered
       setBusy(null);
       if (got) { await attach(got.stream); setShareProblem(null); } else await startShare(false);
@@ -227,6 +229,15 @@ export function WorkSessionPanel({ projectId }: { projectId: string }) {
       toast({ title: 'Could not start', description: errText(e, 'Try again'), variant: 'destructive' });
     } finally { setBusy(null); }
   };
+
+  // "Start work" pressed on the project's Details card: begin here, once, as soon as the state is known
+  useEffect(() => {
+    if (!autoStart || autoRef.current || !state) return;
+    autoRef.current = true;
+    onAutoStarted?.();
+    if (!activeId) void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, state, activeId]);
 
   const stop = async () => {
     if (!activeId) return;
