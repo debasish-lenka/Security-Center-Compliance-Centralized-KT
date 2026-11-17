@@ -909,6 +909,7 @@ enum NotificationType {
   MENTION
   CRITICAL_ALERT
   SYSTEM_MAINTENANCE
+  SECRET_CHANGED
 }
 
 model AuditLog {

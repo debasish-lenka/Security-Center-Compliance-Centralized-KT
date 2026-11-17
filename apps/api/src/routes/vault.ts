@@ -34,6 +34,9 @@ const SecretCreate = z.object({
   expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   ...Content,
 });
+// Every change to an existing secret must say why; super admins are told (see notifyChange)
+const Reason = z.string({ required_error: 'Write why you are changing this' }).trim().min(5, 'Write why you are changing this (at least 5 characters)').max(300);
+const ReasonQuery = z.object({ reason: Reason });
 const SecretPatch = z.object({
   name: z.string().trim().min(1).max(150).optional(),
   description: z.string().trim().max(500).optional().nullable(),
@@ -41,7 +44,7 @@ const SecretPatch = z.object({
   username: Content.username,
   url: Content.url,
   value: Content.value.optional(), // sending a value makes a new version
-  reason: z.string().trim().max(300).optional(),
+  reason: Reason,
 });
 const GrantSchema = z.object({
   userId: z.string().uuid(),
@@ -55,6 +58,7 @@ const FileQuery = z.object({
   expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reason: z.string().trim().max(300).optional(),
 });
+const ReplaceQuery = FileQuery.extend({ reason: Reason });
 const cleanName = (n: string) => n.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]/g, '').slice(0, 200) || 'file';
 const StepUp = z.object({ password: z.string().max(200).optional(), code: z.string().max(20).optional() });
 
@@ -72,6 +76,24 @@ export async function vaultRoutes(app: FastifyInstance) {
   const auth = new AuthService(app);
   const pre = [app.authenticate];
   const storage = getStorageService();
+  // Tell every super admin (except the person who did it) what changed and why. Never throws: the change itself already happened.
+  async function notifyChange(request: FastifyRequest, secretId: string, secretName: string, folderId: string, what: string, reason: string) {
+    try {
+      const [folder, admins] = await Promise.all([
+        app.prisma.secretFolder.findUnique({ where: { id: folderId }, select: { name: true } }),
+        app.prisma.profile.findMany({ where: { role: 'SUPER_ADMIN', status: 'ACTIVE', id: { not: request.userId! } }, select: { id: true } }),
+      ]);
+      if (!admins.length) return;
+      const who = request.user!.fullName;
+      await app.prisma.notification.createMany({
+        data: admins.map((a) => ({
+          userId: a.id, type: 'SECRET_CHANGED' as const, resourceType: 'secret', resourceId: secretId,
+          title: `Secret changed: ${secretName}`,
+          message: `${who} ${what} "${secretName}" in the folder "${folder?.name ?? ''}". Reason: ${reason}`,
+        })),
+      });
+    } catch (e) { app.log.warn({ err: e }, 'could not send the secret-change alert'); }
+  }
   // files arrive as the raw request body (not multipart); the secret's details travel in the query string
   app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit: MAX_UPLOAD_BYTES }, (_req, body, done) => done(null, body));
 
@@ -183,6 +205,7 @@ export async function vaultRoutes(app: FastifyInstance) {
     if (!s) return err(reply, 404, 'NOT_FOUND', 'Secret not found');
     if (!atLeast(await levelOn(request.userId!, s.folderId), 'EDIT')) return err(reply, 403, 'FORBIDDEN', 'You need Edit access to this folder');
     const b = request.body as z.infer<typeof SecretPatch>;
+    if (!(['name', 'description', 'expiresAt', 'username', 'url', 'value'] as const).some((k) => b[k] !== undefined)) return err(reply, 400, 'NOTHING', 'Nothing to change');
     if (s.type === 'FILE' && (b.value !== undefined || b.username !== undefined || b.url !== undefined)) return err(reply, 400, 'IS_FILE', 'This secret is a file. Use Replace file to change it.');
     let version = s.currentVersion;
     // A new value, username or URL always becomes a NEW version; the old one stays untouched
@@ -195,7 +218,7 @@ export async function vaultRoutes(app: FastifyInstance) {
         value: b.value ?? before.value,
       };
       version = s.currentVersion + 1;
-      await app.prisma.secretVersion.create({ data: { secretId: id, version, ...sealSecret(next, id, version), reason: b.reason || 'Changed', createdById: request.userId } });
+      await app.prisma.secretVersion.create({ data: { secretId: id, version, ...sealSecret(next, id, version), reason: b.reason, createdById: request.userId } });
     }
     await app.prisma.secret.update({
       where: { id },
@@ -206,19 +229,23 @@ export async function vaultRoutes(app: FastifyInstance) {
         ...(b.expiresAt !== undefined ? { expiresAt: b.expiresAt ? new Date(b.expiresAt) : null } : {}),
       },
     });
+    const what = b.value !== undefined ? 'changed the secret value of' : b.username !== undefined || b.url !== undefined ? 'changed the login details of' : 'changed the details (name, description or date) of';
+    await notifyChange(request, id, b.name ?? s.name, s.folderId, what, b.reason);
     // never log values, only which fields changed
-    await log(request, 'UPDATE', 'secret', id, { name: s.name, newVersion: version !== s.currentVersion ? version : undefined, fields: Object.keys(b).filter((k) => k !== 'reason') });
+    await log(request, 'UPDATE', 'secret', id, { name: s.name, reason: b.reason, newVersion: version !== s.currentVersion ? version : undefined, fields: Object.keys(b).filter((k) => k !== 'reason') });
     return reply.send({ success: true, data: { id, version } });
   });
 
   // Soft delete: the row and every version stay in the database
-  app.delete('/secrets/:id', { preHandler: pre }, async (request, reply) => {
+  app.delete('/secrets/:id', { preHandler: pre, schema: { querystring: ReasonQuery } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const s = await app.prisma.secret.findFirst({ where: { id, deletedAt: null } });
     if (!s) return err(reply, 404, 'NOT_FOUND', 'Secret not found');
     if (!atLeast(await levelOn(request.userId!, s.folderId), 'MANAGE')) return err(reply, 403, 'FORBIDDEN', 'You need Manage access to this folder');
+    const { reason } = request.query as z.infer<typeof ReasonQuery>;
     await app.prisma.secret.update({ where: { id }, data: { deletedAt: new Date() } });
-    await log(request, 'DELETE', 'secret', id, { name: s.name });
+    await notifyChange(request, id, s.name, s.folderId, 'deleted', reason);
+    await log(request, 'DELETE', 'secret', id, { name: s.name, reason });
     return reply.send({ success: true, data: null });
   });
 
@@ -352,24 +379,25 @@ export async function vaultRoutes(app: FastifyInstance) {
   });
 
   // a new file for an existing file secret: a new version, the old file stays
-  app.put('/secrets/:id/file', { preHandler: pre, schema: { querystring: FileQuery } }, async (request, reply) => {
+  app.put('/secrets/:id/file', { preHandler: pre, schema: { querystring: ReplaceQuery } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const s = await app.prisma.secret.findFirst({ where: { id, deletedAt: null } });
     if (!s) return err(reply, 404, 'NOT_FOUND', 'Secret not found');
     if (s.type !== 'FILE') return err(reply, 400, 'NOT_FILE', 'This secret is not a file');
     if (!atLeast(await levelOn(request.userId!, s.folderId), 'EDIT')) return err(reply, 403, 'FORBIDDEN', 'You need Edit access to this folder');
-    const q = request.query as z.infer<typeof FileQuery>;
+    const q = request.query as z.infer<typeof ReplaceQuery>;
     const bytes = await acceptFile(request, reply);
     if (!bytes) return;
     const version = s.currentVersion + 1;
-    const f = await sealFile(id, version, cleanName(q.filename), bytes, request.userId!, q.reason || 'New file');
+    const f = await sealFile(id, version, cleanName(q.filename), bytes, request.userId!, q.reason);
     try {
       await app.prisma.$transaction([
         app.prisma.secretVersion.create({ data: f.row }),
         app.prisma.secret.update({ where: { id }, data: { currentVersion: version } }),
       ]);
     } catch (e) { await storage.delete(f.key).catch(() => {}); throw e; }
-    await log(request, 'UPLOAD', 'secret', id, { name: s.name, newVersion: version, size: bytes.length });
+    await notifyChange(request, id, s.name, s.folderId, `replaced the file (now version ${version}) of`, q.reason);
+    await log(request, 'UPLOAD', 'secret', id, { name: s.name, reason: q.reason, newVersion: version, size: bytes.length });
     return reply.send({ success: true, data: { id, version } });
   });
 

@@ -123,19 +123,19 @@ function SecretDialog({ folderId, secret, onClose }: { folderId: string; secret:
       const common = { name: f.name.trim(), description: f.description.trim() || null, expiresAt: f.expiresAt || null };
       if (!editing) return vaultApi.createSecret(folderId, { ...common, type: f.type, username: f.username || null, url: f.url || null, value: f.value });
       // empty = keep what is stored (the stored values are not shown here); anything typed becomes a new version
-      return vaultApi.updateSecret(secret!.id, { ...common, ...(f.username ? { username: f.username } : {}), ...(f.url ? { url: f.url } : {}), ...(f.value ? { value: f.value } : {}), ...(f.reason ? { reason: f.reason } : {}) });
+      return vaultApi.updateSecret(secret!.id, { ...common, ...(f.username ? { username: f.username } : {}), ...(f.url ? { url: f.url } : {}), ...(f.value ? { value: f.value } : {}), reason: f.reason.trim() });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['vault-secrets', folderId] }); qc.invalidateQueries({ queryKey: ['vault-folders'] }); toast({ title: editing ? 'Saved' : 'Secret added' }); onClose(); },
     onError: (e) => toast({ title: 'Could not save', description: errMsg(e), variant: 'destructive' }),
   });
-  const ok = f.name.trim() && (editing || f.value);
+  const ok = f.name.trim() && (editing ? f.reason.trim().length >= 5 : !!f.value);
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !save.isPending) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? `Change "${secret!.name}"` : 'Add a secret'}</DialogTitle>
-          <DialogDescription>{editing ? 'Leave the secret fields empty to keep them. A new value is saved as a new version; the old one is kept.' : 'The value is encrypted before it is stored.'}</DialogDescription>
+          <DialogDescription>{editing ? 'Leave the secret fields empty to keep them. A new value is saved as a new version; the old one is kept. You must say why: super admins are told what you changed and your reason.' : 'The value is encrypted before it is stored.'}</DialogDescription>
         </DialogHeader>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (ok) save.mutate(); }}>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -164,8 +164,8 @@ function SecretDialog({ folderId, secret, onClose }: { folderId: string; secret:
           <div><Label htmlFor="s-desc">What it is for</Label><Input id="s-desc" value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Everyone can read this line. Never write the secret here." /></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><Label htmlFor="s-exp">Change before (optional)</Label><Input id="s-exp" type="date" value={f.expiresAt} onChange={(e) => set('expiresAt', e.target.value)} /></div>
-            {editing && <div><Label htmlFor="s-reason">Why changed (optional)</Label><Input id="s-reason" value={f.reason} onChange={(e) => set('reason', e.target.value)} placeholder="e.g. password rotated" /></div>}
           </div>
+          {editing && <div><Label htmlFor="s-reason">Why are you changing this? *</Label><Input id="s-reason" value={f.reason} onChange={(e) => set('reason', e.target.value)} placeholder="e.g. password rotated after a staff change" /><p className="mt-1 text-xs text-dbi-textSecondary">At least 5 characters. Super admins see this reason.</p></div>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose} disabled={save.isPending}>Cancel</Button>
             <Button type="submit" disabled={!ok || save.isPending}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editing ? 'Save' : 'Add secret'}</Button>
@@ -305,20 +305,22 @@ function FileDialog({ folderId, secret, onClose }: { folderId: string; secret: V
   const save = useMutation({
     mutationFn: async () => {
       if (!replacing) return vaultApi.uploadFile(folderId, file!, { name: f.name.trim() || undefined, description: f.description.trim() || undefined, expiresAt: f.expiresAt || undefined });
-      await vaultApi.updateSecret(secret!.id, { name: f.name.trim(), description: f.description.trim() || null, expiresAt: f.expiresAt || null });
-      if (file) await vaultApi.replaceFile(secret!.id, file, f.reason.trim() || undefined);
+      const reason = f.reason.trim();
+      if (metaChanged) await vaultApi.updateSecret(secret!.id, { name: f.name.trim(), description: f.description.trim() || null, expiresAt: f.expiresAt || null, reason });
+      if (file) await vaultApi.replaceFile(secret!.id, file, reason);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['vault-secrets', folderId] }); qc.invalidateQueries({ queryKey: ['vault-folders'] }); toast({ title: replacing ? 'Saved' : 'File stored, encrypted' }); onClose(); },
     onError: (e) => toast({ title: 'Could not save', description: errMsg(e), variant: 'destructive' }),
   });
-  const ok = replacing ? !!f.name.trim() : !!file;
+  const metaChanged = replacing && (f.name.trim() !== secret!.name || (f.description.trim() || null) !== secret!.description || (f.expiresAt || null) !== (secret!.expiresAt?.slice(0, 10) ?? null));
+  const ok = replacing ? !!f.name.trim() && f.reason.trim().length >= 5 && (!!file || metaChanged) : !!file;
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !save.isPending) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{replacing ? `Change "${secret!.name}"` : 'Upload a file'}</DialogTitle>
-          <DialogDescription>{replacing ? 'Choose a file only if you want to replace it. The old file is kept as an older version.' : `For a zip, key file or certificate. It is scanned, then encrypted before it is stored. Up to ${maxMb} MB.`}</DialogDescription>
+          <DialogDescription>{replacing ? 'Choose a file only if you want to replace it. The old file is kept as an older version. You must say why: super admins are told what you changed and your reason.' : `For a zip, key file or certificate. It is scanned, then encrypted before it is stored. Up to ${maxMb} MB.`}</DialogDescription>
         </DialogHeader>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (ok) save.mutate(); }}>
           <div>
@@ -338,11 +340,31 @@ function FileDialog({ folderId, secret, onClose }: { folderId: string; secret: V
           <div><Label htmlFor="f-desc">What it is for</Label><Input id="f-desc" value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Everyone can read this line. Never write a secret here." /></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><Label htmlFor="f-exp">Change before (optional)</Label><Input id="f-exp" type="date" value={f.expiresAt} onChange={(e) => set('expiresAt', e.target.value)} /></div>
-            {replacing && <div><Label htmlFor="f-reason">Why changed (optional)</Label><Input id="f-reason" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>}
           </div>
+          {replacing && <div><Label htmlFor="f-reason">Why are you changing this? *</Label><Input id="f-reason" value={f.reason} onChange={(e) => set('reason', e.target.value)} placeholder="e.g. new camera passwords after the reset" /><p className="mt-1 text-xs text-dbi-textSecondary">At least 5 characters. Super admins see this reason.</p></div>}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose} disabled={save.isPending}>Cancel</Button>
             <Button type="submit" disabled={!ok || save.isPending}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{replacing ? 'Save' : 'Upload'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- removing a secret needs a reason, which super admins are shown ----------
+function ReasonDialog({ secret, busy, onConfirm, onClose }: { secret: VaultSecret; busy: boolean; onConfirm: (reason: string) => void; onClose: () => void }) {
+  const [reason, setReason] = useState('');
+  const ok = reason.trim().length >= 5;
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Remove "{secret.name}"?</DialogTitle><DialogDescription>It disappears from the list; older versions stay in the database. Super admins are told who removed it and why.</DialogDescription></DialogHeader>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (ok) onConfirm(reason.trim()); }}>
+          <div><Label htmlFor="rm-reason">Why are you removing it? *</Label><Input id="rm-reason" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. device was retired" /></div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button type="submit" variant="destructive" disabled={!ok || busy}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Remove</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -357,14 +379,15 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
   const { data, isLoading, isError } = useQuery({ queryKey: ['vault-secrets', folderId], queryFn: () => vaultApi.secrets(folderId) });
   const [reveal, setReveal] = useState<VaultSecret | null>(null);
   const [download, setDownload] = useState<VaultSecret | null>(null);
+  const [removing, setRemoving] = useState<VaultSecret | null>(null);
   const [file, setFile] = useState<VaultSecret | 'new' | null>(null);
   const [edit, setEdit] = useState<VaultSecret | 'new' | null>(null);
   const [history, setHistory] = useState<VaultSecret | null>(null);
   const [access, setAccess] = useState(false);
 
   const del = useMutation({
-    mutationFn: (id: string) => vaultApi.deleteSecret(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vault-secrets', folderId] }); qc.invalidateQueries({ queryKey: ['vault-folders'] }); toast({ title: 'Secret removed' }); },
+    mutationFn: (v: { id: string; reason: string }) => vaultApi.deleteSecret(v.id, v.reason),
+    onSuccess: () => { setRemoving(null); qc.invalidateQueries({ queryKey: ['vault-secrets', folderId] }); qc.invalidateQueries({ queryKey: ['vault-folders'] }); toast({ title: 'Secret removed' }); },
     onError: (e) => toast({ title: 'Could not remove', description: errMsg(e), variant: 'destructive' }),
   });
   const delFolder = useMutation({
@@ -418,7 +441,7 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
                         : <Button size="sm" onClick={() => setReveal(s)}><Eye className="mr-1 h-4 w-4" />Show</Button>)}
                       {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => (s.type === 'FILE' ? setFile(s) : setEdit(s))} aria-label="Change"><Pencil className="h-4 w-4" /></Button>}
                       {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => setHistory(s)} aria-label="Versions"><History className="h-4 w-4" /></Button>}
-                      {can('MANAGE') && <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(`Remove "${s.name}"?`)) del.mutate(s.id); }} aria-label="Remove"><Trash2 className="h-4 w-4" /></Button>}
+                      {can('MANAGE') && <Button size="icon" variant="ghost" onClick={() => setRemoving(s)} aria-label="Remove"><Trash2 className="h-4 w-4" /></Button>}
                     </div>
                   </div>
                 );
@@ -427,6 +450,7 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
           )}
         </CardContent>
       </Card>
+      {removing && <ReasonDialog secret={removing} busy={del.isPending} onConfirm={(reason) => del.mutate({ id: removing.id, reason })} onClose={() => setRemoving(null)} />}
       {reveal && <RevealDialog secret={reveal} stepUp={stepUp} onClose={() => setReveal(null)} />}
       {download && <DownloadDialog secret={download} stepUp={stepUp} onClose={() => setDownload(null)} />}
       {file && <FileDialog folderId={folderId} secret={file === 'new' ? null : file} onClose={() => setFile(null)} />}

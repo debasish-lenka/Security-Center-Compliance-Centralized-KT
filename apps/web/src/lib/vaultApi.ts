@@ -21,11 +21,11 @@ export const vaultApi = {
   secrets: (folderId: string) => d<{ folder: { id: string; name: string; description: string | null }; myLevel: VaultLevel | null; secrets: VaultSecret[] }>(api.get(`/v1/vault/folders/${folderId}/secrets`)),
   createSecret: (folderId: string, b: Record<string, unknown>) => api.post(`/v1/vault/folders/${folderId}/secrets`, b),
   updateSecret: (id: string, b: Record<string, unknown>) => api.patch(`/v1/vault/secrets/${id}`, b),
-  deleteSecret: (id: string) => api.delete(`/v1/vault/secrets/${id}`),
+  deleteSecret: (id: string, reason: string) => api.delete(`/v1/vault/secrets/${id}?${qs({ reason })}`),
   // files travel as the raw request body; the secret's details go in the query string
   uploadFile: (folderId: string, file: File, o: { name?: string; description?: string; expiresAt?: string }) =>
     api.put(`/v1/vault/folders/${folderId}/secrets/file?${qs({ filename: file.name, ...o })}`, file, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 300_000 }),
-  replaceFile: (id: string, file: File, reason?: string) =>
+  replaceFile: (id: string, file: File, reason: string) =>
     api.put(`/v1/vault/secrets/${id}/file?${qs({ filename: file.name, reason })}`, file, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 300_000 }),
   download: async (id: string, b: { password?: string; code?: string }) => {
     try {
