@@ -1,10 +1,17 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { randomUUID } from 'crypto';
+import { chmod } from 'fs/promises';
+import { join } from 'path';
+import { env } from '../utils/env.js';
 import { z } from 'zod';
 import { AuthService } from '../services/auth.js';
 import { createAuditLogger } from '../services/audit-logger.js';
 import { decryptSecret } from '../services/crypto.js';
 import { verifyTotp } from '../services/mfa.js';
-import { openSecret, sealSecret, vaultEnabled } from '../services/vault-crypto.js';
+import { getStorageService } from '../services/storage.js';
+import { VIRUS_SCAN_ENABLED, scanUpload } from '../services/virus-scan.js';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '../services/upload-policy.js';
+import { openSecret, openSecretFile, sealSecret, vaultEnabled } from '../services/vault-crypto.js';
 
 // Secret Manager. Everyone signed in sees folder and secret NAMES (so they can ask for access);
 // values are only returned by /reveal, and only to someone holding a VIEW grant, after a fresh password / 2FA check.
@@ -41,6 +48,14 @@ const GrantSchema = z.object({
   level: z.enum(['VIEW', 'EDIT', 'MANAGE']),
   expiresAt: z.string().datetime().optional().nullable(),
 });
+const FileQuery = z.object({
+  filename: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).max(150).optional(),
+  description: z.string().trim().max(500).optional(),
+  expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  reason: z.string().trim().max(300).optional(),
+});
+const cleanName = (n: string) => n.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]/g, '').slice(0, 200) || 'file';
 const StepUp = z.object({ password: z.string().max(200).optional(), code: z.string().max(20).optional() });
 
 // failed re-checks per person: 5 in 10 minutes locks the reveal for the rest of the window
@@ -56,6 +71,9 @@ export async function vaultRoutes(app: FastifyInstance) {
   const audit = createAuditLogger(app);
   const auth = new AuthService(app);
   const pre = [app.authenticate];
+  const storage = getStorageService();
+  // files arrive as the raw request body (not multipart); the secret's details travel in the query string
+  app.addContentTypeParser('*', { parseAs: 'buffer', bodyLimit: MAX_UPLOAD_BYTES }, (_req, body, done) => done(null, body));
 
   const err = (reply: any, code: number, c: string, message: string) => reply.code(code).send({ success: false, error: { code: c, message } });
   const log = (r: FastifyRequest, action: any, type: string, id: string | null, details: Record<string, unknown>, ok = true, msg?: string) =>
@@ -139,7 +157,9 @@ export async function vaultRoutes(app: FastifyInstance) {
       where: { folderId: id, deletedAt: null }, orderBy: { name: 'asc' },
       select: { id: true, name: true, type: true, description: true, currentVersion: true, expiresAt: true, updatedAt: true },
     });
-    return reply.send({ success: true, data: { folder: { id: folder.id, name: folder.name, description: folder.description }, myLevel, secrets: rows } });
+    const sizes = await app.prisma.secretVersion.findMany({ where: { secretId: { in: rows.map((r) => r.id) }, fileSize: { not: null } }, select: { secretId: true, version: true, fileSize: true } });
+    const withSize = rows.map((r) => ({ ...r, fileSize: sizes.find((v) => v.secretId === r.id && v.version === r.currentVersion)?.fileSize ?? null }));
+    return reply.send({ success: true, data: { folder: { id: folder.id, name: folder.name, description: folder.description }, myLevel, secrets: withSize } });
   });
 
   app.post('/folders/:id/secrets', { preHandler: pre, schema: { body: SecretCreate } }, async (request, reply) => {
@@ -163,6 +183,7 @@ export async function vaultRoutes(app: FastifyInstance) {
     if (!s) return err(reply, 404, 'NOT_FOUND', 'Secret not found');
     if (!atLeast(await levelOn(request.userId!, s.folderId), 'EDIT')) return err(reply, 403, 'FORBIDDEN', 'You need Edit access to this folder');
     const b = request.body as z.infer<typeof SecretPatch>;
+    if (s.type === 'FILE' && (b.value !== undefined || b.username !== undefined || b.url !== undefined)) return err(reply, 400, 'IS_FILE', 'This secret is a file. Use Replace file to change it.');
     let version = s.currentVersion;
     // A new value, username or URL always becomes a NEW version; the old one stays untouched
     if (b.value !== undefined || b.username !== undefined || b.url !== undefined) {
@@ -212,44 +233,144 @@ export async function vaultRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: v.map((x) => ({ version: x.version, reason: x.reason, createdAt: x.createdAt, by: x.createdById ? names.get(x.createdById) ?? null : null })) });
   });
 
-  // ---------- reveal ----------
-  app.post('/secrets/:id/reveal', { preHandler: pre, schema: { body: StepUp }, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+  // ---------- reveal / download ----------
+  // Shared by "show" and "download": a VIEW grant first, then a fresh check that it really is the account owner
+  async function gate(request: FastifyRequest, reply: any, id: string, action: 'VIEW' | 'DOWNLOAD') {
     const userId = request.userId!;
     const s = await app.prisma.secret.findFirst({ where: { id, deletedAt: null }, include: { folder: { select: { name: true } } } });
-    if (!s) return err(reply, 404, 'NOT_FOUND', 'Secret not found');
+    if (!s) { err(reply, 404, 'NOT_FOUND', 'Secret not found'); return null; }
     const detail = { name: s.name, folder: s.folder.name };
     if (!atLeast(await levelOn(userId, s.folderId), 'VIEW')) {
-      await log(request, 'VIEW', 'secret', id, detail, false, 'No access');
-      return err(reply, 403, 'FORBIDDEN', 'You do not have access to this secret. Request access first.');
+      await log(request, action, 'secret', id, detail, false, 'No access');
+      err(reply, 403, 'FORBIDDEN', 'You do not have access to this secret. Request access first.');
+      return null;
     }
     if (recentFails(userId).length >= 5) {
-      await log(request, 'VIEW', 'secret', id, detail, false, 'Locked after repeated failed checks');
-      return err(reply, 429, 'LOCKED', 'Too many wrong attempts. Try again in a few minutes.');
+      await log(request, action, 'secret', id, detail, false, 'Locked after repeated failed checks');
+      err(reply, 429, 'LOCKED', 'Too many wrong attempts. Try again in a few minutes.');
+      return null;
     }
-
-    // fresh proof it is really the account owner: the authenticator code when 2FA is on, else the password
+    // the authenticator code when 2FA is on, else the password
     const me = await app.prisma.profile.findUnique({ where: { id: userId }, select: { passwordHash: true, authProvider: true, totpEnabled: true, totpSecretEnc: true } });
-    const { password, code } = request.body as z.infer<typeof StepUp>;
+    const { password, code } = (request.body ?? {}) as z.infer<typeof StepUp>;
     let ok = false;
     if (me?.totpEnabled && me.totpSecretEnc) ok = !!code && verifyTotp(decryptSecret(me.totpSecretEnc), code);
     else if (me?.authProvider === 'LOCAL') ok = !!password && (await auth.verifyPassword(password, me.passwordHash));
-    else return err(reply, 403, 'NEEDS_2FA', 'Turn on two-factor authentication in Settings to open secrets');
+    else { err(reply, 403, 'NEEDS_2FA', 'Turn on two-factor authentication in Settings to open secrets'); return null; }
     if (!ok) {
       fails.set(userId, [...recentFails(userId), Date.now()]);
-      await log(request, 'VIEW', 'secret', id, detail, false, 'Re-check failed');
-      return err(reply, 401, 'STEP_UP_FAILED', me?.totpEnabled ? 'That authenticator code is not right' : 'That password is not right');
+      await log(request, action, 'secret', id, detail, false, 'Re-check failed');
+      err(reply, 401, 'STEP_UP_FAILED', me?.totpEnabled ? 'That authenticator code is not right' : 'That password is not right');
+      return null;
     }
     fails.delete(userId);
+    return { s, detail };
+  }
 
-    const row = await app.prisma.secretVersion.findUnique({ where: { secretId_version: { secretId: id, version: s.currentVersion } } });
+  app.post('/secrets/:id/reveal', { preHandler: pre, schema: { body: StepUp }, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const g = await gate(request, reply, id, 'VIEW');
+    if (!g) return;
+    if (g.s.type === 'FILE') return err(reply, 400, 'IS_FILE', 'This secret is a file. Use Download.');
+    const row = await app.prisma.secretVersion.findUnique({ where: { secretId_version: { secretId: id, version: g.s.currentVersion } } });
     if (!row) return err(reply, 500, 'MISSING', 'This secret has no stored value');
     let payload;
     try { payload = openSecret(row, id, row.version); }
     catch { return err(reply, 500, 'DECRYPT_FAILED', 'The value could not be decrypted. Is VAULT_MASTER_KEY the same key it was saved with?'); }
-    await log(request, 'VIEW', 'secret', id, { ...detail, version: row.version });
+    await log(request, 'VIEW', 'secret', id, { ...g.detail, version: row.version });
     reply.header('Cache-Control', 'no-store');
     return reply.send({ success: true, data: { ...payload, version: row.version } });
+  });
+
+  app.post('/secrets/:id/download', { preHandler: pre, schema: { body: StepUp }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const g = await gate(request, reply, id, 'DOWNLOAD');
+    if (!g) return;
+    if (g.s.type !== 'FILE') return err(reply, 400, 'NOT_FILE', 'This secret is not a file');
+    const row = await app.prisma.secretVersion.findUnique({ where: { secretId_version: { secretId: id, version: g.s.currentVersion } } });
+    if (!row?.filePath) return err(reply, 500, 'MISSING', 'The stored file is missing on the server');
+    let name = 'file';
+    let bytes: Buffer;
+    try {
+      const chunks: Buffer[] = [];
+      for await (const c of storage.openRead(row.filePath)) chunks.push(c as Buffer);
+      name = openSecret(row, id, row.version).file?.name ?? name;
+      bytes = openSecretFile(row, Buffer.concat(chunks), id, row.version);
+    } catch { return err(reply, 500, 'DECRYPT_FAILED', 'The file could not be decrypted. Is VAULT_MASTER_KEY the same key it was saved with, and is the file still on the server?'); }
+    await log(request, 'DOWNLOAD', 'secret', id, { ...g.detail, version: row.version, size: bytes.length });
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
+    return reply.type('application/octet-stream').send(bytes);
+  });
+
+  // ---------- file secrets (upload) ----------
+  // same checks as any upload: size, then ClamAV; if the scanner cannot answer the file is refused, never let through unscanned
+  async function acceptFile(request: FastifyRequest, reply: any): Promise<Buffer | null> {
+    const body = request.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) { err(reply, 400, 'EMPTY', 'The file is empty or could not be read'); return null; }
+    if (body.length > MAX_UPLOAD_BYTES) { err(reply, 413, 'TOO_LARGE', `The file is larger than ${MAX_UPLOAD_MB} MB`); return null; }
+    if (VIRUS_SCAN_ENABLED) {
+      const scan = await scanUpload(body);
+      if (scan.status === 'infected') {
+        await log(request, 'UPLOAD', 'secret', null, { virus: scan.signature, size: body.length }, false, `Virus found: ${scan.signature}`);
+        err(reply, 422, 'VIRUS_FOUND', `A virus was found in this file (${scan.signature}), so it was not saved. Tell your security team.`);
+        return null;
+      }
+      if (scan.status === 'unavailable') { err(reply, 503, 'SCANNER_UNAVAILABLE', 'The file could not be checked for viruses right now, so it was not saved. Try again in a minute.'); return null; }
+    }
+    return body;
+  }
+
+  // writes the encrypted file, returns the version row to insert; the caller removes the file again if that insert fails
+  async function sealFile(secretId: string, version: number, filename: string, bytes: Buffer, userId: string, reason: string) {
+    const key = `_vault/${secretId}/${version}.bin`;
+    const sealed = sealSecret({ value: '', file: { name: filename } }, secretId, version, bytes);
+    await storage.upload(key, sealed.fileBlob!);
+    await chmod(join(env.STORAGE_DIR, key), 0o600).catch(() => {}); // owner only (no effect on Windows)
+    return { key, row: { secretId, version, valueEnc: sealed.valueEnc, dekEnc: sealed.dekEnc, keyId: sealed.keyId, filePath: key, fileSize: bytes.length, reason, createdById: userId } };
+  }
+
+  app.put('/folders/:id/secrets/file', { preHandler: pre, schema: { querystring: FileQuery } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!atLeast(await levelOn(request.userId!, id), 'EDIT')) return err(reply, 403, 'FORBIDDEN', 'You need Edit access to this folder');
+    if (!(await app.prisma.secretFolder.findFirst({ where: { id, deletedAt: null } }))) return err(reply, 404, 'NOT_FOUND', 'Folder not found');
+    const q = request.query as z.infer<typeof FileQuery>;
+    const bytes = await acceptFile(request, reply);
+    if (!bytes) return;
+    const filename = cleanName(q.filename);
+    const secretId = randomUUID();
+    const f = await sealFile(secretId, 1, filename, bytes, request.userId!, 'Uploaded');
+    try {
+      await app.prisma.$transaction([
+        app.prisma.secret.create({ data: { id: secretId, folderId: id, name: q.name || filename, type: 'FILE', description: q.description || null, expiresAt: q.expiresAt ? new Date(q.expiresAt) : null, createdById: request.userId } }),
+        app.prisma.secretVersion.create({ data: f.row }),
+      ]);
+    } catch (e) { await storage.delete(f.key).catch(() => {}); throw e; }
+    await log(request, 'UPLOAD', 'secret', secretId, { name: q.name || filename, folderId: id, size: bytes.length });
+    return reply.code(201).send({ success: true, data: { id: secretId, name: q.name || filename } });
+  });
+
+  // a new file for an existing file secret: a new version, the old file stays
+  app.put('/secrets/:id/file', { preHandler: pre, schema: { querystring: FileQuery } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const s = await app.prisma.secret.findFirst({ where: { id, deletedAt: null } });
+    if (!s) return err(reply, 404, 'NOT_FOUND', 'Secret not found');
+    if (s.type !== 'FILE') return err(reply, 400, 'NOT_FILE', 'This secret is not a file');
+    if (!atLeast(await levelOn(request.userId!, s.folderId), 'EDIT')) return err(reply, 403, 'FORBIDDEN', 'You need Edit access to this folder');
+    const q = request.query as z.infer<typeof FileQuery>;
+    const bytes = await acceptFile(request, reply);
+    if (!bytes) return;
+    const version = s.currentVersion + 1;
+    const f = await sealFile(id, version, cleanName(q.filename), bytes, request.userId!, q.reason || 'New file');
+    try {
+      await app.prisma.$transaction([
+        app.prisma.secretVersion.create({ data: f.row }),
+        app.prisma.secret.update({ where: { id }, data: { currentVersion: version } }),
+      ]);
+    } catch (e) { await storage.delete(f.key).catch(() => {}); throw e; }
+    await log(request, 'UPLOAD', 'secret', id, { name: s.name, newVersion: version, size: bytes.length });
+    return reply.send({ success: true, data: { id, version } });
   });
 
   // ---------- who has access ----------

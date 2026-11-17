@@ -1219,6 +1219,7 @@ enum SecretType {
   LOGIN
   API_KEY
   NOTE
+  FILE   // an uploaded file (zip, key file, certificate), stored encrypted on disk
 }
 
 enum SecretAccessLevel {
@@ -1271,6 +1272,8 @@ model SecretVersion {
   dekEnc      String   // that data key, wrapped with the master key
   keyId       String   @default("v1")
   reason      String?
+  filePath    String?  // FILE secrets: the encrypted file, relative to STORAGE_DIR
+  fileSize    Int?     // size of the original file in bytes
   createdById String?
   createdAt   DateTime @default(now())
 

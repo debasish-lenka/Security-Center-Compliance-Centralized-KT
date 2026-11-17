@@ -51,6 +51,8 @@ export class StorageService {
     if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
     try {
       const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as FileTokenPayload;
+      // the Secret Manager keeps its (encrypted) files under _vault/; they are only ever served by the vault's own routes
+      if (payload.k === '_vault' || payload.k.startsWith('_vault/') || payload.k.includes('..')) return null;
       return payload.e > Date.now() ? payload : null;
     } catch {
       return null;

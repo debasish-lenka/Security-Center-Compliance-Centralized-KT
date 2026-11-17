@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, Copy, Eye, EyeOff, FolderLock, History, Loader2, LockKeyhole, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Clock, Copy, Download, Eye, EyeOff, FileUp, FolderLock, History, Loader2, LockKeyhole, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { usersApi } from '@/lib/api';
+import { uploadPolicyApi, usersApi } from '@/lib/api';
 import { vaultApi, type VaultFolder, type VaultGrant, type VaultLevel, type VaultSecret, type Revealed } from '@/lib/vaultApi';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTimeIST } from '@/lib/utils';
@@ -16,7 +16,14 @@ import { formatDateTimeIST } from '@/lib/utils';
 const errMsg = (e: any) => e?.response?.data?.error?.message || 'Something went wrong';
 const field = 'h-10 w-full rounded-md border border-dbi-border bg-dbi-elevated px-3 text-sm text-dbi-textPrimary';
 const LEVEL_TEXT: Record<VaultLevel, string> = { VIEW: 'Can view', EDIT: 'Can edit', MANAGE: 'Manager' };
-const TYPE_TEXT = { LOGIN: 'Login', API_KEY: 'API key', NOTE: 'Note' } as const;
+const TYPE_TEXT = { LOGIN: 'Login', API_KEY: 'API key', NOTE: 'Note', FILE: 'File' } as const;
+const size = (b: number | null) => (b == null ? '' : b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const saveBlob = (blob: Blob, name: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+};
 const REVEAL_SECONDS = 30;
 
 function LevelBadge({ level }: { level: VaultLevel | null }) {
@@ -135,7 +142,7 @@ function SecretDialog({ folderId, secret, onClose }: { folderId: string; secret:
             <div className="sm:col-span-2"><Label htmlFor="s-name">Name *</Label><Input id="s-name" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Office firewall admin" /></div>
             <div><Label htmlFor="s-type">Type</Label>
               <select id="s-type" className={field} value={f.type} disabled={editing} onChange={(e) => set('type', e.target.value)}>
-                {Object.entries(TYPE_TEXT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {Object.entries(TYPE_TEXT).filter(([k]) => k !== 'FILE').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
           </div>
@@ -254,12 +261,103 @@ function HistoryDialog({ secret, onClose }: { secret: VaultSecret; onClose: () =
   );
 }
 
+// ---------- a file secret: ask again who you are, then the decrypted file is saved ----------
+function DownloadDialog({ secret, stepUp, onClose }: { secret: VaultSecret; stepUp: 'code' | 'password' | 'none'; onClose: () => void }) {
+  const [proof, setProof] = useState('');
+  const go = useMutation({
+    mutationFn: () => vaultApi.download(secret.id, stepUp === 'code' ? { code: proof } : { password: proof }),
+    onSuccess: ({ blob, name }) => { saveBlob(blob, name); toast({ title: 'Downloaded', description: name }); onClose(); },
+    onError: (e) => toast({ title: 'Could not download', description: errMsg(e), variant: 'destructive' }),
+  });
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !go.isPending) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>{secret.name}</DialogTitle><DialogDescription>The file is decrypted on the server and saved on your computer. This is written to the audit log with your name.</DialogDescription></DialogHeader>
+        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (proof.trim()) go.mutate(); }}>
+          {stepUp === 'none' ? (
+            <p className="text-sm text-dbi-textSecondary">Turn on two-factor authentication in Settings first.</p>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="dl-proof">{stepUp === 'code' ? 'Authenticator code (6 digits)' : 'Your password'}</Label>
+              <Input id="dl-proof" autoFocus autoComplete={stepUp === 'code' ? 'one-time-code' : 'current-password'} type={stepUp === 'code' ? 'text' : 'password'} inputMode={stepUp === 'code' ? 'numeric' : undefined} value={proof} onChange={(e) => setProof(e.target.value)} />
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={go.isPending}>Cancel</Button>
+            <Button type="submit" disabled={go.isPending || !proof.trim() || stepUp === 'none'}>{go.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}Download</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- upload a file (e.g. a zip of shared credentials), or put a newer file in place of it ----------
+function FileDialog({ folderId, secret, onClose }: { folderId: string; secret: VaultSecret | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const replacing = !!secret;
+  const { data: policy } = useQuery({ queryKey: ['upload-policy'], staleTime: 60 * 60_000, queryFn: async () => (await uploadPolicyApi.get()).data.data as { maxMb: number } });
+  const [file, setFile] = useState<File | null>(null);
+  const [f, setF] = useState({ name: secret?.name ?? '', description: secret?.description ?? '', expiresAt: secret?.expiresAt?.slice(0, 10) ?? '', reason: '' });
+  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const maxMb = policy?.maxMb ?? 50;
+
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!replacing) return vaultApi.uploadFile(folderId, file!, { name: f.name.trim() || undefined, description: f.description.trim() || undefined, expiresAt: f.expiresAt || undefined });
+      await vaultApi.updateSecret(secret!.id, { name: f.name.trim(), description: f.description.trim() || null, expiresAt: f.expiresAt || null });
+      if (file) await vaultApi.replaceFile(secret!.id, file, f.reason.trim() || undefined);
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vault-secrets', folderId] }); qc.invalidateQueries({ queryKey: ['vault-folders'] }); toast({ title: replacing ? 'Saved' : 'File stored, encrypted' }); onClose(); },
+    onError: (e) => toast({ title: 'Could not save', description: errMsg(e), variant: 'destructive' }),
+  });
+  const ok = replacing ? !!f.name.trim() : !!file;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !save.isPending) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{replacing ? `Change "${secret!.name}"` : 'Upload a file'}</DialogTitle>
+          <DialogDescription>{replacing ? 'Choose a file only if you want to replace it. The old file is kept as an older version.' : `For a zip, key file or certificate. It is scanned, then encrypted before it is stored. Up to ${maxMb} MB.`}</DialogDescription>
+        </DialogHeader>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (ok) save.mutate(); }}>
+          <div>
+            <Label htmlFor="f-file">{replacing ? 'New file (optional)' : 'File *'}</Label>
+            <input
+              id="f-file" type="file" disabled={save.isPending}
+              className="block w-full rounded-md border border-dbi-border bg-dbi-elevated p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-cyan-500 file:px-3 file:py-1 file:text-sm file:text-background"
+              onChange={(e) => {
+                const picked = e.target.files?.[0] ?? null;
+                if (picked && picked.size > maxMb * 1024 * 1024) { toast({ title: 'The file is too large', description: `The limit is ${maxMb} MB.`, variant: 'destructive' }); e.target.value = ''; setFile(null); return; }
+                setFile(picked);
+              }}
+            />
+            {file && <p className="mt-1 text-xs text-dbi-textSecondary">{file.name} · {size(file.size)}</p>}
+          </div>
+          <div><Label htmlFor="f-name">Name</Label><Input id="f-name" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder={file?.name ?? 'Defaults to the file name'} /></div>
+          <div><Label htmlFor="f-desc">What it is for</Label><Input id="f-desc" value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Everyone can read this line. Never write a secret here." /></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><Label htmlFor="f-exp">Change before (optional)</Label><Input id="f-exp" type="date" value={f.expiresAt} onChange={(e) => set('expiresAt', e.target.value)} /></div>
+            {replacing && <div><Label htmlFor="f-reason">Why changed (optional)</Label><Input id="f-reason" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={save.isPending}>Cancel</Button>
+            <Button type="submit" disabled={!ok || save.isPending}>{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{replacing ? 'Save' : 'Upload'}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ---------- inside one folder ----------
 function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'code' | 'password' | 'none'; onBack: () => void }) {
   const qc = useQueryClient();
   const { data: status } = useQuery({ queryKey: ['vault-status'], queryFn: vaultApi.status });
   const { data, isLoading, isError } = useQuery({ queryKey: ['vault-secrets', folderId], queryFn: () => vaultApi.secrets(folderId) });
   const [reveal, setReveal] = useState<VaultSecret | null>(null);
+  const [download, setDownload] = useState<VaultSecret | null>(null);
+  const [file, setFile] = useState<VaultSecret | 'new' | null>(null);
   const [edit, setEdit] = useState<VaultSecret | 'new' | null>(null);
   const [history, setHistory] = useState<VaultSecret | null>(null);
   const [access, setAccess] = useState(false);
@@ -291,6 +389,7 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
         <div className="ml-auto flex flex-wrap gap-2">
           {(can('MANAGE') || isAdmin) && <Button variant="outline" onClick={() => setAccess(true)}><Users className="mr-2 h-4 w-4" />Access</Button>}
           {can('EDIT') && <Button onClick={() => setEdit('new')}><Plus className="mr-2 h-4 w-4" />Add secret</Button>}
+          {can('EDIT') && <Button variant="outline" onClick={() => setFile('new')}><FileUp className="mr-2 h-4 w-4" />Upload file</Button>}
           {can('MANAGE') && data.secrets.length === 0 && <Button variant="outline" onClick={() => { if (window.confirm('Delete this empty folder?')) delFolder.mutate(); }}><Trash2 className="mr-2 h-4 w-4" />Delete folder</Button>}
         </div>
       </div>
@@ -311,11 +410,13 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
                     <LockKeyhole className="h-4 w-4 shrink-0 text-dbi-textSecondary" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{s.name} <Badge variant="outline" className="ml-1">{TYPE_TEXT[s.type]}</Badge>{due && <Badge variant="warning" className="ml-1">Change overdue</Badge>}</p>
-                      <p className="truncate text-xs text-dbi-textSecondary">{s.description || 'No description'} · version {s.currentVersion} · changed {formatDateTimeIST(s.updatedAt)}</p>
+                      <p className="truncate text-xs text-dbi-textSecondary">{s.description || 'No description'} · {s.type === 'FILE' && s.fileSize ? `${size(s.fileSize)} · ` : ''}version {s.currentVersion} · changed {formatDateTimeIST(s.updatedAt)}</p>
                     </div>
                     <div className="flex gap-1">
-                      {can('VIEW') && <Button size="sm" onClick={() => setReveal(s)}><Eye className="mr-1 h-4 w-4" />Show</Button>}
-                      {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => setEdit(s)} aria-label="Change"><Pencil className="h-4 w-4" /></Button>}
+                      {can('VIEW') && (s.type === 'FILE'
+                        ? <Button size="sm" onClick={() => setDownload(s)}><Download className="mr-1 h-4 w-4" />Download</Button>
+                        : <Button size="sm" onClick={() => setReveal(s)}><Eye className="mr-1 h-4 w-4" />Show</Button>)}
+                      {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => (s.type === 'FILE' ? setFile(s) : setEdit(s))} aria-label="Change"><Pencil className="h-4 w-4" /></Button>}
                       {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => setHistory(s)} aria-label="Versions"><History className="h-4 w-4" /></Button>}
                       {can('MANAGE') && <Button size="icon" variant="ghost" onClick={() => { if (window.confirm(`Remove "${s.name}"?`)) del.mutate(s.id); }} aria-label="Remove"><Trash2 className="h-4 w-4" /></Button>}
                     </div>
@@ -327,6 +428,8 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
         </CardContent>
       </Card>
       {reveal && <RevealDialog secret={reveal} stepUp={stepUp} onClose={() => setReveal(null)} />}
+      {download && <DownloadDialog secret={download} stepUp={stepUp} onClose={() => setDownload(null)} />}
+      {file && <FileDialog folderId={folderId} secret={file === 'new' ? null : file} onClose={() => setFile(null)} />}
       {edit && <SecretDialog folderId={folderId} secret={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
       {history && <HistoryDialog secret={history} onClose={() => setHistory(null)} />}
       {access && <AccessDialog folder={data.folder} onClose={() => setAccess(false)} />}
