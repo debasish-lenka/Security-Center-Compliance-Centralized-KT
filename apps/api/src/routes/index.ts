@@ -31,6 +31,7 @@ import { knowledgeBookFlatRoutes } from './knowledge-books-flat.js';
 import { ktReportFlatRoutes } from './kt-reports-flat.js';
 import { overviewRoutes } from './overview.js';
 import { mailSettingsRoutes } from './mail-settings.js';
+import { vaultRoutes } from './vault.js';
 import { ssoAuthRoutes, ssoSettingsRoutes } from './sso.js';
 
 export async function registerRoutes(app: FastifyInstance) {
@@ -68,5 +69,6 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(attentionRoutes, { prefix: '/api/v1' });
   await app.register(uploadPolicyRoutes, { prefix: '/api/v1' });
   await app.register(projectDeleteRoutes, { prefix: '/api/v1' });
+  await app.register(vaultRoutes, { prefix: '/api/v1/vault' });
   await app.register(fileRoutes, { prefix: '/api/v1/files' });
 }

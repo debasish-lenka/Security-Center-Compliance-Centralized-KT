@@ -18,6 +18,7 @@ import {
   BookOpen,
   Shield,
   AlertTriangle,
+  LockKeyhole,
 } from 'lucide-react';
 
 export type UserRole =
@@ -62,6 +63,7 @@ export const navigationSections: NavSection[] = [
       { name: 'KT Reports', href: '/kt-reports', icon: ClipboardList },
       { name: 'Document Vault', href: '/documents', icon: FolderOpen },
       { name: 'Knowledge Books', href: '/knowledge-books', icon: BookOpen },
+      { name: 'Secret Manager', href: '/secrets', icon: LockKeyhole },
     ],
   },
   {

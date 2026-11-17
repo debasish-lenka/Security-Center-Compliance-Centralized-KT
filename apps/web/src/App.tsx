@@ -36,6 +36,7 @@ const Reminders = lazy(() => import('@/pages/Reminders').then((m) => ({ default:
 const RecycleBin = lazy(() => import('@/pages/RecycleBin').then((m) => ({ default: m.RecycleBin })));
 const SsoSettings = lazy(() => import('@/pages/SsoSettings').then((m) => ({ default: m.SsoSettings })));
 const MailSettings = lazy(() => import('@/pages/MailSettings').then((m) => ({ default: m.MailSettings })));
+const Vault = lazy(() => import('@/pages/Vault').then((m) => ({ default: m.Vault })));
 const Search = lazy(() => import('@/pages/Search').then((m) => ({ default: m.Search })));
 const AdminControlCenter = lazy(() => import('@/pages/AdminControlCenter').then((m) => ({ default: m.AdminControlCenter })));
 import { useAuth } from '@/context/AuthContext';
@@ -146,6 +147,7 @@ function AppRoutes() {
           <Route path="/kt-reports/:id/edit" element={<KTReportEdit />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/knowledge-books" element={<KnowledgeBooks />} />
+          <Route path="/secrets" element={<Vault />} />
 
           {/* GOVERNANCE */}
           <Route path="/compliance" element={<Compliance />} />

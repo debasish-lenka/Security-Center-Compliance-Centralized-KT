@@ -1209,3 +1209,89 @@ model TaskReview {
   @@index([taskId, createdAt])
   @@map("task_reviews")
 }
+
+// ============================================
+// Secret Manager (vault for internal logins, API keys, notes)
+// The secret value is only ever stored encrypted (see services/vault-crypto.ts).
+// ============================================
+
+enum SecretType {
+  LOGIN
+  API_KEY
+  NOTE
+}
+
+enum SecretAccessLevel {
+  VIEW   // may reveal values
+  EDIT   // + add and change secrets
+  MANAGE // + give or take away access, delete secrets
+}
+
+model SecretFolder {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  secrets Secret[]
+  grants  SecretGrant[]
+
+  @@map("secret_folders")
+}
+
+model Secret {
+  id             String     @id @default(uuid())
+  folderId       String
+  name           String
+  type           SecretType @default(LOGIN)
+  description    String?    // plain text, visible to everyone: never put a secret here
+  currentVersion Int        @default(1)
+  expiresAt      DateTime?
+  createdById    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  folder   SecretFolder    @relation(fields: [folderId], references: [id])
+  versions SecretVersion[]
+
+  @@index([folderId])
+  @@map("secrets")
+}
+
+// Append-only: changing a secret writes a new row, the old one is never overwritten
+model SecretVersion {
+  id          String   @id @default(uuid())
+  secretId    String
+  version     Int
+  valueEnc    String   // AES-256-GCM of {username,url,value} under this row's own data key
+  dekEnc      String   // that data key, wrapped with the master key
+  keyId       String   @default("v1")
+  reason      String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  secret Secret @relation(fields: [secretId], references: [id])
+
+  @@unique([secretId, version])
+  @@map("secret_versions")
+}
+
+model SecretGrant {
+  id          String            @id @default(uuid())
+  folderId    String
+  userId      String
+  level       SecretAccessLevel
+  expiresAt   DateTime?
+  grantedById String?
+  createdAt   DateTime          @default(now())
+
+  folder SecretFolder @relation(fields: [folderId], references: [id])
+
+  @@unique([folderId, userId])
+  @@index([userId])
+  @@map("secret_grants")
+}

@@ -42,6 +42,9 @@ const EnvSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
 
   ENCRYPTION_KEY: z.string().length(32),
+
+  // Secret Manager master key: 64 hex characters (openssl rand -hex 32). Kept apart from ENCRYPTION_KEY and from backups.
+  VAULT_MASTER_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters').optional().or(z.literal('').transform(() => undefined)),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

@@ -25,10 +25,13 @@ if [ -f "$src/documents.tgz" ]; then
   tar xzf "$src/documents.tgz"
 fi
 
-if [ -f "$src/env.backup" ] && ! cmp -s "$src/env.backup" .env 2>/dev/null; then
+if [ -f "$src/env.backup" ] && ! cmp -s "$src/env.backup" <(grep -v '^VAULT_MASTER_KEY=' .env) 2>/dev/null; then
   echo "NOTE: the .env in this backup differs from the current one ($src/env.backup)."
   echo "      If 2FA codes or mail passwords stop working, copy it over .env and run: docker compose up -d"
 fi
+
+echo "NOTE: backups never hold VAULT_MASTER_KEY. Secret Manager values open only with the key they were saved under;"
+echo "      keep VAULT_MASTER_KEY in .env as it was (restore it from your own safe copy on a new server)."
 
 docker compose up -d
 echo "Restore finished."

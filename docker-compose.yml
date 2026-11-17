@@ -50,6 +50,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+      VAULT_MASTER_KEY: ${VAULT_MASTER_KEY:-}   # Secret Manager key (64 hex). Empty = Secret Manager switched off. Keep a copy OUTSIDE this server.
       CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost:8443}
       FRONTEND_URL: ${CORS_ORIGIN:-https://localhost:8443}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}

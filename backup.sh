@@ -24,7 +24,9 @@ if [ -d Documents ]; then
   tar czf "$dest/documents.tgz" Documents
   tar tzf "$dest/documents.tgz" >/dev/null
 fi
-[ -f .env ] && cp .env "$dest/env.backup"
+# The Secret Manager master key is left OUT on purpose: a backup that held both the encrypted secrets and their key would open every one of them.
+# Keep a copy of VAULT_MASTER_KEY somewhere that is not this server.
+[ -f .env ] && { grep -v '^VAULT_MASTER_KEY=' .env > "$dest/env.backup" || true; }
 
 touch "$dest/OK"
 echo "Backup written to $dest ($(du -sh "$dest" | cut -f1))"
