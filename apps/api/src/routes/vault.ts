@@ -361,7 +361,9 @@ export async function vaultRoutes(app: FastifyInstance) {
     const key = `_vault/${secretId}/${version}.bin`;
     const sealed = sealSecret({ value: '', file: { name: filename } }, secretId, version, bytes);
     await storage.upload(key, sealed.fileBlob!);
-    await chmod(join(env.STORAGE_DIR, key), 0o600).catch(() => {}); // owner only (no effect on Windows)
+    // Readable by the host's backup job (it runs outside the container as another user). Safe: the file is AES-256-GCM
+    // ciphertext and the key is never stored beside it. Access is still controlled by the vault's own routes.
+    await chmod(join(env.STORAGE_DIR, key), 0o644).catch(() => {});
     return { key, row: { secretId, version, valueEnc: sealed.valueEnc, dekEnc: sealed.dekEnc, keyId: sealed.keyId, filePath: key, fileSize: bytes.length, reason, createdById: userId } };
   }
 
