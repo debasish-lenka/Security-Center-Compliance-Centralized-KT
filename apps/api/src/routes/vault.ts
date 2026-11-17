@@ -177,11 +177,18 @@ export async function vaultRoutes(app: FastifyInstance) {
     const myLevel = await levelOn(request.userId!, id);
     const rows = await app.prisma.secret.findMany({
       where: { folderId: id, deletedAt: null }, orderBy: { name: 'asc' },
-      select: { id: true, name: true, type: true, description: true, currentVersion: true, expiresAt: true, updatedAt: true },
+      select: { id: true, name: true, type: true, description: true, currentVersion: true, expiresAt: true, createdAt: true, createdById: true, updatedAt: true },
     });
-    const sizes = await app.prisma.secretVersion.findMany({ where: { secretId: { in: rows.map((r) => r.id) }, fileSize: { not: null } }, select: { secretId: true, version: true, fileSize: true } });
-    const withSize = rows.map((r) => ({ ...r, fileSize: sizes.find((v) => v.secretId === r.id && v.version === r.currentVersion)?.fileSize ?? null }));
-    return reply.send({ success: true, data: { folder: { id: folder.id, name: folder.name, description: folder.description }, myLevel, secrets: withSize } });
+    // the newest version of each secret is the current one: it tells the file size and who made the latest change
+    const latest = await app.prisma.secretVersion.findMany({ where: { secretId: { in: rows.map((r) => r.id) } }, orderBy: { version: 'desc' }, distinct: ['secretId'], select: { secretId: true, fileSize: true, createdById: true, createdAt: true } });
+    const ids = [...new Set([...rows.map((r) => r.createdById), ...latest.map((v) => v.createdById)].filter(Boolean) as string[])];
+    const names = new Map((await app.prisma.profile.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true } })).map((p) => [p.id, p.fullName]));
+    const nameOf = (id: string | null) => (id ? names.get(id) ?? null : null);
+    const withInfo = rows.map(({ createdById, ...r }) => {
+      const v = latest.find((x) => x.secretId === r.id);
+      return { ...r, fileSize: v?.fileSize ?? null, createdBy: nameOf(createdById), changedBy: nameOf(v?.createdById ?? null), changedAt: v?.createdAt ?? r.updatedAt };
+    });
+    return reply.send({ success: true, data: { folder: { id: folder.id, name: folder.name, description: folder.description }, myLevel, secrets: withInfo } });
   });
 
   app.post('/folders/:id/secrets', { preHandler: pre, schema: { body: SecretCreate } }, async (request, reply) => {

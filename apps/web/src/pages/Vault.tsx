@@ -433,7 +433,8 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
                     <LockKeyhole className="h-4 w-4 shrink-0 text-dbi-textSecondary" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{s.name} <Badge variant="outline" className="ml-1">{TYPE_TEXT[s.type]}</Badge>{due && <Badge variant="warning" className="ml-1">Change overdue</Badge>}</p>
-                      <p className="truncate text-xs text-dbi-textSecondary">{s.description || 'No description'} · {s.type === 'FILE' && s.fileSize ? `${size(s.fileSize)} · ` : ''}version {s.currentVersion} · changed {formatDateTimeIST(s.updatedAt)}</p>
+                      <p className="truncate text-xs text-dbi-textSecondary">{s.description || 'No description'} · {s.type === 'FILE' && s.fileSize ? `${size(s.fileSize)} · ` : ''}version {s.currentVersion}</p>
+                      <p className="truncate text-xs text-dbi-textSecondary">{s.type === 'FILE' ? 'Uploaded' : 'Added'} by <b className="font-medium text-dbi-textPrimary">{s.createdBy ?? 'unknown'}</b> on {formatDateTimeIST(s.createdAt)}{s.currentVersion > 1 && <> · last changed by <b className="font-medium text-dbi-textPrimary">{s.changedBy ?? 'unknown'}</b> on {formatDateTimeIST(s.changedAt)}</>}</p>
                     </div>
                     <div className="flex gap-1">
                       {can('VIEW') && (s.type === 'FILE'

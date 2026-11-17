@@ -5,7 +5,7 @@ export type VaultLevel = 'VIEW' | 'EDIT' | 'MANAGE';
 export type SecretType = 'LOGIN' | 'API_KEY' | 'NOTE' | 'FILE';
 
 export interface VaultFolder { id: string; name: string; description: string | null; secretCount: number; myLevel: VaultLevel | null; myAccessExpiresAt: string | null }
-export interface VaultSecret { id: string; name: string; type: SecretType; description: string | null; currentVersion: number; expiresAt: string | null; updatedAt: string; fileSize: number | null }
+export interface VaultSecret { id: string; name: string; type: SecretType; description: string | null; currentVersion: number; expiresAt: string | null; updatedAt: string; fileSize: number | null; createdAt: string; createdBy: string | null; changedBy: string | null; changedAt: string }
 export interface VaultGrant { id: string; userId: string; level: VaultLevel; expiresAt: string | null; expired: boolean; user: { fullName: string; email: string; role: string } | null }
 export interface VaultVersion { version: number; reason: string | null; createdAt: string; by: string | null }
 export interface Revealed { username?: string; url?: string; value: string; version: number }
