@@ -47,6 +47,48 @@ export function toolVerdict(checked: number, seen: number, anyRead: boolean): 'S
 let running = false;
 export const isOcrRunning = () => running;
 
+// Reads ONE picture right when it arrives (used to keep only pictures that show the tool). One shared reader is kept
+// for a short while so a picture every 30 seconds does not start the reader again each time.
+let liveWorker: Promise<Worker> | null = null;
+let liveIdle: NodeJS.Timeout | null = null;
+let liveBusy: Promise<unknown> = Promise.resolve();
+export function checkPicture(buf: Buffer, terms: string[]): Promise<boolean | null> {
+  const job = liveBusy.then(async () => {
+    try {
+      liveWorker ??= createWorker('eng', 1, { langPath: LANG_DIR, gzip: false, cachePath: LANG_DIR });
+      const w = await liveWorker;
+      const { data } = await w.recognize(buf);
+      return shows(data.text, terms);
+    } catch {
+      liveWorker = null;
+      return null; // could not be read: the caller decides (it keeps the picture)
+    } finally {
+      if (liveIdle) clearTimeout(liveIdle);
+      liveIdle = setTimeout(() => { const w = liveWorker; liveWorker = null; void w?.then((x) => x.terminate()).catch(() => undefined); }, 2 * 60_000);
+      liveIdle.unref();
+    }
+  });
+  liveBusy = job.catch(() => undefined);
+  return job;
+}
+
+// The tool's name / address terms for a session (its own link, else the project's links)
+export async function termsForSession(app: FastifyInstance, s: { projectId: string; linkLabel: string | null; linkUrl: string | null }): Promise<string[]> {
+  if (s.linkLabel || s.linkUrl) return toolTerms([{ label: s.linkLabel, url: s.linkUrl }]);
+  const p = await app.prisma.project.findUnique({ where: { id: s.projectId }, select: { workLinks: true } });
+  return toolTerms((p?.workLinks as LinkLike[] | null) ?? []);
+}
+
+// Count again what the session's pictures show and set the verdict
+export async function refreshVerdict(app: FastifyInstance, sid: string) {
+  const [checked, hit, anyRead] = await Promise.all([
+    app.prisma.workEntry.count({ where: { sessionId: sid, kind: 'SHOT', toolSeen: { not: null } } }),
+    app.prisma.workEntry.count({ where: { sessionId: sid, kind: 'SHOT', toolSeen: true } }),
+    app.prisma.workEntry.count({ where: { sessionId: sid, kind: 'SHOT', ocrAt: { not: null } } }),
+  ]);
+  await app.prisma.workSession.update({ where: { id: sid }, data: { ocrChecked: checked, ocrSeen: hit, toolCheck: toolVerdict(checked, hit, anyRead > 0) } });
+}
+
 export async function pendingPictures(app: FastifyInstance) {
   return app.prisma.workEntry.count({ where: { kind: 'SHOT', storageKey: { not: null }, ocrAt: null } });
 }

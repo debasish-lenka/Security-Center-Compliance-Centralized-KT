@@ -38,10 +38,10 @@ ok('the project carries its work links', detail.body.data.workLinks?.length === 
 // ---- a works ----
 let st = await call('GET', W('/state'), null, S.a.token);
 ok('state: links, nothing running, nothing pending', st.body.data.links.length === 2 && st.body.data.active === null && st.body.data.pending.sessions === 0);
-const start = await call('POST', W('/start'), { linkUrl: 'https://dnac.example.com/dna', linkLabel: 'Cisco dashboard', surface: 'monitor' }, S.a.token);
+const start = await call('POST', W('/start'), { linkUrl: 'https://dnac.example.com/dna', linkLabel: 'Cisco dashboard', surface: 'window' }, S.a.token);
 ok('start a session', start.status === 201, JSON.stringify(start.body).slice(0, 120));
 const sid = start.body.data.id;
-ok('a second start is refused while one runs', (await call('POST', W('/start'), { surface: 'monitor' }, S.a.token)).status === 409);
+ok('a second start is refused while one runs', (await call('POST', W('/start'), { surface: 'window' }, S.a.token)).status === 409);
 ok('a project viewer cannot start work', (await call('POST', W('/start'), {}, S.view.token)).status === 403);
 ok('a person outside the project cannot', (await call('POST', W('/start'), {}, S.out.token)).status === 403);
 ok('another member cannot use my session', (await call('POST', W(`/${sid}/note`), { text: 'hi' }, S.b.token)).status === 404);
@@ -84,7 +84,7 @@ ok('stopping the share is recorded', (await call('POST', W(`/${sid}/share`), { s
 st = await call('GET', W('/state'), null, S.a.token);
 ok('after the share was cut the session is PARTIAL', st.body.data.active.evidence === 'PARTIAL' && st.body.data.active.shareStops === 1, st.body.data.active.evidence);
 ok('sharing a window instead of the whole screen is refused while required', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'window' }, S.a.token)).status === 400);
-ok('sharing the whole screen again is accepted', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'monitor' }, S.a.token)).status === 201);
+ok('sharing the whole screen again is accepted', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'window' }, S.a.token)).status === 201);
 ok('the cut stays on record: still PARTIAL after sharing again', (await call('GET', W('/state'), null, S.a.token)).body.data.active.evidence === 'PARTIAL');
 
 // ---- stop, generate, version ----
@@ -105,7 +105,7 @@ const txt = pdf.toString('latin1');
 ok('it was generated for the project with its watermark', true); // watermark text is inside compressed streams; checked visually elsewhere
 ok('nothing new left to generate', (await call('POST', W('/generate-kt'), null, S.a.token)).status === 400);
 // second round
-const st2 = (await call('POST', W('/start'), { surface: 'monitor' }, S.a.token)).body.data.id;
+const st2 = (await call('POST', W('/start'), { surface: 'window' }, S.a.token)).body.data.id;
 await call('POST', W(`/${st2}/note`), { text: 'Second visit: ran the ManageEngine report.' }, S.a.token);
 await call('POST', W(`/${st2}/stop`), null, S.a.token);
 const g2 = await call('POST', W('/generate-kt'), null, S.a.token);
@@ -117,7 +117,7 @@ const tl = (await call('GET', `/projects/${pid}/documents/timeline`, null, S.a.t
 ok('it appears in the vault as a generated document', (tl.items ?? tl).some((d) => d.id === docId && d.generated));
 
 // ---- idle ----
-const idleSid = (await call('POST', W('/start'), { surface: 'monitor' }, S.b.token)).body.data.id;
+const idleSid = (await call('POST', W('/start'), { surface: 'window' }, S.b.token)).body.data.id;
 await db.workSession.update({ where: { id: idleSid }, data: { lastSeenAt: new Date(Date.now() - 30 * 60 * 1000) } });
 st = await call('GET', W('/state'), null, S.b.token);
 const idleRow = st.body.data.recent.find((s) => s.id === idleSid);

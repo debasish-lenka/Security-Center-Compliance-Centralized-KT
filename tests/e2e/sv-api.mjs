@@ -52,7 +52,7 @@ ok('To do -> In progress is still fine', (await call('PATCH', T(`/${t1}`), { sta
 
 // ---- evidence ----
 const upload = async (sess, name) => { const up = (await call('POST', `/projects/${pid}/documents/upload-url`, { name, category: 'OTHER' }, sess.token)).body.data; await fetch(FILES + up.uploadUrl, { method: 'PUT', body: Buffer.from('%PDF-1.4 x') }); return (await call('POST', `/projects/${pid}/documents`, { name, category: 'OTHER', storageKey: up.storageKey, size: 10, mimeType: 'application/pdf' }, sess.token)).body.data.id; };
-const session = async (sess) => { const s = (await call('POST', `/projects/${pid}/work/start`, { surface: 'monitor' }, sess.token)).body.data.id; await call('POST', `/projects/${pid}/work/${s}/stop`, null, sess.token); return s; };
+const session = async (sess) => { const s = (await call('POST', `/projects/${pid}/work/start`, { surface: 'window' }, sess.token)).body.data.id; await call('POST', `/projects/${pid}/work/${s}/stop`, null, sess.token); return s; };
 const docA = await upload(S.a, 'a-report.pdf'), docB = await upload(S.b, 'b-report.pdf');
 const sesA = await session(S.a);
 const opts = (await call('GET', T('/evidence-options'), null, S.a.token)).body.data;

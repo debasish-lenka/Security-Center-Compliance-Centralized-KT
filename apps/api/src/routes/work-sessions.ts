@@ -5,6 +5,7 @@ import { createAuditLogger } from '../services/audit-logger.js';
 import { getStorageService } from '../services/storage.js';
 import { tellSuperAdmins } from '../services/document-oversight.js';
 import { formatWhen } from '../services/watermark.js';
+import { checkPicture, refreshVerdict, termsForSession } from '../services/ocr.js';
 import { evidenceOf, lengthOf, minutesBetween, workKtPdf } from '../services/work-kt.js';
 
 export const getWorkSettings = (app: FastifyInstance) => app.prisma.workSettings.upsert({ where: { id: 'default' }, create: { id: 'default' }, update: {} });
@@ -20,6 +21,9 @@ const MAX_SHOT_BYTES = 800_000;
 const MAX_SHOTS_PER_SESSION = 400;
 const KEEP_PICTURES_DAYS = Number(process.env.WORK_SHOT_RETENTION_DAYS ?? 90);
 
+// Work is recorded from the tool's WINDOW only (its address bar is in the picture). The whole screen and a browser tab are refused.
+const OK_SURFACE = (s?: string | null) => s === 'window';
+const WINDOW_MSG = 'Share only the window of the tool you work in. In the sharing dialog open the "Window" tab, pick that window and press Share. The whole screen and a browser tab are not accepted.';
 const bad = (reply: any, code: number, c: string, message: string) => reply.code(code).send({ success: false, error: { code: c, message } });
 
 export async function workSessionRoutes(app: FastifyInstance) {
@@ -95,7 +99,8 @@ export async function workSessionRoutes(app: FastifyInstance) {
     const userId = request.userId!;
     const { linkUrl, linkLabel, surface } = request.body as { linkUrl?: string | null; linkLabel?: string | null; surface?: string | null };
     const settings = await getWorkSettings(app);
-    if (settings.requireScreenShare && surface !== 'monitor') return bad(reply, 400, 'SHARE_REQUIRED', 'Share your whole screen to start work');
+    if (settings.requireScreenShare && !OK_SURFACE(surface)) return bad(reply, 400, 'SHARE_REQUIRED', WINDOW_MSG);
+    if (settings.requireScreenShare && !(await termsForSession(app, { projectId, linkLabel: linkLabel ?? null, linkUrl: linkUrl ?? null })).length) return bad(reply, 400, 'NO_TOOL', 'This project has no tool address yet. Add the tool link in the project (Work links) so only that tool is recorded.');
     await closeStale(projectId);
     const open = await app.prisma.workSession.findFirst({ where: { projectId, userId, endedAt: null } });
     if (open) return bad(reply, 409, 'ALREADY_RUNNING', 'You already have a work session running on this project');
@@ -139,13 +144,13 @@ export async function workSessionRoutes(app: FastifyInstance) {
     if (s.endedAt) return bad(reply, 409, 'ENDED', 'This work session has ended');
     const { state, surface } = request.body as { state: 'STARTED' | 'STOPPED' | 'DENIED' | 'REJECTED'; surface?: string | null };
     const settings = await getWorkSettings(app);
-    if (state === 'STARTED' && settings.requireScreenShare && surface !== 'monitor') return bad(reply, 400, 'SHARE_REQUIRED', 'Share your whole screen');
-    const text = { STARTED: `Started sharing ${surfaceName(surface ?? 'monitor')}`, STOPPED: 'Stopped sharing the screen', DENIED: 'Screen sharing was not allowed', REJECTED: 'Shared a window or tab instead of the whole screen (not accepted)' }[state];
+    if (state === 'STARTED' && settings.requireScreenShare && !OK_SURFACE(surface)) return bad(reply, 400, 'SHARE_REQUIRED', WINDOW_MSG);
+    const text = { STARTED: `Started sharing ${surfaceName(surface ?? 'monitor')}`, STOPPED: 'Stopped sharing the screen', DENIED: 'Screen sharing was not allowed', REJECTED: 'Shared the whole screen or a browser tab instead of the tool window (not accepted)' }[state];
     await app.prisma.workEntry.create({ data: { sessionId: s.id, kind: 'EVENT', text } });
     await app.prisma.workSession.update({
       where: { id: s.id },
       data: state === 'STARTED'
-        ? { shareStarts: { increment: 1 }, surface: s.surface && s.surface !== 'monitor' ? s.surface : (surface ?? s.surface), lastSeenAt: new Date() }
+        ? { shareStarts: { increment: 1 }, surface: surface ?? s.surface, lastSeenAt: new Date() }
         : { shareStops: { increment: 1 }, lastSeenAt: new Date() },
     });
     return reply.code(201).send({ success: true, data: { ok: true } });
@@ -181,9 +186,24 @@ export async function workSessionRoutes(app: FastifyInstance) {
     const last = await app.prisma.workEntry.findFirst({ where: { sessionId: s.id, kind: 'SHOT' }, orderBy: { createdAt: 'desc' }, select: { hash: true } });
     await app.prisma.workSession.update({ where: { id: s.id }, data: { lastSeenAt: new Date() } });
     if (last?.hash === hash) return { success: true, data: { duplicate: true } };
+    // Only pictures that show the tool are kept. A picture of anything else is thrown away at once and never stored.
+    const settings = await getWorkSettings(app);
+    let toolSeen: boolean | null = null;
+    if (settings.requireScreenShare && settings.ocrEnabled) {
+      const terms = await termsForSession(app, s);
+      if (terms.length) {
+        toolSeen = await checkPicture(buf, terms);
+        if (toolSeen === false) {
+          const recent = await app.prisma.workEntry.findFirst({ where: { sessionId: s.id, kind: 'EVENT', text: { startsWith: 'A picture was not kept' }, createdAt: { gt: new Date(Date.now() - 5 * 60_000) } }, select: { id: true } });
+          if (!recent) await app.prisma.workEntry.create({ data: { sessionId: s.id, kind: 'EVENT', text: 'A picture was not kept: the tool was not on the shared window' } });
+          return { success: true, data: { skipped: true, duplicate: false } };
+        }
+      }
+    }
     const key = `${projectId}/work/${s.id}/${Date.now()}.jpg`;
     await storage.upload(key, buf, 'image/jpeg');
-    const e = await app.prisma.workEntry.create({ data: { sessionId: s.id, kind: 'SHOT', storageKey: key, size: buf.length, hash, reason } });
+    const e = await app.prisma.workEntry.create({ data: { sessionId: s.id, kind: 'SHOT', storageKey: key, size: buf.length, hash, reason, ...(toolSeen !== null ? { ocrAt: new Date(), toolSeen } : {}) } });
+    if (toolSeen !== null) await refreshVerdict(app, s.id);
     return reply.code(201).send({ success: true, data: { id: e.id, duplicate: false, count: taken + 1 } });
   });
 

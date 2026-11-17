@@ -7,14 +7,14 @@ import { formatWhen, latin, watermarkPdf } from './watermark.js';
 export interface KtEntry { kind: string; text: string | null; reason: string | null; createdAt: Date; image?: Buffer | null }
 export type Evidence = 'FULL' | 'PARTIAL' | 'NONE';
 
-// How well a session is backed by the screen: the whole screen was shared the whole time and pictures were taken (FULL),
-// sharing was cut, a window / tab was shared, or no picture exists (PARTIAL), or nothing was ever shared (NONE).
+// How well a session is backed by the screen: the tool's window was shared the whole time and pictures were taken (FULL),
+// sharing was cut or no picture exists (PARTIAL), or nothing was ever shared (NONE).
 export function evidenceOf(s: { shareStarts: number; shareStops: number; surface: string | null }, shots: number): Evidence {
   if (s.shareStarts === 0) return 'NONE';
-  if (s.shareStops > 0 || s.surface !== 'monitor' || shots === 0) return 'PARTIAL';
+  if (s.shareStops > 0 || shots === 0) return 'PARTIAL';
   return 'FULL';
 }
-export const evidenceText = (e: Evidence) => (e === 'FULL' ? 'Full (whole screen shared, pictures taken)' : e === 'PARTIAL' ? 'Partial (sharing was interrupted, not the whole screen, or no pictures)' : 'None (the screen was never shared)');
+export const evidenceText = (e: Evidence) => (e === 'FULL' ? 'Full (the tool window was shared, pictures taken)' : e === 'PARTIAL' ? 'Partial (sharing was interrupted, or no pictures)' : 'None (the screen was never shared)');
 
 export const toolText = (check: string | null, seen: number, checked: number) =>
   check === 'SEEN' ? `Seen on screen (${seen} of ${checked} screenshots show it)`

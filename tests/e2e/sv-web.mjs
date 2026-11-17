@@ -37,7 +37,7 @@ const t1 = await task('Review the firewall rules', ids.a), t2 = await task('Patc
 const up = (await call('POST', `/projects/${pid}/documents/upload-url`, { name: 'fw-report.pdf', category: 'OTHER' }, S.a.token)).body.data;
 await fetch(FILES + up.uploadUrl, { method: 'PUT', body: Buffer.from('%PDF-1.4 x') });
 await call('POST', `/projects/${pid}/documents`, { name: 'fw-report.pdf', category: 'OTHER', storageKey: up.storageKey, size: 10, mimeType: 'application/pdf' }, S.a.token);
-const ses = (await call('POST', `/projects/${pid}/work/start`, { surface: 'monitor', linkLabel: 'Firewall console', linkUrl: 'https://fw.example.com' }, S.a.token)).body.data.id;
+const ses = (await call('POST', `/projects/${pid}/work/start`, { surface: 'window', linkLabel: 'Firewall console', linkUrl: 'https://fw.example.com' }, S.a.token)).body.data.id;
 await call('POST', `/projects/${pid}/work/${ses}/stop`, null, S.a.token);
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });

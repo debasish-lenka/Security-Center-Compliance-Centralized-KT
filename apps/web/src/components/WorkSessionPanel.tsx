@@ -24,8 +24,8 @@ const errText = (e: any, fallback: string) => e?.response?.data?.error?.message 
 interface WorkLink { label: string; url: string }
 
 const EVIDENCE: Record<string, { label: string; cls: string; hint: string }> = {
-  FULL: { label: 'Full evidence', cls: 'bg-dbi-success/20 text-dbi-success', hint: 'The whole screen was shared the whole time and pictures were taken' },
-  PARTIAL: { label: 'Partial evidence', cls: 'bg-dbi-warning/20 text-dbi-warning', hint: 'Sharing was interrupted, only a window or tab was shared, or no picture was taken' },
+  FULL: { label: 'Full evidence', cls: 'bg-dbi-success/20 text-dbi-success', hint: 'The tool window was shared the whole time and pictures were taken' },
+  PARTIAL: { label: 'Partial evidence', cls: 'bg-dbi-warning/20 text-dbi-warning', hint: 'Sharing was interrupted, or no picture was taken' },
   NONE: { label: 'No evidence', cls: 'bg-dbi-critical/20 text-dbi-critical', hint: 'The screen was never shared' },
 };
 const ToolBadge = ({ s }: { s: { toolCheck: string | null; ocrSeen: number; ocrChecked: number } }) => {
@@ -55,6 +55,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
   const [sharing, setSharing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [openSession, setOpenSession] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState(false); // the last picture did not show the tool and was not kept
   const [shareProblem, setShareProblem] = useState<string | null>(null); // why sharing did not start; stays until the next try
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -62,6 +63,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
   const timerRef = useRef<number | null>(null);
   const prevRef = useRef<Uint8ClampedArray | null>(null);
   const lastShotRef = useRef(0);
+  const hiddenRef = useRef(false); // the shared window is hidden or minimised: nothing is taken
   const sessionRef = useRef<string | null>(null);
   sessionRef.current = activeId;
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -84,6 +86,12 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
     try {
       const r = await workApi.shot(projectId, sid, image, reason);
       lastShotRef.current = Date.now();
+      if (r.data?.data?.skipped) {
+        setSkipped(true);
+        if (reason === 'MANUAL') toast({ title: 'Picture not kept', description: 'The tool was not on this picture, so it was not saved.', variant: 'destructive' });
+        return;
+      }
+      setSkipped(false);
       if (!r.data?.data?.duplicate) qc.invalidateQueries({ queryKey: ['work-state', projectId] });
     } catch (e: any) {
       if (reason === 'MANUAL') toast({ title: 'Screenshot not saved', description: errText(e, 'Try again'), variant: 'destructive' });
@@ -103,7 +111,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
 
   const look = useCallback(() => {
     const v = videoRef.current;
-    if (!v || !v.videoWidth) return;
+    if (!v || !v.videoWidth || hiddenRef.current) return;
     const small = document.createElement('canvas');
     small.width = 64; small.height = 36;
     const ctx = small.getContext('2d', { willReadFrequently: true })!;
@@ -137,16 +145,16 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
     if (announce) postShare('STOPPED');
   }, [postShare]);
 
-  // Ask the browser for the screen. Only the whole screen is asked for; what the person really chose is checked afterwards.
+  // Ask the browser for a WINDOW (the tool's). The whole screen is hidden from the dialog; what the person really chose is checked afterwards.
   const askScreen = useCallback(async (): Promise<{ stream: MediaStream; surface: string } | null> => {
     setShareProblem(null);
     if (!navigator.mediaDevices?.getDisplayMedia) { toast({ title: 'Screen sharing is not available in this browser', variant: 'destructive' }); return null; }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 2, displaySurface: 'monitor' }, audio: false,
-        monitorTypeSurfaces: 'include', selfBrowserSurface: 'exclude', surfaceSwitching: 'exclude',
+        video: { frameRate: 2, displaySurface: 'window' }, audio: false,
+        monitorTypeSurfaces: 'exclude', selfBrowserSurface: 'exclude', surfaceSwitching: 'exclude',
       } as any);
-      const surface = (stream.getVideoTracks()[0].getSettings() as any).displaySurface ?? 'monitor'; // a browser that does not say: taken as the whole screen
+      const surface = (stream.getVideoTracks()[0].getSettings() as any).displaySurface ?? 'monitor'; // a browser that does not say: taken as the whole screen (refused)
       return { stream, surface };
     } catch (e: any) {
       const why = e?.name === 'NotAllowedError' ? 'The sharing dialog was cancelled or the browser did not allow it.' : e?.name === 'NotFoundError' ? 'There is no screen to share.' : `The browser said: ${e?.name ?? 'unknown error'}.`;
@@ -157,8 +165,9 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
   }, []);
 
   const notWholeScreen = () => {
-    setShareProblem('Share the whole screen. A single window or browser tab is not accepted. In the sharing dialog choose "Entire screen" and press Share.');
-    toast({ title: 'Share the whole screen', description: 'A single window or browser tab is not accepted. In the sharing dialog choose "Entire screen" and press Share.', variant: 'destructive' });
+    const msg = 'Share only the window of the tool you work in. In the sharing dialog open the "Window" tab, pick that window and press Share. The whole screen and a browser tab are not accepted.';
+    setShareProblem(msg);
+    toast({ title: 'Share the tool window', description: msg, variant: 'destructive' });
   };
 
   // run the capture on a stream that was already accepted
@@ -167,18 +176,21 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
     const v = videoRef.current!;
     v.srcObject = stream;
     await v.play();
-    stream.getVideoTracks()[0].onended = () => endShare(true); // the person stopped sharing from the browser bar
+    const track = stream.getVideoTracks()[0];
+    track.onended = () => endShare(true); // the person stopped sharing from the browser bar
+    track.onmute = () => { hiddenRef.current = true; sendEvent('The shared window was minimised or hidden: no pictures taken'); };
+    track.onunmute = () => { hiddenRef.current = false; prevRef.current = null; sendEvent('The shared window is visible again'); };
     prevRef.current = null;
     lastShotRef.current = 0;
     setSharing(true);
     timerRef.current = window.setInterval(look, LOOK_EVERY_MS);
-  }, [endShare, look]);
+  }, [endShare, look, sendEvent]);
 
   // share (again) while a session is running
   const startShare = useCallback(async (requireWhole: boolean) => {
     const got = await askScreen();
     if (!got) { postShare('DENIED'); return false; }
-    if (requireWhole && got.surface !== 'monitor') {
+    if (requireWhole && got.surface !== 'window') {
       got.stream.getTracks().forEach((t) => t.stop());
       postShare('REJECTED');
       notWholeScreen();
@@ -216,10 +228,10 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
       const must = !!state?.requireShare;
       let got: { stream: MediaStream; surface: string } | null = null;
       if (must) {
-        // no work without the screen: ask first, and only the whole screen is accepted
+        // no work without the tool window: ask first, and only a window is accepted
         got = await askScreen();
         if (!got) return;
-        if (got.surface !== 'monitor') { got.stream.getTracks().forEach((t) => t.stop()); notWholeScreen(); return; }
+        if (got.surface !== 'window') { got.stream.getTracks().forEach((t) => t.stop()); notWholeScreen(); return; }
       }
       const r = await workApi.start(projectId, { linkUrl: link?.url ?? null, linkLabel: link?.label ?? null, surface: got?.surface ?? null });
       sessionRef.current = r.data.data.id; // events and pictures need the id before the page has re-drawn
@@ -322,9 +334,10 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
                   : <Badge className="bg-dbi-warning/20 text-dbi-warning">Screen is not shared</Badge>}
               </div>
               {shareProblem && <p role="alert" className="rounded-md border border-dbi-critical/40 bg-dbi-critical/10 p-2 text-sm text-dbi-critical">{shareProblem}</p>}
+              {sharing && skipped && <p className="rounded-md border border-dbi-warning/40 bg-dbi-warning/10 p-2 text-sm text-dbi-warning">The tool is not on the shared window, so pictures are not being kept. Open the tool in the window you shared.</p>}
               {!sharing && (
                 <p className="rounded-md border border-dbi-warning/40 bg-dbi-warning/10 p-2 text-sm text-dbi-warning">
-                  Your screen is not being shared, so this work has {active.evidence === 'NONE' ? 'no' : 'only partial'} screen evidence. Press "Share screen" and choose the whole screen.
+                  Your screen is not being shared, so this work has {active.evidence === 'NONE' ? 'no' : 'only partial'} screen evidence. Press "Share screen" and choose the window of the tool.
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
@@ -417,7 +430,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
               </table>
             </div>
           )}
-          <p className="mt-2 text-xs text-dbi-textSecondary"><b>Evidence</b>: how well the screen backs the session (Full = the whole screen was shared the whole time; Partial = sharing was cut or only a window was shared; No evidence = never shared). <b>Tool on screen</b>: how many screenshots show the tool's web address, read at night (a hint, not proof). The numbers in brackets are screenshots that show it / screenshots read.</p>
+          <p className="mt-2 text-xs text-dbi-textSecondary"><b>Evidence</b>: how well the screen backs the session (Full = the tool window was shared the whole time; Partial = sharing was cut or no picture; No evidence = never shared). <b>Tool on screen</b>: pictures that do not show the tool are not kept at all; this counts the ones that do. The numbers in brackets are screenshots that show it / screenshots read.</p>
           <p className="mt-2 text-xs text-dbi-textSecondary">Screenshots are deleted after the retention period; the notes and the generated KT stay. Documents made here are in the <Link className="underline" to={`/documents?projectId=${projectId}`}>Document Vault</Link>.</p>
         </CardContent>
       </Card>

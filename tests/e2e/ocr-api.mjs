@@ -44,7 +44,7 @@ const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
 let n = 0;
 const pic = async (l1, l2 = '') => { const j = new Jimp(1280, 720, 0xffffffff); j.print(font, 60, 100, l1); if (l2) j.print(font, 60, 220, l2); j.print(font, 60, 600, `frame number ${++n}`); return (await j.getBufferAsync(Jimp.MIME_JPEG)).toString('base64'); };
 const session = async (pid, body, texts) => {
-  const s = (await call('POST', `/projects/${pid}/work/start`, { surface: 'monitor', ...body }, S.a.token)).body.data.id;
+  const s = (await call('POST', `/projects/${pid}/work/start`, { surface: 'window', ...body }, S.a.token)).body.data.id;
   for (const t of texts) await call('POST', `/projects/${pid}/work/${s}/shot`, { image: await pic(...t), reason: 'CHANGE' }, S.a.token);
   await call('POST', `/projects/${pid}/work/${s}/stop`, null, S.a.token);
   return s;
