@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { uploadPolicyApi, usersApi } from '@/lib/api';
-import { vaultApi, type VaultFolder, type VaultGrant, type VaultLevel, type VaultSecret, type Revealed } from '@/lib/vaultApi';
+import { vaultApi, type AccessRequest, type WaitingRequest, type VaultFolder, type VaultGrant, type VaultLevel, type VaultSecret, type Revealed } from '@/lib/vaultApi';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTimeIST } from '@/lib/utils';
 
@@ -335,6 +335,121 @@ function ReasonDialog({ secret, busy, onConfirm, onClose }: { secret: VaultSecre
   );
 }
 
+// ---------- asking for access, and answering ----------
+const ASK_HOURS: [number, string][] = [[1, '1 hour'], [4, '4 hours'], [8, '8 hours'], [24, '1 day'], [72, '3 days'], [168, '7 days']];
+const hoursText = (h: number) => ASK_HOURS.find((x) => x[0] === h)?.[1] ?? (h % 24 === 0 ? `${h / 24} days` : `${h} hours`);
+const refreshRequests = (qc: ReturnType<typeof useQueryClient>) => { qc.invalidateQueries({ queryKey: ['vault-requests'] }); qc.invalidateQueries({ queryKey: ['vault-folders'] }); qc.invalidateQueries({ queryKey: ['vault-secrets'] }); };
+
+function AskDialog({ folder, onClose }: { folder: { id: string; name: string }; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [reason, setReason] = useState('');
+  const [hours, setHours] = useState(4);
+  const ok = reason.trim().length >= 5;
+  const ask = useMutation({
+    mutationFn: () => vaultApi.requestAccess(folder.id, { reason: reason.trim(), hours }),
+    onSuccess: () => { refreshRequests(qc); toast({ title: 'Request sent', description: 'An admin or the folder manager will answer. You will get a notification.' }); onClose(); },
+    onError: (e) => toast({ title: 'Could not send', description: errMsg(e), variant: 'destructive' }),
+  });
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !ask.isPending) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Ask for access to "{folder.name}"</DialogTitle><DialogDescription>You get view access for the time you pick, and it ends by itself. Say why you need it; the approver sees your reason.</DialogDescription></DialogHeader>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (ok) ask.mutate(); }}>
+          <div><Label htmlFor="ask-reason">Why do you need it? *</Label><Textarea id="ask-reason" autoFocus rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. firewall change for the Pune site, ticket 1234" /></div>
+          <div><Label htmlFor="ask-hours">For how long</Label><select id="ask-hours" className={field} value={hours} onChange={(e) => setHours(Number(e.target.value))}>{ASK_HOURS.map((h) => <option key={h[0]} value={h[0]}>{h[1]}</option>)}</select></div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={ask.isPending}>Cancel</Button>
+            <Button type="submit" disabled={!ok || ask.isPending}>{ask.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Send request</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DecideDialog({ req, onClose }: { req: WaitingRequest; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [hours, setHours] = useState(req.hours);
+  const [note, setNote] = useState('');
+  const go = useMutation({
+    mutationFn: (approve: boolean) => vaultApi.decide(req.id, approve ? { approve, hours, ...(note.trim() ? { note: note.trim() } : {}) } : { approve, note: note.trim() }),
+    onSuccess: (_d, approve) => { refreshRequests(qc); toast({ title: approve ? 'Access given' : 'Request refused' }); onClose(); },
+    onError: (e) => { refreshRequests(qc); toast({ title: 'Could not save the answer', description: errMsg(e), variant: 'destructive' }); },
+  });
+  const options = ASK_HOURS.some((h) => h[0] === req.hours) ? ASK_HOURS : [...ASK_HOURS, [req.hours, hoursText(req.hours)] as [number, string]].sort((a, b) => a[0] - b[0]);
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !go.isPending) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>{req.requester} wants to open "{req.folder}"</DialogTitle><DialogDescription>Asked for {hoursText(req.hours)} on {formatDateTimeIST(req.createdAt)}. Approving gives view access only, and it ends by itself.</DialogDescription></DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-md border border-dbi-border bg-dbi-elevated p-3 text-sm"><p className="text-xs text-dbi-textSecondary">Their reason</p>{req.reason}</div>
+          <div><Label htmlFor="dec-hours">Give access for</Label><select id="dec-hours" className={field} value={hours} onChange={(e) => setHours(Number(e.target.value))}>{options.map((h) => <option key={h[0]} value={h[0]}>{h[1]}</option>)}</select></div>
+          <div><Label htmlFor="dec-note">Note (needed if you refuse)</Label><Input id="dec-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. use the shared jump host instead" /></div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={go.isPending}>Close</Button>
+            <Button type="button" variant="destructive" disabled={go.isPending || note.trim().length < 5} onClick={() => go.mutate(false)}>Refuse</Button>
+            <Button type="button" disabled={go.isPending} onClick={() => go.mutate(true)}>{go.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Approve</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const STATUS_BADGE: Record<AccessRequest['status'], { v: 'warning' | 'success' | 'critical' | 'outline'; t: string }> = {
+  PENDING: { v: 'warning', t: 'Waiting' }, APPROVED: { v: 'success', t: 'Approved' }, DENIED: { v: 'critical', t: 'Refused' }, CANCELLED: { v: 'outline', t: 'Cancelled' },
+};
+
+function RequestsPanel({ onOpen }: { onOpen: (folderId: string) => void }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ['vault-requests'], queryFn: vaultApi.requests, refetchInterval: 30_000 });
+  const [deciding, setDeciding] = useState<WaitingRequest | null>(null);
+  const cancel = useMutation({
+    mutationFn: (id: string) => vaultApi.cancelRequest(id),
+    onSuccess: () => { refreshRequests(qc); toast({ title: 'Request cancelled' }); },
+    onError: (e) => toast({ title: 'Could not cancel', description: errMsg(e), variant: 'destructive' }),
+  });
+  const waiting = data?.toDecide ?? [];
+  const mine = (data?.mine ?? []).filter((r) => r.status === 'PENDING' || Date.now() - new Date(r.decidedAt ?? r.createdAt).getTime() < 7 * 86400_000);
+  if (!waiting.length && !mine.length) return null;
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {waiting.length > 0 && (
+        <Card><CardHeader className="pb-2"><CardTitle className="text-base">Waiting for your answer ({waiting.length})</CardTitle></CardHeader>
+          <CardContent className="divide-y divide-dbi-border p-0">
+            {waiting.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-3 p-3">
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{r.requester} · {r.folder}</p><p className="truncate text-xs text-dbi-textSecondary">{hoursText(r.hours)} · {r.reason}</p></div>
+                <Button size="sm" onClick={() => setDeciding(r)}>Review</Button>
+              </div>
+            ))}
+          </CardContent></Card>
+      )}
+      {mine.length > 0 && (
+        <Card><CardHeader className="pb-2"><CardTitle className="text-base">My requests</CardTitle></CardHeader>
+          <CardContent className="divide-y divide-dbi-border p-0">
+            {mine.map((r) => {
+              const live = r.status === 'APPROVED' && r.grantedUntil && new Date(r.grantedUntil) > new Date();
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-3 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{r.folder} <Badge variant={STATUS_BADGE[r.status].v} className="ml-1">{STATUS_BADGE[r.status].t}</Badge></p>
+                    <p className="truncate text-xs text-dbi-textSecondary">
+                      {r.status === 'APPROVED' ? (live ? `Open until ${formatDateTimeIST(r.grantedUntil!)}` : 'Access ended') : r.status === 'DENIED' ? `${r.decidedBy ?? 'An approver'}: ${r.decisionNote ?? ''}` : r.status === 'PENDING' ? `Asked for ${hoursText(r.hours)}` : 'You cancelled it'}
+                    </p>
+                  </div>
+                  {live && <Button size="sm" variant="outline" onClick={() => onOpen(r.folderId)}>Open</Button>}
+                  {r.status === 'PENDING' && <Button size="sm" variant="ghost" disabled={cancel.isPending} onClick={() => cancel.mutate(r.id)}>Cancel</Button>}
+                </div>
+              );
+            })}
+          </CardContent></Card>
+      )}
+      {deciding && <DecideDialog req={deciding} onClose={() => setDeciding(null)} />}
+    </div>
+  );
+}
+
 // ---------- inside one folder ----------
 function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'code' | 'password' | 'none'; onBack: () => void }) {
   const qc = useQueryClient();
@@ -346,6 +461,9 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
   const [edit, setEdit] = useState<VaultSecret | 'new' | null>(null);
   const [history, setHistory] = useState<VaultSecret | null>(null);
   const [access, setAccess] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const { data: reqs } = useQuery({ queryKey: ['vault-requests'], queryFn: vaultApi.requests });
+  const waitingMine = reqs?.mine.find((r) => r.folderId === folderId && r.status === 'PENDING');
 
   const del = useMutation({
     mutationFn: (v: { id: string; reason: string }) => vaultApi.deleteSecret(v.id, v.reason),
@@ -381,7 +499,9 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
       {data.folder.description && <p className="text-sm text-dbi-textSecondary">{data.folder.description}</p>}
       {!lvl && (
         <Card><CardContent className="flex items-center gap-3 p-4 text-sm text-dbi-textSecondary">
-          <ShieldAlert className="h-5 w-5 shrink-0" />You can see what is stored here but not open it. Ask an admin to give you access to this folder.
+          <ShieldAlert className="h-5 w-5 shrink-0" />
+          <span className="min-w-0 flex-1">You can see what is stored here but not open it.{waitingMine ? ` Your request for ${hoursText(waitingMine.hours)} is waiting for an answer.` : ' Ask for access and say why you need it.'}</span>
+          {!waitingMine && <Button size="sm" onClick={() => setAsking(true)}>Request access</Button>}
         </CardContent></Card>
       )}
       <Card>
@@ -419,6 +539,7 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
       {edit && <SecretDialog folderId={folderId} secret={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
       {history && <HistoryDialog secret={history} onClose={() => setHistory(null)} />}
       {access && <AccessDialog folder={data.folder} onClose={() => setAccess(false)} />}
+      {asking && <AskDialog folder={data.folder} onClose={() => setAsking(false)} />}
     </div>
   );
 }
@@ -460,6 +581,8 @@ export function Vault() {
         </div>
         {status?.canCreateFolder && !open && <Button className="ml-auto" onClick={() => setCreating(true)}><Plus className="mr-2 h-4 w-4" />New folder</Button>}
       </div>
+
+      {!open && <RequestsPanel onOpen={setOpen} />}
 
       {open ? (
         <FolderView folderId={open} stepUp={status?.stepUp ?? 'password'} onBack={() => setOpen(null)} />

@@ -8,6 +8,8 @@ export interface VaultFolder { id: string; name: string; description: string | n
 export interface VaultSecret { id: string; name: string; type: SecretType; description: string | null; currentVersion: number; expiresAt: string | null; updatedAt: string; fileSize: number | null; createdAt: string; createdBy: string | null; changedBy: string | null; changedAt: string }
 export interface VaultGrant { id: string; userId: string; level: VaultLevel; expiresAt: string | null; expired: boolean; user: { fullName: string; email: string; role: string } | null }
 export interface VaultVersion { version: number; reason: string | null; createdAt: string; by: string | null }
+export interface AccessRequest { id: string; folderId: string; folder: string; reason: string; hours: number; status: 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED'; createdAt: string; decidedBy: string | null; decidedAt: string | null; decisionNote: string | null; grantedUntil: string | null }
+export interface WaitingRequest { id: string; folderId: string; folder: string; reason: string; hours: number; createdAt: string; requester: string }
 export interface Revealed { username?: string; url?: string; value: string; version: number }
 
 const qs = (o: Record<string, string | undefined>) => Object.entries(o).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&');
@@ -27,6 +29,10 @@ export const vaultApi = {
     api.put(`/v1/vault/folders/${folderId}/secrets/file?${qs({ filename: file.name, ...o })}`, file, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 300_000 }),
   replaceFile: (id: string, file: File, reason: string) =>
     api.put(`/v1/vault/secrets/${id}/file?${qs({ filename: file.name, reason })}`, file, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 300_000 }),
+  requests: () => d<{ mine: AccessRequest[]; toDecide: WaitingRequest[] }>(api.get('/v1/vault/requests')),
+  requestAccess: (folderId: string, b: { reason: string; hours: number }) => api.post(`/v1/vault/folders/${folderId}/requests`, b),
+  decide: (id: string, b: { approve: boolean; hours?: number; note?: string }) => api.post(`/v1/vault/requests/${id}/decide`, b),
+  cancelRequest: (id: string) => api.post(`/v1/vault/requests/${id}/cancel`),
   versions: (id: string) => d<VaultVersion[]>(api.get(`/v1/vault/secrets/${id}/versions`)),
   reveal: (id: string, b: { password?: string; code?: string }) => d<Revealed>(api.post(`/v1/vault/secrets/${id}/reveal`, b)),
   grants: (folderId: string) => d<VaultGrant[]>(api.get(`/v1/vault/folders/${folderId}/grants`)),

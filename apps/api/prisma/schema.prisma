@@ -910,6 +910,8 @@ enum NotificationType {
   CRITICAL_ALERT
   SYSTEM_MAINTENANCE
   SECRET_CHANGED
+  SECRET_ACCESS_REQUEST
+  SECRET_ACCESS_DECIDED
 }
 
 model AuditLog {
@@ -1240,6 +1242,7 @@ model SecretFolder {
 
   secrets Secret[]
   grants  SecretGrant[]
+  requests SecretAccessRequest[]
 
   @@map("secret_folders")
 }
@@ -1282,6 +1285,34 @@ model SecretVersion {
 
   @@unique([secretId, version])
   @@map("secret_versions")
+}
+
+enum SecretRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+}
+
+// Someone with no access asks to open a folder, with a reason. An approver says yes (for a set time) or no.
+model SecretAccessRequest {
+  id           String                @id @default(uuid())
+  folderId     String
+  requesterId  String
+  reason       String
+  hours        Int                   // how long the person asked for
+  status       SecretRequestStatus   @default(PENDING)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  grantedUntil DateTime?
+  createdAt    DateTime              @default(now())
+
+  folder SecretFolder @relation(fields: [folderId], references: [id])
+
+  @@index([folderId, status])
+  @@index([requesterId])
+  @@map("secret_access_requests")
 }
 
 model SecretGrant {

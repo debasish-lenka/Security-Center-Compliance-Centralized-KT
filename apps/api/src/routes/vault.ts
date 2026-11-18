@@ -51,6 +51,8 @@ const GrantSchema = z.object({
   level: z.enum(['VIEW', 'EDIT', 'MANAGE']),
   expiresAt: z.string().datetime().optional().nullable(),
 });
+const RequestSchema = z.object({ reason: Reason, hours: z.number().int().min(1).max(168) });
+const DecideSchema = z.object({ approve: z.boolean(), hours: z.number().int().min(1).max(720).optional(), note: z.string().trim().max(300).optional() });
 const FileQuery = z.object({
   filename: z.string().trim().min(1).max(255),
   name: z.string().trim().min(1).max(150).optional(),
@@ -386,6 +388,100 @@ export async function vaultRoutes(app: FastifyInstance) {
     await notifyChange(request, id, s.name, s.folderId, `replaced the file (now version ${version}) of`, q.reason);
     await log(request, 'UPLOAD', 'secret', id, { name: s.name, reason: q.reason, newVersion: version, size: bytes.length });
     return reply.send({ success: true, data: { id, version } });
+  });
+
+  // ---------- asking for access ----------
+  // Who may say yes: any admin, and anyone holding Manage on that folder
+  const canDecide = async (request: FastifyRequest, folderId: string) =>
+    ADMINS.includes(request.user!.role) || atLeast(await levelOn(request.userId!, folderId), 'MANAGE');
+  const approversOf = async (folderId: string, notId: string) => {
+    const [admins, managers] = await Promise.all([
+      app.prisma.profile.findMany({ where: { role: { in: ADMINS as any }, status: 'ACTIVE', id: { not: notId } }, select: { id: true } }),
+      app.prisma.secretGrant.findMany({ where: { folderId, level: 'MANAGE', userId: { not: notId }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { userId: true } }),
+    ]);
+    return [...new Set([...admins.map((a) => a.id), ...managers.map((m) => m.userId)])];
+  };
+  const hoursText = (h: number) => (h % 24 === 0 ? `${h / 24} day${h === 24 ? '' : 's'}` : `${h} hour${h === 1 ? '' : 's'}`);
+
+  app.post('/folders/:id/requests', { preHandler: pre, schema: { body: RequestSchema } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const b = request.body as z.infer<typeof RequestSchema>;
+    const folder = await app.prisma.secretFolder.findFirst({ where: { id, deletedAt: null }, select: { id: true, name: true } });
+    if (!folder) return err(reply, 404, 'NOT_FOUND', 'Folder not found');
+    if (await levelOn(request.userId!, id)) return err(reply, 409, 'HAS_ACCESS', 'You already have access to this folder');
+    if (await app.prisma.secretAccessRequest.findFirst({ where: { folderId: id, requesterId: request.userId!, status: 'PENDING' }, select: { id: true } }))
+      return err(reply, 409, 'ALREADY_ASKED', 'You already asked for this folder. Wait for an answer.');
+    const row = await app.prisma.secretAccessRequest.create({ data: { folderId: id, requesterId: request.userId!, reason: b.reason, hours: b.hours } });
+    try {
+      const ids = await approversOf(id, request.userId!);
+      if (ids.length) await app.prisma.notification.createMany({ data: ids.map((u) => ({
+        userId: u, type: 'SECRET_ACCESS_REQUEST' as const, resourceType: 'secret', resourceId: id,
+        title: `Access request: ${folder.name}`,
+        message: `${request.user!.fullName} asks to open the folder "${folder.name}" for ${hoursText(b.hours)}. Reason: ${b.reason}`,
+      })) });
+    } catch (e) { app.log.warn({ err: e }, 'could not send the access-request alert'); }
+    await log(request, 'CREATE', 'secret_request', row.id, { folderId: id, hours: b.hours, reason: b.reason });
+    return reply.code(201).send({ success: true, data: { id: row.id } });
+  });
+
+  // my own requests, and the ones waiting for me to decide
+  app.get('/requests', { preHandler: pre }, async (request, reply) => {
+    const me = request.userId!;
+    const isAdmin = ADMINS.includes(request.user!.role);
+    const managed = isAdmin ? null : (await app.prisma.secretGrant.findMany({ where: { userId: me, level: 'MANAGE', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { folderId: true } })).map((g) => g.folderId);
+    const [mine, waiting] = await Promise.all([
+      app.prisma.secretAccessRequest.findMany({ where: { requesterId: me }, orderBy: { createdAt: 'desc' }, take: 20, include: { folder: { select: { name: true } } } }),
+      app.prisma.secretAccessRequest.findMany({
+        where: { status: 'PENDING', requesterId: { not: me }, ...(managed ? { folderId: { in: managed } } : {}) },
+        orderBy: { createdAt: 'asc' }, take: 100, include: { folder: { select: { name: true } } },
+      }),
+    ]);
+    const ids = [...new Set([...mine.map((r) => r.decidedById), ...waiting.map((r) => r.requesterId)].filter(Boolean) as string[])];
+    const names = new Map((await app.prisma.profile.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true } })).map((p) => [p.id, p.fullName]));
+    return reply.send({ success: true, data: {
+      mine: mine.map((r) => ({ id: r.id, folderId: r.folderId, folder: r.folder.name, reason: r.reason, hours: r.hours, status: r.status, createdAt: r.createdAt, decidedBy: r.decidedById ? names.get(r.decidedById) ?? null : null, decidedAt: r.decidedAt, decisionNote: r.decisionNote, grantedUntil: r.grantedUntil })),
+      toDecide: waiting.map((r) => ({ id: r.id, folderId: r.folderId, folder: r.folder.name, reason: r.reason, hours: r.hours, createdAt: r.createdAt, requester: names.get(r.requesterId) ?? 'Unknown' })),
+    } });
+  });
+
+  app.post('/requests/:id/decide', { preHandler: pre, schema: { body: DecideSchema } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const b = request.body as z.infer<typeof DecideSchema>;
+    const r = await app.prisma.secretAccessRequest.findUnique({ where: { id }, include: { folder: { select: { name: true, deletedAt: true } } } });
+    if (!r) return err(reply, 404, 'NOT_FOUND', 'Request not found');
+    if (!(await canDecide(request, r.folderId))) return err(reply, 403, 'FORBIDDEN', 'Only an admin or a manager of this folder can answer');
+    if (r.requesterId === request.userId) return err(reply, 403, 'OWN_REQUEST', 'You cannot answer your own request. Another approver must do it.');
+    if (!b.approve && (b.note ?? '').length < 5) return err(reply, 400, 'NOTE_REQUIRED', 'Write why you are saying no (at least 5 characters)');
+    if (b.approve && r.folder.deletedAt) return err(reply, 409, 'GONE', 'That folder no longer exists');
+    const hours = b.hours ?? r.hours;
+    const until = b.approve ? new Date(Date.now() + hours * 3600_000) : null;
+    // only the first answer counts, even if two approvers click at once
+    const won = await app.prisma.secretAccessRequest.updateMany({
+      where: { id, status: 'PENDING' },
+      data: { status: b.approve ? 'APPROVED' : 'DENIED', decidedById: request.userId!, decidedAt: new Date(), decisionNote: b.note || null, grantedUntil: until },
+    });
+    if (won.count === 0) return err(reply, 409, 'ALREADY_DECIDED', 'Somebody else already answered this request');
+    if (until && !(await levelOn(r.requesterId, r.folderId))) {
+      const data = { level: 'VIEW' as const, expiresAt: until, grantedById: request.userId! };
+      await app.prisma.secretGrant.upsert({ where: { folderId_userId: { folderId: r.folderId, userId: r.requesterId } }, create: { folderId: r.folderId, userId: r.requesterId, ...data }, update: data });
+    }
+    try {
+      await app.prisma.notification.create({ data: {
+        userId: r.requesterId, type: 'SECRET_ACCESS_DECIDED', resourceType: 'secret', resourceId: r.folderId,
+        title: b.approve ? `Access approved: ${r.folder.name}` : `Access refused: ${r.folder.name}`,
+        message: b.approve ? `${request.user!.fullName} gave you view access to "${r.folder.name}" for ${hoursText(hours)}.${b.note ? ` Note: ${b.note}` : ''}` : `${request.user!.fullName} refused your request for "${r.folder.name}". Reason: ${b.note}`,
+      } });
+    } catch (e) { app.log.warn({ err: e }, 'could not send the answer'); }
+    await log(request, 'SHARE', 'secret_request', id, { folderId: r.folderId, requesterId: r.requesterId, approved: b.approve, hours: b.approve ? hours : null, note: b.note ?? null });
+    return reply.send({ success: true, data: { status: b.approve ? 'APPROVED' : 'DENIED', grantedUntil: until } });
+  });
+
+  app.post('/requests/:id/cancel', { preHandler: pre }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const done = await app.prisma.secretAccessRequest.updateMany({ where: { id, requesterId: request.userId!, status: 'PENDING' }, data: { status: 'CANCELLED', decidedAt: new Date() } });
+    if (done.count === 0) return err(reply, 404, 'NOT_FOUND', 'No waiting request of yours with that id');
+    await log(request, 'UPDATE', 'secret_request', id, { cancelled: true });
+    return reply.send({ success: true, data: null });
   });
 
   // ---------- who has access ----------
