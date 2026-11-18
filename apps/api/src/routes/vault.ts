@@ -267,7 +267,7 @@ export async function vaultRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: v.map((x) => ({ version: x.version, reason: x.reason, createdAt: x.createdAt, by: x.createdById ? names.get(x.createdById) ?? null : null })) });
   });
 
-  // ---------- reveal / download ----------
+  // ---------- reveal (there is no download: nothing can be taken out of the vault as a file) ----------
   // Shared by "show" and "download": a VIEW grant first, then a fresh check that it really is the account owner
   async function gate(request: FastifyRequest, reply: any, id: string, action: 'VIEW' | 'DOWNLOAD') {
     const userId = request.userId!;
@@ -305,7 +305,7 @@ export async function vaultRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const g = await gate(request, reply, id, 'VIEW');
     if (!g) return;
-    if (g.s.type === 'FILE') return err(reply, 400, 'IS_FILE', 'This secret is a file. Use Download.');
+    if (g.s.type === 'FILE') return err(reply, 400, 'IS_FILE', 'This secret is a file. Files cannot be downloaded from the Secret Manager.');
     const row = await app.prisma.secretVersion.findUnique({ where: { secretId_version: { secretId: id, version: g.s.currentVersion } } });
     if (!row) return err(reply, 500, 'MISSING', 'This secret has no stored value');
     let payload;
@@ -314,28 +314,6 @@ export async function vaultRoutes(app: FastifyInstance) {
     await log(request, 'VIEW', 'secret', id, { ...g.detail, version: row.version });
     reply.header('Cache-Control', 'no-store');
     return reply.send({ success: true, data: { ...payload, version: row.version } });
-  });
-
-  app.post('/secrets/:id/download', { preHandler: pre, schema: { body: StepUp }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const g = await gate(request, reply, id, 'DOWNLOAD');
-    if (!g) return;
-    if (g.s.type !== 'FILE') return err(reply, 400, 'NOT_FILE', 'This secret is not a file');
-    const row = await app.prisma.secretVersion.findUnique({ where: { secretId_version: { secretId: id, version: g.s.currentVersion } } });
-    if (!row?.filePath) return err(reply, 500, 'MISSING', 'The stored file is missing on the server');
-    let name = 'file';
-    let bytes: Buffer;
-    try {
-      const chunks: Buffer[] = [];
-      for await (const c of storage.openRead(row.filePath)) chunks.push(c as Buffer);
-      name = openSecret(row, id, row.version).file?.name ?? name;
-      bytes = openSecretFile(row, Buffer.concat(chunks), id, row.version);
-    } catch { return err(reply, 500, 'DECRYPT_FAILED', 'The file could not be decrypted. Is VAULT_MASTER_KEY the same key it was saved with, and is the file still on the server?'); }
-    await log(request, 'DOWNLOAD', 'secret', id, { ...g.detail, version: row.version, size: bytes.length });
-    reply.header('Cache-Control', 'no-store');
-    reply.header('X-Content-Type-Options', 'nosniff');
-    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
-    return reply.type('application/octet-stream').send(bytes);
   });
 
   // ---------- file secrets (upload) ----------

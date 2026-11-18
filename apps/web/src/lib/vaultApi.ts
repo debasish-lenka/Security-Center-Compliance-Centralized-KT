@@ -27,17 +27,6 @@ export const vaultApi = {
     api.put(`/v1/vault/folders/${folderId}/secrets/file?${qs({ filename: file.name, ...o })}`, file, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 300_000 }),
   replaceFile: (id: string, file: File, reason: string) =>
     api.put(`/v1/vault/secrets/${id}/file?${qs({ filename: file.name, reason })}`, file, { headers: { 'Content-Type': 'application/octet-stream' }, timeout: 300_000 }),
-  download: async (id: string, b: { password?: string; code?: string }) => {
-    try {
-      const r = await api.post(`/v1/vault/secrets/${id}/download`, b, { responseType: 'blob', timeout: 300_000 });
-      const m = /filename\*=UTF-8''([^;]+)/i.exec(String(r.headers['content-disposition'] ?? ''));
-      return { blob: r.data as Blob, name: m ? decodeURIComponent(m[1]) : 'file' };
-    } catch (e: any) {
-      // an error body also arrives as a Blob; turn it back into the usual { error: { message } } shape
-      if (e?.response?.data instanceof Blob) { try { e.response.data = JSON.parse(await e.response.data.text()); } catch { /* keep as is */ } }
-      throw e;
-    }
-  },
   versions: (id: string) => d<VaultVersion[]>(api.get(`/v1/vault/secrets/${id}/versions`)),
   reveal: (id: string, b: { password?: string; code?: string }) => d<Revealed>(api.post(`/v1/vault/secrets/${id}/reveal`, b)),
   grants: (folderId: string) => d<VaultGrant[]>(api.get(`/v1/vault/folders/${folderId}/grants`)),

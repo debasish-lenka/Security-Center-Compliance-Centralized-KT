@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, Copy, Download, Eye, EyeOff, FileUp, FolderLock, History, Loader2, LockKeyhole, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Clock, Copy, Eye, EyeOff, FileUp, FolderLock, History, Loader2, LockKeyhole, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -18,12 +18,6 @@ const field = 'h-10 w-full rounded-md border border-dbi-border bg-dbi-elevated p
 const LEVEL_TEXT: Record<VaultLevel, string> = { VIEW: 'Can view', EDIT: 'Can edit', MANAGE: 'Manager' };
 const TYPE_TEXT = { LOGIN: 'Login', API_KEY: 'API key', NOTE: 'Note', FILE: 'File' } as const;
 const size = (b: number | null) => (b == null ? '' : b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
-const saveBlob = (blob: Blob, name: string) => {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-};
 const REVEAL_SECONDS = 30;
 
 function LevelBadge({ level }: { level: VaultLevel | null }) {
@@ -261,37 +255,6 @@ function HistoryDialog({ secret, onClose }: { secret: VaultSecret; onClose: () =
   );
 }
 
-// ---------- a file secret: ask again who you are, then the decrypted file is saved ----------
-function DownloadDialog({ secret, stepUp, onClose }: { secret: VaultSecret; stepUp: 'code' | 'password' | 'none'; onClose: () => void }) {
-  const [proof, setProof] = useState('');
-  const go = useMutation({
-    mutationFn: () => vaultApi.download(secret.id, stepUp === 'code' ? { code: proof } : { password: proof }),
-    onSuccess: ({ blob, name }) => { saveBlob(blob, name); toast({ title: 'Downloaded', description: name }); onClose(); },
-    onError: (e) => toast({ title: 'Could not download', description: errMsg(e), variant: 'destructive' }),
-  });
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o && !go.isPending) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{secret.name}</DialogTitle><DialogDescription>The file is decrypted on the server and saved on your computer. This is written to the audit log with your name.</DialogDescription></DialogHeader>
-        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (proof.trim()) go.mutate(); }}>
-          {stepUp === 'none' ? (
-            <p className="text-sm text-dbi-textSecondary">Turn on two-factor authentication in Settings first.</p>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="dl-proof">{stepUp === 'code' ? 'Authenticator code (6 digits)' : 'Your password'}</Label>
-              <Input id="dl-proof" autoFocus autoComplete={stepUp === 'code' ? 'one-time-code' : 'current-password'} type={stepUp === 'code' ? 'text' : 'password'} inputMode={stepUp === 'code' ? 'numeric' : undefined} value={proof} onChange={(e) => setProof(e.target.value)} />
-            </div>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose} disabled={go.isPending}>Cancel</Button>
-            <Button type="submit" disabled={go.isPending || !proof.trim() || stepUp === 'none'}>{go.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}Download</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ---------- upload a file (e.g. a zip of shared credentials), or put a newer file in place of it ----------
 function FileDialog({ folderId, secret, onClose }: { folderId: string; secret: VaultSecret | null; onClose: () => void }) {
   const qc = useQueryClient();
@@ -378,7 +341,6 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
   const { data: status } = useQuery({ queryKey: ['vault-status'], queryFn: vaultApi.status });
   const { data, isLoading, isError } = useQuery({ queryKey: ['vault-secrets', folderId], queryFn: () => vaultApi.secrets(folderId) });
   const [reveal, setReveal] = useState<VaultSecret | null>(null);
-  const [download, setDownload] = useState<VaultSecret | null>(null);
   const [removing, setRemoving] = useState<VaultSecret | null>(null);
   const [file, setFile] = useState<VaultSecret | 'new' | null>(null);
   const [edit, setEdit] = useState<VaultSecret | 'new' | null>(null);
@@ -437,9 +399,9 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
                       <p className="truncate text-xs text-dbi-textSecondary">{s.type === 'FILE' ? 'Uploaded' : 'Added'} by <b className="font-medium text-dbi-textPrimary">{s.createdBy ?? 'unknown'}</b> on {formatDateTimeIST(s.createdAt)}{s.currentVersion > 1 && <> · last changed by <b className="font-medium text-dbi-textPrimary">{s.changedBy ?? 'unknown'}</b> on {formatDateTimeIST(s.changedAt)}</>}</p>
                     </div>
                     <div className="flex gap-1">
-                      {can('VIEW') && (s.type === 'FILE'
-                        ? <Button size="sm" onClick={() => setDownload(s)}><Download className="mr-1 h-4 w-4" />Download</Button>
-                        : <Button size="sm" onClick={() => setReveal(s)}><Eye className="mr-1 h-4 w-4" />Show</Button>)}
+                      {s.type === 'FILE'
+                        ? <Badge variant="secondary" title="Files cannot be downloaded from the Secret Manager">No download</Badge>
+                        : can('VIEW') && <Button size="sm" onClick={() => setReveal(s)}><Eye className="mr-1 h-4 w-4" />Show</Button>}
                       {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => (s.type === 'FILE' ? setFile(s) : setEdit(s))} aria-label="Change"><Pencil className="h-4 w-4" /></Button>}
                       {can('EDIT') && <Button size="icon" variant="ghost" onClick={() => setHistory(s)} aria-label="Versions"><History className="h-4 w-4" /></Button>}
                       {can('MANAGE') && <Button size="icon" variant="ghost" onClick={() => setRemoving(s)} aria-label="Remove"><Trash2 className="h-4 w-4" /></Button>}
@@ -453,7 +415,6 @@ function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'c
       </Card>
       {removing && <ReasonDialog secret={removing} busy={del.isPending} onConfirm={(reason) => del.mutate({ id: removing.id, reason })} onClose={() => setRemoving(null)} />}
       {reveal && <RevealDialog secret={reveal} stepUp={stepUp} onClose={() => setReveal(null)} />}
-      {download && <DownloadDialog secret={download} stepUp={stepUp} onClose={() => setDownload(null)} />}
       {file && <FileDialog folderId={folderId} secret={file === 'new' ? null : file} onClose={() => setFile(null)} />}
       {edit && <SecretDialog folderId={folderId} secret={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
       {history && <HistoryDialog secret={history} onClose={() => setHistory(null)} />}
