@@ -1278,6 +1278,7 @@ model SecretVersion {
   reason      String?
   filePath    String?  // FILE secrets: the encrypted file, relative to STORAGE_DIR
   fileSize    Int?     // size of the original file in bytes
+  blobSha256  String?  // checksum of the encrypted file on disk (checked by the backup check)
   createdById String?
   createdAt   DateTime @default(now())
 

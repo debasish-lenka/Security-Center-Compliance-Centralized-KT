@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
-import { chmod } from 'fs/promises';
+import { chmod, readFile } from 'fs/promises';
 import { join } from 'path';
 import { env } from '../utils/env.js';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ import { getStorageService } from '../services/storage.js';
 import { VIRUS_SCAN_ENABLED, scanUpload } from '../services/virus-scan.js';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '../services/upload-policy.js';
 import { openSecret, openSecretFile, sealSecret, vaultEnabled } from '../services/vault-crypto.js';
+import { blobHash, keepBackup, readBackups, sameVersion } from '../services/vault-backup.js';
 
 // Secret Manager. Everyone signed in sees folder and secret NAMES (so they can ask for access);
 // values are only returned by /reveal, and only to someone holding a VIEW grant, after a fresh password / 2FA check.
@@ -201,9 +202,10 @@ export async function vaultRoutes(app: FastifyInstance) {
     const secret = await app.prisma.secret.create({
       data: { folderId: id, name: b.name, type: b.type, description: b.description || null, expiresAt: b.expiresAt ? new Date(b.expiresAt) : null, createdById: request.userId },
     });
-    await app.prisma.secretVersion.create({
+    const v1 = await app.prisma.secretVersion.create({
       data: { secretId: secret.id, version: 1, ...sealSecret({ username: b.username || undefined, url: b.url || undefined, value: b.value }, secret.id, 1), reason: 'Created', createdById: request.userId },
     });
+    await keepBackup(v1); // every saved version gets its own backup file, never overwritten
     await log(request, 'CREATE', 'secret', secret.id, { name: secret.name, folderId: id, type: secret.type });
     return reply.code(201).send({ success: true, data: { id: secret.id, name: secret.name } });
   });
@@ -227,7 +229,8 @@ export async function vaultRoutes(app: FastifyInstance) {
         value: b.value ?? before.value,
       };
       version = s.currentVersion + 1;
-      await app.prisma.secretVersion.create({ data: { secretId: id, version, ...sealSecret(next, id, version), reason: b.reason, createdById: request.userId } });
+      const nv = await app.prisma.secretVersion.create({ data: { secretId: id, version, ...sealSecret(next, id, version), reason: b.reason, createdById: request.userId } });
+      await keepBackup(nv);
     }
     await app.prisma.secret.update({
       where: { id },
@@ -344,7 +347,7 @@ export async function vaultRoutes(app: FastifyInstance) {
     // Readable by the host's backup job (it runs outside the container as another user). Safe: the file is AES-256-GCM
     // ciphertext and the key is never stored beside it. Access is still controlled by the vault's own routes.
     await chmod(join(env.STORAGE_DIR, key), 0o644).catch(() => {});
-    return { key, row: { secretId, version, valueEnc: sealed.valueEnc, dekEnc: sealed.dekEnc, keyId: sealed.keyId, filePath: key, fileSize: bytes.length, reason, createdById: userId } };
+    return { key, row: { secretId, version, valueEnc: sealed.valueEnc, dekEnc: sealed.dekEnc, keyId: sealed.keyId, filePath: key, fileSize: bytes.length, reason, createdById: userId, blobSha256: blobHash(sealed.fileBlob!) } };
   }
 
   app.put('/folders/:id/secrets/file', { preHandler: pre, schema: { querystring: FileQuery } }, async (request, reply) => {
@@ -357,12 +360,14 @@ export async function vaultRoutes(app: FastifyInstance) {
     const filename = cleanName(q.filename);
     const secretId = randomUUID();
     const f = await sealFile(secretId, 1, filename, bytes, request.userId!, 'Uploaded');
+    let saved;
     try {
-      await app.prisma.$transaction([
+      [, saved] = await app.prisma.$transaction([
         app.prisma.secret.create({ data: { id: secretId, folderId: id, name: q.name || filename, type: 'FILE', description: q.description || null, expiresAt: q.expiresAt ? new Date(q.expiresAt) : null, createdById: request.userId } }),
         app.prisma.secretVersion.create({ data: f.row }),
       ]);
     } catch (e) { await storage.delete(f.key).catch(() => {}); throw e; }
+    await keepBackup(saved!);
     await log(request, 'UPLOAD', 'secret', secretId, { name: q.name || filename, folderId: id, size: bytes.length });
     return reply.code(201).send({ success: true, data: { id: secretId, name: q.name || filename } });
   });
@@ -379,12 +384,14 @@ export async function vaultRoutes(app: FastifyInstance) {
     if (!bytes) return;
     const version = s.currentVersion + 1;
     const f = await sealFile(id, version, cleanName(q.filename), bytes, request.userId!, q.reason);
+    let saved;
     try {
-      await app.prisma.$transaction([
+      [saved] = await app.prisma.$transaction([
         app.prisma.secretVersion.create({ data: f.row }),
         app.prisma.secret.update({ where: { id }, data: { currentVersion: version } }),
       ]);
     } catch (e) { await storage.delete(f.key).catch(() => {}); throw e; }
+    await keepBackup(saved!);
     await notifyChange(request, id, s.name, s.folderId, `replaced the file (now version ${version}) of`, q.reason);
     await log(request, 'UPLOAD', 'secret', id, { name: s.name, reason: q.reason, newVersion: version, size: bytes.length });
     return reply.send({ success: true, data: { id, version } });
@@ -482,6 +489,80 @@ export async function vaultRoutes(app: FastifyInstance) {
     if (done.count === 0) return err(reply, 404, 'NOT_FOUND', 'No waiting request of yours with that id');
     await log(request, 'UPDATE', 'secret_request', id, { cancelled: true });
     return reply.send({ success: true, data: null });
+  });
+
+  // ---------- backups of every saved version (super admin) ----------
+  // The check compares the database with the backup files. Repair writes a backup for any version that has none.
+  // Restore puts back a version that is in a valid backup file but missing from the database. Nothing is ever overwritten or deleted.
+  const SUPER = ['SUPER_ADMIN'];
+  const versionRows = () => app.prisma.secretVersion.findMany({ orderBy: [{ secretId: 'asc' }, { version: 'asc' }] });
+  const key = (x: { secretId: string; version: number }) => `${x.secretId}:${x.version}`;
+  const blobProblem = async (r: { filePath: string | null; blobSha256: string | null }) => {
+    if (!r.filePath) return null;
+    try {
+      const h = blobHash(await readFile(join(env.STORAGE_DIR, r.filePath)));
+      return r.blobSha256 && h !== r.blobSha256 ? 'the file does not match its saved checksum' : null;
+    } catch { return 'the encrypted file is missing on the server'; }
+  };
+
+  async function backupReport() {
+    const [rows, saved] = await Promise.all([versionRows(), readBackups()]);
+    const valid = saved.filter((s) => s.valid && s.data).map((s) => s.data!);
+    const unbacked = rows.filter((r) => !valid.some((v) => sameVersion(v, r)));
+    const missingInDb = valid.filter((v) => !rows.some((r) => key(r) === key(v)));
+    const fileProblems: { secretId: string; version: number; problem: string }[] = [];
+    for (const r of rows) {
+      const p = await blobProblem(r);
+      if (p) fileProblems.push({ secretId: r.secretId, version: r.version, problem: p });
+    }
+    return {
+      versions: rows.length,
+      backupFiles: saved.length,
+      unbacked: unbacked.map((r) => ({ secretId: r.secretId, version: r.version })),
+      missingInDb: missingInDb.map((v) => ({ secretId: v.secretId, version: v.version })),
+      badBackupFiles: saved.filter((s) => !s.valid).map((s) => s.file),
+      fileProblems,
+    };
+  }
+
+  app.get('/backups', { preHandler: [...pre, app.requireRole(SUPER)] }, async (_request, reply) => {
+    return reply.send({ success: true, data: await backupReport() });
+  });
+
+  app.post('/backups/repair', { preHandler: [...pre, app.requireRole(SUPER)] }, async (request, reply) => {
+    const rows = await versionRows();
+    const valid = (await readBackups()).filter((s) => s.valid && s.data).map((s) => s.data!);
+    let written = 0;
+    for (const r of rows) {
+      if (valid.some((v) => sameVersion(v, r))) continue;
+      await keepBackup(r);
+      written++;
+    }
+    await log(request, 'CREATE', 'secret_backup', null, { written });
+    return reply.send({ success: true, data: { written } });
+  });
+
+  app.post('/backups/restore', { preHandler: [...pre, app.requireRole(SUPER)] }, async (request, reply) => {
+    const rows = await versionRows();
+    const saved = await readBackups();
+    let restored = 0;
+    const skipped: { secretId: string; version: number; why: string }[] = [];
+    for (const s of saved) {
+      const v = s.data;
+      if (!s.valid || !v) continue;
+      if (rows.some((r) => key(r) === key(v))) continue;
+      const secret = await app.prisma.secret.findUnique({ where: { id: v.secretId }, select: { currentVersion: true } });
+      if (!secret) { skipped.push({ secretId: v.secretId, version: v.version, why: 'the secret no longer exists' }); continue; }
+      const p = await blobProblem(v);
+      if (p) { skipped.push({ secretId: v.secretId, version: v.version, why: p }); continue; }
+      await app.prisma.$transaction([
+        app.prisma.secretVersion.create({ data: { secretId: v.secretId, version: v.version, valueEnc: v.valueEnc, dekEnc: v.dekEnc, keyId: v.keyId, filePath: v.filePath, fileSize: v.fileSize, reason: v.reason, createdById: v.createdById, createdAt: v.createdAt, blobSha256: v.blobSha256 } }),
+        app.prisma.secret.update({ where: { id: v.secretId }, data: { currentVersion: Math.max(secret.currentVersion, v.version) } }),
+      ]);
+      restored++;
+    }
+    await log(request, 'UPDATE', 'secret_backup', null, { restored, skipped: skipped.length });
+    return reply.send({ success: true, data: { restored, skipped } });
   });
 
   // ---------- who has access ----------

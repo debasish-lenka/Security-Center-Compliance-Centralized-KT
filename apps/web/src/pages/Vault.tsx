@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { uploadPolicyApi, usersApi } from '@/lib/api';
-import { vaultApi, type AccessRequest, type WaitingRequest, type VaultFolder, type VaultGrant, type VaultLevel, type VaultSecret, type Revealed } from '@/lib/vaultApi';
+import { vaultApi, type BackupReport, type AccessRequest, type WaitingRequest, type VaultFolder, type VaultGrant, type VaultLevel, type VaultSecret, type Revealed } from '@/lib/vaultApi';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTimeIST } from '@/lib/utils';
 
@@ -450,6 +450,46 @@ function RequestsPanel({ onOpen }: { onOpen: (folderId: string) => void }) {
   );
 }
 
+// ---------- backups of every saved version (super admin only) ----------
+function BackupsPanel() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const q = useQuery({ queryKey: ['vault-backups'], queryFn: vaultApi.backups, enabled: open, retry: false });
+  const fix = useMutation({
+    mutationFn: (kind: 'repair' | 'restore'): Promise<any> => (kind === 'repair' ? vaultApi.repairBackups() : vaultApi.restoreBackups()),
+    onSuccess: (d: any, kind) => {
+      const msg = kind === 'repair' ? `${d.written} backup file(s) written` : `${d.restored} version(s) put back${d.skipped?.length ? `, ${d.skipped.length} could not be` : ''}`;
+      toast({ title: 'Done', description: msg });
+      qc.invalidateQueries({ queryKey: ['vault-backups'] });
+    },
+    onError: (e) => toast({ title: 'Could not do that', description: errMsg(e), variant: 'destructive' }),
+  });
+  if (!open) return <div><Button variant="outline" size="sm" onClick={() => setOpen(true)}><History className="mr-2 h-4 w-4" />Check backups</Button></div>;
+  const forbidden = (q.error as any)?.response?.status === 403;
+  const r: BackupReport | undefined = q.data;
+  const clean = !!r && !r.unbacked.length && !r.missingInDb.length && !r.badBackupFiles.length && !r.fileProblems.length;
+  return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Backups of every saved version</CardTitle></CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {q.isLoading && <p className="text-dbi-textSecondary">Checking...</p>}
+        {forbidden && <p className="text-dbi-textSecondary">Only a super admin can check the backups.</p>}
+        {q.isError && !forbidden && <p className="text-dbi-critical">The check could not run. Try again.</p>}
+        {r && (
+          <>
+            <p className="text-dbi-textSecondary">{r.versions} saved version(s), {r.backupFiles} backup file(s). {clean ? <b className="text-dbi-success">Everything is backed up and matches.</b> : 'Some things need attention.'}</p>
+            {r.unbacked.length > 0 && <div className="flex flex-wrap items-center gap-2"><Badge variant="warning">{r.unbacked.length} version(s) without a valid backup</Badge><Button size="sm" variant="outline" disabled={fix.isPending} onClick={() => fix.mutate('repair')}>Write missing backups</Button></div>}
+            {r.missingInDb.length > 0 && <div className="flex flex-wrap items-center gap-2"><Badge variant="warning">{r.missingInDb.length} version(s) in a backup but missing from the database</Badge><Button size="sm" variant="outline" disabled={fix.isPending} onClick={() => fix.mutate('restore')}>Put them back</Button></div>}
+            {r.badBackupFiles.length > 0 && <p className="text-dbi-critical">{r.badBackupFiles.length} backup file(s) changed after they were written. They are kept as they are for investigation: {r.badBackupFiles.slice(0, 5).join(', ')}{r.badBackupFiles.length > 5 ? ' ...' : ''}</p>}
+            {r.fileProblems.length > 0 && <p className="text-dbi-critical">{r.fileProblems.length} encrypted file(s) have a problem: {r.fileProblems.slice(0, 3).map((p) => p.problem).join('; ')}{r.fileProblems.length > 3 ? '; ...' : ''}</p>}
+          </>
+        )}
+        <div className="flex justify-end"><Button size="sm" variant="ghost" onClick={() => void qc.invalidateQueries({ queryKey: ['vault-backups'] })} disabled={q.isFetching}>Check again</Button></div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ---------- inside one folder ----------
 function FolderView({ folderId, stepUp, onBack }: { folderId: string; stepUp: 'code' | 'password' | 'none'; onBack: () => void }) {
   const qc = useQueryClient();
@@ -582,6 +622,7 @@ export function Vault() {
         {status?.canCreateFolder && !open && <Button className="ml-auto" onClick={() => setCreating(true)}><Plus className="mr-2 h-4 w-4" />New folder</Button>}
       </div>
 
+      {!open && <BackupsPanel />}
       {!open && <RequestsPanel onOpen={setOpen} />}
 
       {open ? (
