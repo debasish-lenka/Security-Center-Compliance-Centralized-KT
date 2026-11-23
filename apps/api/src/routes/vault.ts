@@ -12,7 +12,7 @@ import { getStorageService } from '../services/storage.js';
 import { VIRUS_SCAN_ENABLED, scanUpload } from '../services/virus-scan.js';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '../services/upload-policy.js';
 import { openSecret, openSecretFile, sealSecret, vaultEnabled } from '../services/vault-crypto.js';
-import { blobHash, keepBackup, readBackups, sameVersion } from '../services/vault-backup.js';
+import { blobHash, keepBackup, readBackups, sameVersion, vaultBackupReport, blobProblem } from '../services/vault-backup.js';
 
 // Secret Manager. Everyone signed in sees folder and secret NAMES (so they can ask for access);
 // values are only returned by /reveal, and only to someone holding a VIEW grant, after a fresh password / 2FA check.
@@ -497,33 +497,7 @@ export async function vaultRoutes(app: FastifyInstance) {
   const SUPER = ['SUPER_ADMIN'];
   const versionRows = () => app.prisma.secretVersion.findMany({ orderBy: [{ secretId: 'asc' }, { version: 'asc' }] });
   const key = (x: { secretId: string; version: number }) => `${x.secretId}:${x.version}`;
-  const blobProblem = async (r: { filePath: string | null; blobSha256: string | null }) => {
-    if (!r.filePath) return null;
-    try {
-      const h = blobHash(await readFile(join(env.STORAGE_DIR, r.filePath)));
-      return r.blobSha256 && h !== r.blobSha256 ? 'the file does not match its saved checksum' : null;
-    } catch { return 'the encrypted file is missing on the server'; }
-  };
-
-  async function backupReport() {
-    const [rows, saved] = await Promise.all([versionRows(), readBackups()]);
-    const valid = saved.filter((s) => s.valid && s.data).map((s) => s.data!);
-    const unbacked = rows.filter((r) => !valid.some((v) => sameVersion(v, r)));
-    const missingInDb = valid.filter((v) => !rows.some((r) => key(r) === key(v)));
-    const fileProblems: { secretId: string; version: number; problem: string }[] = [];
-    for (const r of rows) {
-      const p = await blobProblem(r);
-      if (p) fileProblems.push({ secretId: r.secretId, version: r.version, problem: p });
-    }
-    return {
-      versions: rows.length,
-      backupFiles: saved.length,
-      unbacked: unbacked.map((r) => ({ secretId: r.secretId, version: r.version })),
-      missingInDb: missingInDb.map((v) => ({ secretId: v.secretId, version: v.version })),
-      badBackupFiles: saved.filter((s) => !s.valid).map((s) => s.file),
-      fileProblems,
-    };
-  }
+  const backupReport = () => vaultBackupReport(app);
 
   app.get('/backups', { preHandler: [...pre, app.requireRole(SUPER)] }, async (_request, reply) => {
     return reply.send({ success: true, data: await backupReport() });

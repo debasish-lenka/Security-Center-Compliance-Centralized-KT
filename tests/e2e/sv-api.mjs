@@ -28,7 +28,7 @@ const PW = 'Sv-Test-Pass-2026';
 const ids = {};
 for (const k of ['lead', 'lead2', 'a', 'b', 'out']) ids[k] = (await call('POST', '/users', { email: `${k}@test.local`, fullName: `Person ${k}`, role: 'USER', authType: 'PASSWORD', password: PW }, sa.token)).body.data.id;
 const S = {}; for (const k of Object.keys(ids)) S[k] = await login(`${k}@test.local`, PW);
-const pid = (await call('POST', '/projects', { name: 'SV project', ownerId: ids.lead, managerId: ids.lead2, priority: 'LOW', memberIds: [ids.a, ids.b] }, S.lead.token)).body.data.id;
+const pid = (await call('POST', '/projects', { name: 'SV project', ownerId: ids.lead, managerId: ids.lead2, priority: 'LOW', memberIds: [ids.a, ids.b], workLinks: [{ label: 'Firewall console', url: 'https://fw.example.com' }] }, S.lead.token)).body.data.id;
 await call('POST', `/projects/${pid}/members`, { userId: sa.user.id, role: 'CONTRIBUTOR' }, sa.token);
 const T = (p) => `/projects/${pid}/tasks${p}`;
 const mk = async (title, who) => (await call('POST', T(''), { title, assigneeId: who, priority: 'LOW' }, S.lead.token)).body.data.id;

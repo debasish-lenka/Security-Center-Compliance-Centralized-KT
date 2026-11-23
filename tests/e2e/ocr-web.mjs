@@ -56,8 +56,7 @@ const sNot = await session(p1, link, [['Funny cat videos'], ['Start work in Cisc
 
 
 const wait = (ms) => new Promise((x) => setTimeout(x, ms));
-const run = await runAndWait(sa.token);
-ok('the check read the 6 pictures', /^6 screenshot\(s\) read/.test(run.summary ?? ''), JSON.stringify(run));
+// pictures without the tool were refused on arrival (never stored), so that session has no check result
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new' });
 const mk = async (sess) => { const ctx = await browser.createBrowserContext(); const p = await ctx.newPage(); await p.setViewport({ width: 1500, height: 1000 }); const errs = []; p.on('pageerror', (e) => errs.push(e.message.slice(0, 100))); await p.goto(`${WEB_URL}/login`, { waitUntil: 'domcontentloaded' }); await p.evaluate((t, u) => { localStorage.setItem('dbi_auth_token', t); localStorage.setItem('dbi_user', JSON.stringify(u)); }, sess.token, sess.user); return { p, errs }; };
 const clickText = async (p, re, sel = 'button') => { const h = await p.evaluateHandle((s, r) => [...document.querySelectorAll(s)].find((b) => new RegExp(r, 'i').test(b.textContent.trim())), sel, re.source); const el = h.asElement(); if (!el) return false; await el.evaluate((e) => e.scrollIntoView({ block: 'center' })); await wait(150); const bb = await el.boundingBox(); await p.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2); return true; };
@@ -68,7 +67,7 @@ await clickText(L.p, /^Work Log$/, 'button[role=tab]'); await wait(2000);
 let t = await text(L.p);
 ok('the table has a "Tool on screen" column', /Tool on screen/.test(t));
 ok('one session says Tool seen (3/3)', /Tool seen \(3\/3\)/.test(t), '');
-ok('the other says Tool NOT seen (0/3)', /Tool NOT seen \(0\/3\)/.test(t));
+ok('the other has no picture kept: Not checked yet, and no NOT-seen verdict', /Not checked yet/.test(t) && !/Tool NOT seen/.test(t));
 await clickText(L.p, /^View$/); await wait(1800);
 t = await text(L.p);
 ok('the session dialog shows the tool badge too', /Tool (seen|NOT seen)/.test(t));
@@ -76,7 +75,7 @@ await L.p.keyboard.press('Escape'); await wait(400);
 const AD = await mk(sa);
 await AD.p.goto(`${WEB_URL}/reminders`, { waitUntil: 'load' }); await wait(2500);
 t = await text(AD.p);
-ok('the admin page has the screenshot-check card with a status line', /is the tool really on screen/.test(t) && /Last check:/.test(t) && /0 screenshot\(s\) waiting/.test(t));
+ok('the admin page has the screenshot-check card with a status line', /is the tool really on screen/.test(t) && /0 screenshot\(s\) waiting/.test(t));
 await AD.p.click('#ocr-enabled'); await wait(1500);
 ok('the switch turns the night check off', (await call('GET', '/admin/work-settings', null, sa.token)).body.data.ocrEnabled === false);
 await AD.p.click('#ocr-enabled'); await wait(1500);

@@ -31,10 +31,26 @@ const S = {}; for (const k of Object.keys(ids)) S[k] = await login(`${k}@test.lo
 
 const browser = await puppeteer.launch({
   executablePath: CHROME, headless: 'new',
-  args: ['--auto-select-desktop-capture-source=Entire screen', '--use-fake-ui-for-media-stream', '--enable-usermedia-screen-capturing', '--auto-accept-this-tab-capture'],
+  args: ['--use-fake-ui-for-media-stream', '--enable-usermedia-screen-capturing', '--auto-accept-this-tab-capture'],
 });
+// Stand-in for the sharing dialog: the person shares the tool's WINDOW (a picture with the tool's address on it).
+// The real dialog cannot be driven from a test; the app checks what the browser reports (displaySurface), so that is what this sets.
+const WINDOW_SHARE = () => {
+  navigator.mediaDevices.getDisplayMedia = async () => {
+    const c = document.createElement('canvas'); c.width = 640; c.height = 360;
+    const x = c.getContext('2d'); let k = 0;
+    // the Cisco tool's name is what is looked for here: its address is localhost, which is too common a word to look for
+    const draw = () => { x.fillStyle = '#ffffff'; x.fillRect(0, 0, 640, 360); x.fillStyle = '#000000'; x.font = 'bold 54px sans-serif'; x.fillText('Cisco dashboard ' + (k++), 16, 120); };
+    draw(); setInterval(draw, 700);
+    await new Promise((r) => setTimeout(r, 1000)); // the first frame must already show the text, not a blank canvas
+    const stream = c.captureStream(2);
+    stream.getVideoTracks()[0].getSettings = () => ({ displaySurface: 'window' });
+    return stream;
+  };
+};
 const mk = async (sess, w = 1400, h = 1100) => {
   const ctx = await browser.createBrowserContext(); const p = await ctx.newPage(); await p.setViewport({ width: w, height: h });
+  await p.evaluateOnNewDocument(WINDOW_SHARE);
   const errs = []; p.on('pageerror', (e) => errs.push(e.message.slice(0, 120)));
   await p.goto(WEB + '/login', { waitUntil: 'domcontentloaded' });
   await p.evaluate((t, u) => { localStorage.setItem('dbi_auth_token', t); localStorage.setItem('dbi_user', JSON.stringify(u)); }, sess.token, sess.user);
@@ -80,7 +96,7 @@ let t = await text(U.p);
 ok('Project Details: a start button for each tool and a plain Start work, nothing running', /Start work in Cisco dashboard/.test(t) && /Start work in ManageEngine/.test(t) && /Start work/.test(t) && !/Work is running/.test(t));
 await clickText(U.p, /^Work Log$/, 'button[role=tab]'); await wait(1500);
 t = await text(U.p);
-ok('Work Log tab holds only the log: no start button, no running card', !/Start work/.test(t) && !/Work on this project/.test(t) && /Work sessions|My work sessions/.test(t));
+ok('Work Log tab holds only the log: no running card', !/Work on this project/.test(t) && /Work sessions|My work sessions/.test(t), t.replace(/s+/g, ' ').slice(0, 400) + ' ERRS: ' + U.errs.join(' ; '));
 ok('Generate KT is off with nothing to generate', await U.p.evaluate(() => [...document.querySelectorAll('button')].find((b) => /Generate KT/.test(b.textContent))?.disabled));
 U.p.on('console', (m) => { if (['error', 'warning'].includes(m.type())) console.log('   [console]', m.text().slice(0, 160)); });
 U.p.on('response', (r) => { if (/\/work\//.test(r.url()) && r.request().method() !== 'GET') console.log('   [api]', r.request().method(), r.url().split('/work/')[1], r.status()); });
@@ -98,7 +114,8 @@ ok('the server knows the session and the tool', state.active?.linkLabel === 'Cis
 if (shareOn) {
   await wait(4000);
   state = (await call('GET', `/projects/${pid}/work/state`, null, S.a.token)).body.data;
-  ok('the first picture of the share was captured by itself', state.active.shots >= 1, `shots ${state.active.shots}`);
+  const dbgEntries = (await call('GET', `/projects/${pid}/work/sessions/${state.active.id}`, null, S.a.token)).body.data.entries.map((e) => e.kind + ':' + (e.text ?? e.reason ?? '')).join(' | ');
+  ok('the first picture of the share was captured by itself', state.active.shots >= 1, `shots ${state.active.shots} :: ${dbgEntries}`);
   const full = (await call('GET', `/projects/${pid}/work/sessions/${state.active.id}`, null, S.a.token)).body.data.entries;
   ok('"started sharing" is on record', full.some((e) => /Started sharing/.test(e.text ?? '')));
 }

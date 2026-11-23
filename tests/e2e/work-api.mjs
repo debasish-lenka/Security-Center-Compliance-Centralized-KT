@@ -19,7 +19,9 @@ const login = async (email, pw) => {
   const t = l.body.data.mfaToken; const sec = (await call('POST', '/auth/mfa/setup', { mfaToken: t })).body.data.secret;
   return (await call('POST', '/auth/mfa/confirm', { mfaToken: t, code: totp(sec) })).body.data;
 };
-const jpeg = async (color, text) => { const j = new Jimp(320, 180, color); return (await j.getBufferAsync(Jimp.MIME_JPEG)).toString('base64'); };
+// the picture must show the tool (its address), like a real window with the tool open; a screenshot without it is not kept now
+const font = await Jimp.loadFont(Jimp.FONT_SANS_32_BLACK);
+const jpeg = async (color, text) => { const j = new Jimp(640, 360, color); if (text) j.print(font, 20, 60, text); return (await j.getBufferAsync(Jimp.MIME_JPEG)).toString('base64'); };
 
 const sa = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
 const PW = 'Work-Test-Pass-2026';
@@ -48,7 +50,7 @@ ok('another member cannot use my session', (await call('POST', W(`/${sid}/note`)
 ok('a note is saved', (await call('POST', W(`/${sid}/note`), { text: 'Logged in to the Cisco DNA dashboard and checked the 12 site health scores.' }, S.a.token)).status === 201);
 ok('an empty note is refused', (await call('POST', W(`/${sid}/note`), { text: '   ' }, S.a.token)).status === 400);
 ok('screen sharing events are kept', (await call('POST', W(`/${sid}/event`), { text: 'Started sharing the screen' }, S.a.token)).status === 201);
-const j1 = await jpeg(0x2266aaff), j2 = await jpeg(0xaa3322ff);
+const j1 = await jpeg(0x2266aaff, 'https://dnac.example.com/dna Site health'), j2 = await jpeg(0xaa3322ff, 'dnac.example.com Devices');
 const s1 = await call('POST', W(`/${sid}/shot`), { image: j1, reason: 'CHANGE' }, S.a.token);
 ok('a screenshot is stored', s1.status === 201 && s1.body.data.duplicate === false, JSON.stringify(s1.body).slice(0, 100));
 const s1b = await call('POST', W(`/${sid}/shot`), { image: j1, reason: 'HEARTBEAT' }, S.a.token);
@@ -78,13 +80,13 @@ ok('a super admin sees it too', adminSees.body.data.items.length === 1);
 // ---- evidence + required sharing ----
 st = await call('GET', W('/state'), null, S.a.token);
 ok('state says screen sharing is required (default)', st.body.data.requireShare === true);
-ok('the running session has FULL evidence (whole screen, pictures, never cut)', st.body.data.active.evidence === 'FULL' && st.body.data.active.surface === 'monitor', JSON.stringify([st.body.data.active.evidence, st.body.data.active.surface]));
+ok('the running session has FULL evidence (the tool window, pictures, never cut)', st.body.data.active.evidence === 'FULL' && st.body.data.active.surface === 'window', JSON.stringify([st.body.data.active.evidence, st.body.data.active.surface]));
 ok('a normal user cannot change the setting', (await call('PUT', '/admin/work-settings', { requireScreenShare: false }, S.a.token)).status === 403);
 ok('stopping the share is recorded', (await call('POST', W(`/${sid}/share`), { state: 'STOPPED' }, S.a.token)).status === 201);
 st = await call('GET', W('/state'), null, S.a.token);
 ok('after the share was cut the session is PARTIAL', st.body.data.active.evidence === 'PARTIAL' && st.body.data.active.shareStops === 1, st.body.data.active.evidence);
-ok('sharing a window instead of the whole screen is refused while required', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'window' }, S.a.token)).status === 400);
-ok('sharing the whole screen again is accepted', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'window' }, S.a.token)).status === 201);
+ok('sharing the whole screen instead of the tool window is refused while required', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'monitor' }, S.a.token)).status === 400);
+ok('sharing the tool window again is accepted', (await call('POST', W(`/${sid}/share`), { state: 'STARTED', surface: 'window' }, S.a.token)).status === 201);
 ok('the cut stays on record: still PARTIAL after sharing again', (await call('GET', W('/state'), null, S.a.token)).body.data.active.evidence === 'PARTIAL');
 
 // ---- stop, generate, version ----
@@ -126,10 +128,10 @@ ok('a session with no sign of life for 10+ minutes is closed as IDLE at its last
 await call('POST', W(`/${idleSid}/stop`), null, S.b.token);
 const ns = await call('POST', W('/start'), {}, S.b.token);
 ok('start without any screen share is refused while required', ns.status === 400 && ns.body.error?.code === 'SHARE_REQUIRED', JSON.stringify(ns.body).slice(0, 100));
-ok('start with only a window is refused', (await call('POST', W('/start'), { surface: 'window' }, S.b.token)).status === 400);
+ok('start with the whole screen is refused', (await call('POST', W('/start'), { surface: 'monitor' }, S.b.token)).status === 400);
 ok('an admin turns the requirement off', (await call('PUT', '/admin/work-settings', { requireScreenShare: false }, sa.token)).body.data?.requireScreenShare === false);
 const free = await call('POST', W('/start'), {}, S.b.token);
-ok('then work can start without sharing', free.status === 201);
+ok('then work can start without sharing', free.status === 201, JSON.stringify(free.body).slice(0, 160));
 const fs = (await call('GET', W('/state'), null, S.b.token)).body.data;
 ok('such a session has NO evidence', fs.requireShare === false && fs.active.evidence === 'NONE', fs.active?.evidence);
 ok('a window share is allowed when not required but is only PARTIAL', (await call('POST', W(`/${free.body.data.id}/share`), { state: 'STARTED', surface: 'window' }, S.b.token)).status === 201 && (await call('GET', W('/state'), null, S.b.token)).body.data.active.evidence === 'PARTIAL');
