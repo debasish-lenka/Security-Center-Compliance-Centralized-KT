@@ -24,6 +24,7 @@ import { startStalledJob } from './services/stalled.js';
 import { startOcrJob } from './services/ocr.js';
 import { startBackupJob } from './services/backup.js';
 import { startVaultBackupCheck } from './services/vault-backup.js';
+import { startQuarantinePurge } from './services/work-quarantine.js';
 import { recordProjectActivity } from './services/project-progress.js';
 
 const app = Fastify({
@@ -223,6 +224,7 @@ try {
     startWorkShotPurge(app); // deletes work screenshots after the retention period
     startPurgeJob(app); // removes recycle-bin entries older than 30 days
     startBackupJob(app); // runs the scheduled backup set on the Backups page
+    startQuarantinePurge(app); // deletes refused screenshots after 48 hours, each one in the audit log
     startVaultBackupCheck(app); // once a day at 03:00 IST: checks the Secret Manager backups and tells the super admins if one is wrong
   }
   app.log.info(`🚀 DBI Security Center API running on http://${env.HOST}:${env.PORT}`);

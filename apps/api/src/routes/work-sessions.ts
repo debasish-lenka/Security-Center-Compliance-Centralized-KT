@@ -6,6 +6,7 @@ import { getStorageService } from '../services/storage.js';
 import { tellSuperAdmins } from '../services/document-oversight.js';
 import { formatWhen } from '../services/watermark.js';
 import { checkPicture, refreshVerdict, termsForSession } from '../services/ocr.js';
+import { quarantineShot } from '../services/work-quarantine.js';
 import { evidenceOf, lengthOf, minutesBetween, workKtPdf } from '../services/work-kt.js';
 
 export const getWorkSettings = (app: FastifyInstance) => app.prisma.workSettings.upsert({ where: { id: 'default' }, create: { id: 'default' }, update: {} });
@@ -209,9 +210,11 @@ export async function workSessionRoutes(app: FastifyInstance) {
       if (terms.length) {
         toolSeen = await checkPicture(buf, terms);
         if (toolSeen === false) {
+          // kept encrypted for 48 hours, not in the work log; an admin can restore it, or it is deleted by itself
+          const quarantined = await quarantineShot(app, s.id, s.userId, buf, 'tool not on picture').catch((e) => { app.log.warn({ err: e }, 'could not keep a refused picture'); return null; });
           const recent = await app.prisma.workEntry.findFirst({ where: { sessionId: s.id, kind: 'EVENT', text: { startsWith: 'A picture was not kept' }, createdAt: { gt: new Date(Date.now() - 5 * 60_000) } }, select: { id: true } });
           if (!recent) await app.prisma.workEntry.create({ data: { sessionId: s.id, kind: 'EVENT', text: 'A picture was not kept: the tool was not on the shared window' } });
-          return { success: true, data: { skipped: true, duplicate: false } };
+          return { success: true, data: { skipped: true, duplicate: false, quarantined: !!quarantined } };
         }
       }
     }

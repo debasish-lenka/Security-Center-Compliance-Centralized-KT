@@ -257,6 +257,29 @@ model WorkSession {
 }
 
 // A note, a screenshot or an event (screen sharing started / stopped) inside a work session
+// A screenshot that did not show the tool, kept encrypted for 48 hours (see services/work-quarantine.ts)
+model WorkQuarantine {
+  id           String    @id
+  sessionId    String
+  userId       String
+  storageKey   String?
+  dekEnc       String
+  valueEnc     String
+  keyId        String
+  size         Int
+  reason       String
+  status       String    @default("HELD") // HELD, RESTORED, DELETED
+  expiresAt    DateTime
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime  @default(now())
+
+  @@index([status, expiresAt])
+  @@index([sessionId])
+  @@map("work_quarantine")
+}
+
 model WorkEntry {
   id         String   @id @default(uuid())
   sessionId  String

@@ -5,6 +5,9 @@ import { diffFields } from '../services/document-oversight.js';
 import { getReminderSettings, runStalledCheck } from '../services/stalled.js';
 import { getWorkSettings } from './work-sessions.js';
 import { isOcrRunning, pendingPictures, runOcrBatch } from '../services/ocr.js';
+import { decideQuarantine } from '../services/work-quarantine.js';
+import { openSecretFile, vaultEnabled } from '../services/vault-crypto.js';
+import { getStorageService } from '../services/storage.js';
 
 const days = z.number().int().min(1).max(90);
 const SettingsSchema = z.object({
@@ -42,6 +45,43 @@ export async function reminderRoutes(app: FastifyInstance) {
   });
 
   // Reads a batch of unread screenshots now (at night this happens by itself)
+  // Screenshots kept for 48 hours because they did not show the tool. Admins see them here and decide.
+  app.get('/admin/work-quarantine', { preHandler: admins }, async (request, reply) => {
+    const rows = await app.prisma.workQuarantine.findMany({ where: { status: 'HELD' }, orderBy: { createdAt: 'desc' }, take: 200 });
+    const sessions = await app.prisma.workSession.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.sessionId))] } }, select: { id: true, projectId: true, linkLabel: true, userId: true, project: { select: { name: true } } } });
+    const people = await app.prisma.profile.findMany({ where: { id: { in: [...new Set(sessions.map((s) => s.userId))] } }, select: { id: true, fullName: true } });
+    const sBy = new Map(sessions.map((s) => [s.id, s]));
+    const pBy = new Map(people.map((p) => [p.id, p.fullName]));
+    return reply.send({ success: true, data: rows.map((r) => {
+      const s = sBy.get(r.sessionId);
+      return { id: r.id, createdAt: r.createdAt, expiresAt: r.expiresAt, size: r.size, reason: r.reason, project: s?.project.name ?? '', person: s ? pBy.get(s.userId) ?? '' : '', tool: s?.linkLabel ?? null };
+    }) });
+  });
+
+  // The picture itself, decrypted for this one request. Never cached, and every look is audited.
+  app.get('/admin/work-quarantine/:id/picture', { preHandler: admins }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const q = await app.prisma.workQuarantine.findUnique({ where: { id } });
+    if (!q || q.status !== 'HELD' || !q.storageKey || !vaultEnabled()) return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'That picture is not held any more' } });
+    const chunks: Buffer[] = [];
+    for await (const c of getStorageService().openRead(q.storageKey)) chunks.push(c as Buffer);
+    const bytes = openSecretFile({ dekEnc: q.dekEnc }, Buffer.concat(chunks), id, 1);
+    await auditLogger.logResource('DOWNLOAD', request.userId!, 'work_quarantine', id, { sessionId: q.sessionId, viewedBy: 'admin' }, request.ip, request.headers['user-agent']);
+    reply.header('Cache-Control', 'no-store');
+    return reply.type('image/jpeg').send(bytes);
+  });
+
+  // Decide: restore it into the work log (a person checked the tool is on it), or refuse and delete it now
+  app.post('/admin/work-quarantine/:id/decide', { preHandler: admins, schema: { body: z.object({ restore: z.boolean(), note: z.string().trim().max(300).optional() }) } }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const b = request.body as { restore: boolean; note?: string };
+    if (!b.restore && (b.note ?? '').length < 5) return reply.code(400).send({ success: false, error: { code: 'NOTE_REQUIRED', message: 'Write why you are refusing it (at least 5 characters)' } });
+    const r = await decideQuarantine(app, id, request.userId!, b.restore, b.note);
+    if (r === 'NOT_FOUND') return reply.code(404).send({ success: false, error: { code: 'NOT_FOUND', message: 'Not found' } });
+    if (r === 'NOT_HELD') return reply.code(409).send({ success: false, error: { code: 'NOT_HELD', message: 'Already decided or expired' } });
+    return reply.send({ success: true, data: { status: r } });
+  });
+
   app.post('/admin/work-ocr/run', { preHandler: admins }, async (request, reply) => {
     if (isOcrRunning()) return reply.code(409).send({ success: false, error: { code: 'RUNNING', message: 'The screenshot check is already running' } });
     await auditLogger.logResource('CREATE', request.userId!, 'work_ocr_run', 'manual', {}, request.ip, request.headers['user-agent']);
