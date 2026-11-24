@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { remindersApi } from '@/lib/api';
+import { QuarantinePanel } from '@/components/QuarantinePanel';
 import { toast } from '@/hooks/use-toast';
 import { formatDateTimeIST } from '@/lib/utils';
 
@@ -148,6 +149,8 @@ export function Reminders() {
           </div>
         </CardContent>
       </Card>
+
+      <QuarantinePanel />
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">

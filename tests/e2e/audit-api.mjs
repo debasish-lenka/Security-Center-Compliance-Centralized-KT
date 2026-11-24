@@ -59,7 +59,9 @@ const today = new Date(now + 5.5 * 3600_000).toISOString().slice(0, 10);
 ok('from a date (that day in IST) leaves out older entries', ids(await get(`${ZZ}&startDate=${today}`)) === 'r1,r1,r2,r3,r4');
 ok('to a date leaves out newer entries', ids(await get(`${ZZ}&endDate=${new Date(now - 2 * 86400_000).toISOString().slice(0, 10)}`)) === 'r5');
 const hhmm = (ms) => new Date(ms + 5.5 * 3600_000).toISOString().slice(0, 16); // IST wall-clock minute
-ok('a date and time range (read as IST)', ids(await get(`${ZZ}&startDate=${hhmm(now - 45_000)}&endDate=${hhmm(now - 25_000)}`)).length > 0 && !ids(await get(`${ZZ}&startDate=${hhmm(now - 45_000)}&endDate=${hhmm(now - 25_000)}`)).includes('r5'));
+// a window of the last few minutes (minute precision, so it must not be a few seconds wide: that flaked at minute edges)
+const rangeIds = ids(await get(`${ZZ}&startDate=${hhmm(now - 120_000)}&endDate=${hhmm(now + 60_000)}`));
+ok('a date and time range (read as IST)', rangeIds.length > 0 && !rangeIds.includes('r5'), rangeIds);
 ok('a time in the future finds nothing', (await get(`${ZZ}&startDate=${new Date(now + 86400_000).toISOString()}`)).total === 0);
 ok('an action that does not exist finds nothing (not an error)', (await get(`${ZZ}&action=NOPE`)).total === 0);
 ok('a bad person id finds nothing (not an error)', (await get(`${ZZ}&actorId=not-a-uuid`)).total === 0);
