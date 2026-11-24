@@ -18,7 +18,7 @@ const surfaceName = (s: string) => (s === 'monitor' ? 'the whole screen' : s ===
 
 const IDLE_MS = 10 * 60 * 1000; // no sign of life for this long: the session is closed as IDLE
 const MAX_SHOT_BYTES = 800_000;
-const MAX_SHOTS_PER_SESSION = 400;
+const MAX_SHOTS_PER_SESSION = 1000; // with a picture every 5 s of change, 400 would be reached in under an hour of busy work
 const KEEP_PICTURES_DAYS = Number(process.env.WORK_SHOT_RETENTION_DAYS ?? 90);
 
 // Work is recorded from the tool's WINDOW only (its address bar is in the picture). The whole screen and a browser tab are refused.
@@ -110,6 +110,21 @@ export async function workSessionRoutes(app: FastifyInstance) {
     if (began.count) await auditLogger.logResource('UPDATE', userId, 'project', projectId, { status: 'NOT_STARTED -> ONGOING', reason: 'work started' }, request.ip, request.headers['user-agent']);
     await app.prisma.workEntry.create({ data: { sessionId: session.id, kind: 'EVENT', text: linkUrl ? `Started work, opened ${linkLabel ? `${linkLabel} (${linkUrl})` : linkUrl}` : 'Started work' } });
     if (surface) await app.prisma.workEntry.create({ data: { sessionId: session.id, kind: 'EVENT', text: `Started sharing ${surfaceName(surface)}` } });
+    if (!request.projectRole) {
+      // an admin (no membership) started work here: the owner and the leads are told
+      try {
+        const [proj, leads] = await Promise.all([
+          app.prisma.project.findUnique({ where: { id: projectId }, select: { name: true } }),
+          app.prisma.projectMember.findMany({ where: { projectId, role: { in: ['OWNER', 'LEAD'] }, userId: { not: userId } }, select: { userId: true } }),
+        ]);
+        if (leads.length) await app.prisma.notification.createMany({ data: leads.map((l) => ({
+          userId: l.userId, type: 'PROJECT_STARTED' as const, resourceType: 'project', resourceId: projectId,
+          title: `Work started by an admin: ${proj?.name ?? ''}`,
+          message: `${request.user!.fullName} (${request.user!.role.replace('_', ' ').toLowerCase()}, not a member of this project) started work on "${proj?.name ?? ''}".`,
+        })) });
+      } catch (e) { app.log.warn({ err: e }, 'could not tell the leads about an admin session'); }
+      await auditLogger.logResource('CREATE', userId, 'work_session', session.id, { projectId, adminNotMember: true }, request.ip, request.headers['user-agent']);
+    }
     await app.prisma.activityFeed.create({ data: { actorId: userId, action: 'CREATE', resourceType: 'work_session', projectId, details: { text: 'started a work session' }, ipAddress: request.ip, userAgent: request.headers['user-agent'] } });
     await auditLogger.logResource('CREATE', userId, 'work_session', session.id, { projectId, link: linkUrl ?? null }, request.ip, request.headers['user-agent']);
     return reply.code(201).send({ success: true, data: shape(session) });

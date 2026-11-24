@@ -399,6 +399,18 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const before = await app.prisma.project.findUnique({ where: { id: projectId } });
 
+    // The tool links decide which screen the work log checks, so only the owner or lead changes them (an admin too).
+    // The person who created the project may fill them in once, while none are set yet.
+    if (data.workLinks !== undefined && JSON.stringify(data.workLinks ?? []) !== JSON.stringify(before?.workLinks ?? [])) {
+      const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
+      const member = await app.prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } }, select: { role: true } });
+      const lead = member?.role === 'OWNER' || member?.role === 'LEAD';
+      const firstSetup = before?.createdById === userId && !(Array.isArray(before?.workLinks) && before.workLinks.length > 0);
+      if (!isAdmin && !lead && !firstSetup) {
+        return reply.code(403).send({ success: false, error: { code: 'LINKS_LOCKED', message: 'Only the project owner or lead can change the tool links now' } });
+      }
+    }
+
     // Prisma wants Date objects, not "YYYY-MM-DD" strings
     const { startDate, expectedCompletionDate, actualCompletionDate, ...rest } = data;
     const toDate = (v: string | null | undefined) => (v === undefined ? undefined : v === null ? null : new Date(v));

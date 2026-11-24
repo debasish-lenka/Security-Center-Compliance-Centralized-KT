@@ -14,9 +14,9 @@ import { formatDateTimeIST } from '@/lib/utils';
 // Screenshots are taken only when the picture changes (not on a timer), at most one every 30 seconds,
 // and once every 10 minutes at the least as a sign of life. A JPEG of about 100-150 KB each.
 const LOOK_EVERY_MS = 3000;
-const MIN_GAP_MS = 30_000;
+const MIN_GAP_MS = 5_000; // at least 5 s between two pictures of a changing screen
 const SIGN_OF_LIFE_MS = 10 * 60_000;
-const CHANGED_PIXELS = 0.08;
+const CHANGED_PIXELS = 0.02; // 2% of the picture changed counts as a change (small edits such as one field included)
 
 const mins = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`);
 const errText = (e: any, fallback: string) => e?.response?.data?.error?.message ?? fallback;
@@ -55,6 +55,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
   const [sharing, setSharing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [openSession, setOpenSession] = useState<string | null>(null);
+  const [needNote, setNeedNote] = useState(false); // a changed screen was kept and nothing has been written about it yet
   const [skipped, setSkipped] = useState(false); // the last picture did not show the tool and was not kept
   const [shareProblem, setShareProblem] = useState<string | null>(null); // why sharing did not start; stays until the next try
 
@@ -92,6 +93,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
         return;
       }
       setSkipped(false);
+      if (reason === 'CHANGE' && !r.data?.data?.duplicate) setNeedNote(true);
       if (!r.data?.data?.duplicate) qc.invalidateQueries({ queryKey: ['work-state', projectId] });
     } catch (e: any) {
       if (reason === 'MANUAL') toast({ title: 'Screenshot not saved', description: errText(e, 'Try again'), variant: 'destructive' });
@@ -264,6 +266,7 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
     try {
       await workApi.note(projectId, activeId, note.trim());
       setNote('');
+      setNeedNote(false);
       if (streamRef.current) frame('NOTE');
       refresh();
     } catch (e: any) {
@@ -353,6 +356,12 @@ export const WorkSessionPanel = forwardRef<WorkPanelHandle, { projectId: string;
                   {busy === 'stop' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Square className="mr-1 h-4 w-4" />}Stop work
                 </Button>
               </div>
+              {needNote && (
+                <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-dbi-warning/40 bg-dbi-warning/10 p-2 text-sm text-dbi-warning">
+                  The screen changed. Write what you changed, so the KT has the reason next to the picture.
+                  <Button size="sm" variant="outline" onClick={() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Work note"]')?.focus()}>Write it</Button>
+                </div>
+              )}
               <div>
                 <Textarea aria-label="Work note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="What did you do? Write it here (for example: checked the 12 site health scores in the dashboard)" rows={3} maxLength={5000} />
                 <div className="mt-2 flex justify-end">
